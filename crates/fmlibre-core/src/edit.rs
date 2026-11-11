@@ -1270,11 +1270,11 @@ mod tests {
         assert!(!players.iter().any(|f| f.key == "position.sw"));
         let staff = fields(&layout, Entity::Staff);
         let staff_attributes = layout.staff.attributes.len() + layout.staff.ratings.len();
-        assert_eq!(staff.len(), 6 + staff_attributes + PERSONALITY.len() + 2);
+        assert_eq!(staff.len(), 7 + staff_attributes + PERSONALITY.len() + 2);
         let clubs = fields(&layout, Entity::Club);
-        // Reputation, the 5 facilities and the 4 amounts of money; and the 4 capacities of the stadium where the layout
-        // knows it (Windows so far).
-        assert_eq!(clubs.len(), 10 + if layout.stadium.is_some() { 4 } else { 0 });
+        // Reputation, the 5 facilities and the 3 amounts of money (the spent wage budget is not editable); and the 4
+        // capacities of the stadium where the layout knows it (Windows so far).
+        assert_eq!(clubs.len(), 9 + if layout.stadium.is_some() { 4 } else { 0 });
         if layout.stadium.is_some() {
             assert_eq!(key(&clubs, "stadium.capacity").place, Place::Stadium);
             // A count of seats, not money, which the app shows with a pound sign.
