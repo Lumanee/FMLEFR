@@ -1145,6 +1145,8 @@ export interface ScoutRequest {
   /** 0–100. */
   minProbability?: number | null;
   noFreeAgents?: boolean;
+  /** Part of a nation's name; null or omitted for any nation. */
+  nation?: string | null;
   order?: ScoutOrder;
   limit?: number;
 }

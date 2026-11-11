@@ -49,6 +49,7 @@ function readSaved(value: unknown): Saved {
       maxFee: readText(brief.maxFee),
       minProbability: readText(brief.minProbability),
       noFreeAgents: brief.noFreeAgents === true,
+      nation: readText(brief.nation),
     },
   };
 }

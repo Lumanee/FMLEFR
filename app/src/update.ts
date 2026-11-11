@@ -11,10 +11,10 @@ import { useCallback, useEffect, useState } from "react";
 import { call, inTauri } from "./api";
 
 /** The latest published release (drafts and pre-releases are left out by GitHub). */
-const LATEST_RELEASE = "https://api.github.com/repos/tozmoz/FMLibreEditor/releases/latest";
+const LATEST_RELEASE = "https://api.github.com/repos/Lumanee/FMLEFR/releases/latest";
 
 /** Where the releases are; the only pages the notice opens (the app may open no other, see capabilities/default.json). */
-const RELEASES_PAGE = "https://github.com/tozmoz/FMLibreEditor/releases";
+const RELEASES_PAGE = "https://github.com/Lumanee/FMLEFR/releases";
 
 /** The version the browser preview pretends to be: an old one, so that the notice can be seen there. */
 const PREVIEW_VERSION = "0.1.0";

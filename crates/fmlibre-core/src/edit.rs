@@ -507,7 +507,7 @@ fn club_fields(layout: &Layout) -> Vec<Field> {
         facility("facilities.corporate", f.corporate, Place::ClubFinance),
         money("finance.balance", f.balance, -2_000_000_000..=2_000_000_000),
         money("finance.transfer_budget", f.transfer_budget, 0..=2_000_000_000),
-        money("finance.wage_budget", f.wage_budget, 0..=100_000_000),
+        // `wage_budget` is what the club already spends a week: it is not editable. Only the total budget is.
         money("finance.total_wage_budget", f.total_wage_budget, 0..=100_000_000),
     ];
     // Capacities, as stored. The biggest stadium of the test save held 115,109.

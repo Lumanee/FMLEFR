@@ -798,6 +798,9 @@ export const es: Strings = {
 
     // Sobre los atributos, mientras se lee el perfil
     maxAttributes: "Atributos al máximo",
+    bulkSet: "Fijar en",
+    bulkAll: "Todos los atributos",
+    bulkTitle: "Rellena los campos con este valor; no se escribe nada hasta Aplicar",
     maxAttributesTitle:
       "Poner cada atributo de este jugador en su mejor valor: 20, y 1 para la propensión a lesiones y el juego sucio",
     maxAttributesDone: (count) =>

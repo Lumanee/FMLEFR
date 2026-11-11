@@ -111,7 +111,7 @@ impl PlayerFilter {
 }
 
 /// Whether `text` contains `needle`, ignoring accents and case; an empty needle matches anything.
-fn contains(text: Option<&str>, needle: Option<&str>) -> bool {
+pub(crate) fn contains(text: Option<&str>, needle: Option<&str>) -> bool {
     match needle.map(str::trim).filter(|n| !n.is_empty()) {
         Some(needle) => text.is_some_and(|text| fold(text).contains(&fold(needle))),
         None => true,

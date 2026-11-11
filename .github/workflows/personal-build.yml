@@ -1,0 +1,47 @@
+# Personal build of this fork: the portable Windows app, with no installer and no signing key needed.
+# Run it by hand (Actions tab > Personal build > Run workflow), then download the zip from the finished run.
+name: Personal build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install the interface's packages
+        working-directory: app
+        run: npm ci
+
+      - name: Build the interface
+        working-directory: app
+        run: npm run build
+
+      - name: Build the app
+        working-directory: app
+        run: npx tauri build --no-bundle
+
+      - name: Package the portable zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force portable/FMLEFR | Out-Null
+          Copy-Item target/release/FMLibreEditor.exe portable/FMLEFR/
+          Copy-Item docs/portable-readme.txt portable/FMLEFR/README.txt
+          Compress-Archive -Path portable/FMLEFR -DestinationPath FMLEFR-portable.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FMLEFR-portable
+          path: FMLEFR-portable.zip

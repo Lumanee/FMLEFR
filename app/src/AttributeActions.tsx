@@ -16,6 +16,7 @@ import { describeError } from "./format";
 import { InfoTip } from "./InfoTip";
 import { appText, fieldLabel, massEditText, profileText } from "./labels";
 import { undoFailureLines } from "./massDraft";
+import { GOALKEEPING, isGoalkeeper, MENTAL, PHYSICAL, TECHNICAL } from "./playerAttributes";
 import type { PlayerDetails, StaffDetails } from "./types";
 import { EditorContext, useEditSession } from "./useProfileEditing";
 
@@ -82,7 +83,7 @@ export function AttributeActions({
   }, [uid, details, staff]);
 
   if (editing) {
-    return null;
+    return <BulkAttributes goalkeeper={!staff && isGoalkeeper(details as PlayerDetails)} player={!staff} />;
   }
 
   const freezeNote = staff ? profileText.freezeStaffAttributesNote : profileText.freezeAttributesNote;
@@ -218,6 +219,80 @@ export function AttributeActions({
           {freezeError}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * While the profile is edited: one value, and a button for all the attributes (and, for a player, for each group of
+ * them) that types it into their inputs in one go. It only fills the inputs, which can still be changed one by one;
+ * the changes are written, logged and undone with Apply like any other.
+ */
+function BulkAttributes({ goalkeeper, player }: { goalkeeper: boolean; player: boolean }) {
+  const session = useEditSession();
+  const [value, setValue] = useState("20");
+  if (!session) {
+    return null;
+  }
+  const attributeKeys = session.keys.filter((key) => key.startsWith("attribute."));
+  const groups: { label: string; keys: readonly string[] }[] =
+    player
+      ? [
+          goalkeeper
+            ? { label: profileText.goalkeeping, keys: GOALKEEPING }
+            : { label: profileText.technical, keys: TECHNICAL },
+          { label: profileText.mental, keys: MENTAL },
+          { label: profileText.physical, keys: PHYSICAL },
+        ]
+    : [];
+  const fill = (keys: readonly string[]) => {
+    for (const key of keys) {
+      const field = `attribute.${key}`;
+      const input = session.input(field);
+      if (input) {
+        const clamped = Math.min(input.range.max, Math.max(input.range.min, Number(value)));
+        session.type(field, String(clamped));
+      }
+    }
+  };
+  const valid = value.trim() !== "" && Number.isFinite(Number(value));
+  return (
+    <div className="attribute-actions">
+      <div className="attribute-buttons">
+        <label className="freeze-toggle" title={profileText.bulkTitle}>
+          <span>{profileText.bulkSet}</span>
+          <input
+            type="number"
+            className="edit-input"
+            min={1}
+            max={20}
+            value={value}
+            disabled={session.busy}
+            onChange={(e) => setValue(e.currentTarget.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="max-toggle"
+          disabled={!valid || session.busy}
+          title={profileText.bulkTitle}
+          onClick={() => fill(attributeKeys.map((key) => key.slice("attribute.".length)))}
+        >
+          {profileText.bulkAll}
+        </button>
+        {groups.map(({ label, keys }) => (
+          <button
+            key={label}
+            type="button"
+            className="max-toggle"
+            disabled={!valid || session.busy}
+            title={profileText.bulkTitle}
+            onClick={() => fill(keys)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

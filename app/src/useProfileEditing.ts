@@ -36,6 +36,8 @@ export const EditorContext = createContext<EditorState>({ editable: false, readO
 /** The inputs of the profile being edited (header and body), for the components that draw them. */
 export interface EditSession {
   entity: Entity;
+  /** The keys of the fields that can be edited here. */
+  keys: string[];
   /** Whether the field with this key can be edited here. */
   has: (key: string) => boolean;
   input: (key: string) => InputState | null;
@@ -158,6 +160,7 @@ export function useProfileEditing(entity: Entity, uid: number): ProfileEditing {
     return {
       entity,
       busy: applying,
+      keys: [...byKey.keys()].filter((key) => start[key] !== undefined),
       has: (key) => byKey.has(key) && start[key] !== undefined,
       input: (key) => {
         const field = byKey.get(key);

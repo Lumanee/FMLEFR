@@ -741,6 +741,9 @@ export const en = {
     // Above the attributes, while the profile is read
     /** Sets every attribute of the player to its best at once. */
     maxAttributes: "Max attributes",
+    bulkSet: "Set to",
+    bulkAll: "All attributes",
+    bulkTitle: "Fills the inputs below with this value; nothing is written until Apply",
     maxAttributesTitle: "Set every attribute of this player to its best: 20, and 1 for injury proneness and dirtiness",
     /** What Max attributes wrote, beside the button that takes it back; then what that undid. */
     maxAttributesDone: (count: number) =>

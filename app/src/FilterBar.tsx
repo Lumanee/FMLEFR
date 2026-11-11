@@ -2,8 +2,9 @@
 // and Clear. Under it, the filters the two lists share (whom to show, age, abilities, nation, club, contract end and
 // attributes), between which each list puts its own (see PlayerFilters.tsx and StaffFilters.tsx).
 
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { readAttributeRows, toAttributeBounds, type AttributeChoices, type AttributeRow } from "./AttributeFilters";
+import { listNations } from "./editing";
 import { playerListText } from "./labels";
 import type { FmDate, PersonFilter } from "./types";
 
@@ -261,6 +262,53 @@ export function TextInput({ label, value, onChange }: InputProps<string> & { lab
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
       />
+    </label>
+  );
+}
+
+/** The nations of the game, read once: the choices of every nation input. Empty while unread or when it cannot be. */
+let nationNames: Promise<string[]> | null = null;
+
+function loadNationNames(): Promise<string[]> {
+  nationNames ??= listNations()
+    .then((nations) => [...new Set(nations.map((nation) => nation.name))].sort((a, b) => a.localeCompare(b)))
+    .catch(() => {
+      nationNames = null;
+      return [];
+    });
+  return nationNames;
+}
+
+/**
+ * A nation: the text field of the filters, with the nations of the game to pick from (a list that narrows as it is
+ * typed in). Typing part of a name still works, as before.
+ */
+export function NationInput({ label, value, onChange }: InputProps<string> & { label: string }) {
+  const listId = useId();
+  const [names, setNames] = useState<string[]>([]);
+  useEffect(() => {
+    let current = true;
+    void loadNationNames().then((loaded) => current && setNames(loaded));
+    return () => {
+      current = false;
+    };
+  }, []);
+  return (
+    <label className="filter-field">
+      <span>{label}</span>
+      <input
+        type="text"
+        list={listId}
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        onChange={(e) => onChange(e.currentTarget.value)}
+      />
+      <datalist id={listId}>
+        {names.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
     </label>
   );
 }

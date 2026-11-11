@@ -32,6 +32,7 @@ import {
   planClubSwap,
   planStaffMove,
   roomMakers,
+  scoutingOverview,
   swapPlayers,
 } from "./editing";
 import { toPounds, toShown } from "./currency";
@@ -545,6 +546,23 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
       cancelled = true;
     };
   }, [staff]);
+
+  // The club the human manager runs is the one the dialog starts with, unless the person is already there or one has been
+  // picked meanwhile. Without such a club (no team picked yet), the dialog starts empty as before.
+  useEffect(() => {
+    let cancelled = false;
+    scoutingOverview().then(
+      ({ club: mine }) => {
+        if (!cancelled && mine.uid !== player.clubUid) {
+          setClub((picked) => picked ?? mine);
+        }
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [player.clubUid]);
 
   // A member of staff's contract keeps its terms in a move: only one signed has terms to set.
   const hasTerms = !staff || signing;

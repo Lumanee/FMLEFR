@@ -10,6 +10,7 @@ import {
   GenderInput,
   NO_PERSON_FILTERS,
   readPersonFields,
+  NationInput,
   TextInput,
   toPersonFilter,
   type PersonFilterFields,
@@ -109,7 +110,7 @@ export function StaffFilterBar({ fields, onChange, active, genderKnown, actions 
         title={text.minPotentialAbilityTitle}
         {...input("minPotentialAbility")}
       />
-      <TextInput label={text.nation} {...input("nation")} />
+      <NationInput label={text.nation} {...input("nation")} />
       <TextInput label={text.club} {...input("club")} />
       <CheckInput label={staffText.unemployedOnly} {...input("unemployed")} />
       <ContractEndInput {...input("contractExpiresBy")} />

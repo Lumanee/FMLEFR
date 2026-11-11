@@ -777,6 +777,9 @@ export const tr: Strings = {
 
     // Above the attributes, while the profile is read
     maxAttributes: "Özellikleri tamamla",
+    bulkSet: "Şuna ayarla",
+    bulkAll: "Tüm nitelikler",
+    bulkTitle: "Alanları bu değerle doldurur; Uygula'ya basana kadar hiçbir şey yazılmaz",
     maxAttributesTitle: "Bu oyuncunun bütün özelliklerini en iyiye çıkar: 20; sakatlık eğilimi ve sertlik için 1",
     maxAttributesDone: (count) => (count === 0 ? "Bütün özellikleri zaten en iyide" : `${changes(count)} yazıldı`),
     maxAttributesUndone: (count) => (count === 0 ? "Hiçbir şey geri alınmadı" : `${changes(count)} geri alındı`),
