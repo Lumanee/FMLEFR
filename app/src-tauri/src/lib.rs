@@ -2724,6 +2724,15 @@ fn read_values(state: State<'_, AppState>, entity: Entity, uid: u32) -> Result<B
         .collect())
 }
 
+/// A plain-text report on why a club's finance and team records do or do not check out.
+#[tauri::command]
+fn club_diagnostics(state: State<'_, AppState>, uid: u32) -> Result<String, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let (target, _) = connection.target(Entity::Club, uid)?;
+    Ok(connection.session.club_diagnostics(&target))
+}
+
 /// Writes `edits` (values as stored) to one player or member of staff. Each edit is
 /// checked and written on its own: the ones that fail change nothing and are reported.
 #[tauri::command]
@@ -3686,6 +3695,7 @@ pub fn run() {
             freeze_team,
             edit_fields,
             read_values,
+            club_diagnostics,
             apply_edits,
             recall_loan,
             change_log,

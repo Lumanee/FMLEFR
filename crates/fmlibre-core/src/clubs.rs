@@ -300,33 +300,59 @@ pub(crate) fn finances_look_real(bytes: &[u8], f: &ClubFinanceLayout) -> bool {
         && i32_at(f.total_wage_budget) >= 0
 }
 
-/// The class (vtable) of the full finance record: the one shared by the clubs whose
-/// finances look real, when nearly all of them share one. Only records of this class
-/// are long enough to hold the budgets, so only they are ever written.
-pub(crate) fn full_finance_class(process: &Process, module: &Module, array: &ArrayRef, layout: &Layout) -> Option<u64> {
+/// What the clubs' finance records look like: how many clubs there are, how many of
+/// them have a record that looks real, and the classes (vtables) those records have.
+#[derive(Debug, Clone, Default)]
+pub struct FinanceCensus {
+    pub clubs: usize,
+    pub with_pointer: usize,
+    pub readable: usize,
+    pub real: usize,
+    /// Every class of the real-looking records, with how many records have it, most first.
+    pub classes: Vec<(u64, usize)>,
+}
+
+pub(crate) fn finance_census(process: &Process, module: &Module, array: &ArrayRef, layout: &Layout) -> FinanceCensus {
     let f = &layout.club_finance;
-    let (begin, count) = array.locate(process, module).ok()?;
-    let pointers = process.read_bytes(begin, (count * 8) as usize).ok()?;
+    let mut census = FinanceCensus::default();
+    let Some((begin, count)) = array.locate(process, module).ok() else {
+        return census;
+    };
+    let Some(pointers) = process.read_bytes(begin, (count * 8) as usize).ok() else {
+        return census;
+    };
     let mut classes: BTreeMap<u64, usize> = BTreeMap::new();
-    let mut real = 0;
     for chunk in pointers.as_chunks::<8>().0 {
         let club = u64::from_le_bytes(*chunk);
-        let Some(finance) = is_user_pointer(club).then(|| process.read_u64(club + layout.club.finance).ok()).flatten()
-        else {
-            continue;
-        };
-        if !is_user_pointer(finance) {
+        if !is_user_pointer(club) {
             continue;
         }
+        census.clubs += 1;
+        let Some(finance) = process.read_u64(club + layout.club.finance).ok().filter(|&p| is_user_pointer(p)) else {
+            continue;
+        };
+        census.with_pointer += 1;
         let Ok(bytes) = process.read_bytes(finance, f.end() as usize) else {
             continue;
         };
+        census.readable += 1;
         if finances_look_real(&bytes, f) {
-            real += 1;
+            census.real += 1;
             *classes.entry(u64::from_le_bytes(bytes[..8].try_into().expect("8 bytes"))).or_default() += 1;
         }
     }
-    let (&class, &count) = classes.iter().max_by_key(|&(_, &count)| count)?;
-    // One class for (nearly) every real-looking record, and more than a handful of them.
-    (count >= 10 && count * 100 >= real * 99).then_some(class)
+    census.classes = classes.into_iter().collect();
+    census.classes.sort_by_key(|&(_, count)| std::cmp::Reverse(count));
+    census
+}
+
+/// The class (vtable) of the full finance record: the one shared by the clubs whose
+/// finances look real, when most of them share one. Only records of this class
+/// are long enough to hold the budgets, so only they are ever written.
+pub(crate) fn full_finance_class(process: &Process, module: &Module, array: &ArrayRef, layout: &Layout) -> Option<u64> {
+    let census = finance_census(process, module, array, layout);
+    let &(class, count) = census.classes.first()?;
+    // One class for most real-looking records, and more than a handful of them. A few
+    // records of a smaller class can look real by chance in a big database.
+    (count >= 10 && count * 100 >= census.real * 75).then_some(class)
 }

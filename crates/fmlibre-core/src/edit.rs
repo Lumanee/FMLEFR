@@ -1061,6 +1061,90 @@ impl Session {
         Ok(())
     }
 
+    /// A plain-text report of why the finance and senior-team records of a club do (not) check out,
+    /// for debugging a build whose layout this crate does not know well.
+    pub fn club_diagnostics(&self, target: &Target) -> String {
+        let mut out = String::new();
+        let mut line = |text: String| {
+            out.push_str(&text);
+            out.push('\n');
+        };
+        let club = &self.layout.club;
+        let f = &self.layout.club_finance;
+        match self.process.read_u64(target.address + club.finance) {
+            Err(e) => line(format!("finance pointer: read failed {e:?}")),
+            Ok(pointer) => {
+                line(format!("finance pointer: {pointer:#x} user={}", is_user_pointer(pointer)));
+                if is_user_pointer(pointer) {
+                    match self.process.read_bytes(pointer, f.end() as usize) {
+                        Err(e) => line(format!("finance bytes: read failed {e:?}")),
+                        Ok(bytes) => {
+                            let class = u64::from_le_bytes(bytes[..8].try_into().expect("8 bytes"));
+                            let i32_at = |o: u64| {
+                                i32::from_le_bytes(bytes[o as usize..o as usize + 4].try_into().expect("4 bytes"))
+                            };
+                            let ticket = f32::from_le_bytes(
+                                bytes[f.ticket_price as usize..f.ticket_price as usize + 4].try_into().expect("4"),
+                            );
+                            line(format!("class {class:#x}, record length {}", f.end()));
+                            line(format!(
+                                "ticket {ticket}, corporate {}, balance {}, transfer {}, wage {}, total wage {}",
+                                bytes[f.corporate as usize],
+                                i32_at(f.balance),
+                                i32_at(f.transfer_budget),
+                                i32_at(f.wage_budget),
+                                i32_at(f.total_wage_budget)
+                            ));
+                            line(format!("looks real: {}", finances_look_real(&bytes, f)));
+                            line(format!("session full class: {:?}", self.finance_class().map(|c| format!("{c:#x}"))));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(array) = self.arrays.clubs.as_ref() {
+            let census = crate::clubs::finance_census(&self.process, &self.plugin, array, &self.layout);
+            line(format!(
+                "census: clubs {}, pointer {}, readable {}, real {}",
+                census.clubs, census.with_pointer, census.readable, census.real
+            ));
+            for (class, count) in census.classes.iter().take(6) {
+                line(format!("  class {class:#x}: {count}"));
+            }
+        } else {
+            line("no clubs array".to_string());
+        }
+        match self.process.read_u64(target.address + club.teams) {
+            Err(e) => line(format!("teams pointer: read failed {e:?}")),
+            Ok(teams) => {
+                line(format!("teams pointer: {teams:#x} user={}", is_user_pointer(teams)));
+                if is_user_pointer(teams) {
+                    match self.process.read_u64(teams) {
+                        Err(e) => line(format!("first team: read failed {e:?}")),
+                        Ok(team) => {
+                            line(format!("first team: {team:#x} user={}", is_user_pointer(team)));
+                            if is_user_pointer(team) {
+                                match self.process.read_u64(team + self.layout.team.club) {
+                                    Err(e) => line(format!("team.club: read failed {e:?}")),
+                                    Ok(owner) => line(format!(
+                                        "team.club {owner:#x}, club {:#x}, match {}",
+                                        target.address,
+                                        owner == target.address
+                                    )),
+                                }
+                                match self.process.read_bytes(team + self.layout.team.reputation, 2) {
+                                    Ok(r) => line(format!("team.reputation {}", u16::from_le_bytes([r[0], r[1]]))),
+                                    Err(e) => line(format!("team.reputation: read failed {e:?}")),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// Where `field` of `target` is, or `None` when its record is missing or does not check out.
     fn locate(&self, target: &Target, field: &Field) -> Result<Option<u64>, EditError> {
         Ok(self.record(target, field.place)?.map(|record| field.address(record, target)))
