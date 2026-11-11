@@ -1,6 +1,6 @@
 import { useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { EditableValue } from "./EditControls";
-import { freezeMoney, frozenClubs, renameStadium, stadiumName } from "./editing";
+import { clubDiagnostics, freezeMoney, frozenClubs, renameStadium, stadiumName } from "./editing";
 import { converts, inCurrency } from "./currency";
 import { describeError, formatMoney, formatNumber } from "./format";
 import { InfoTip } from "./InfoTip";
@@ -315,7 +315,26 @@ function FinancesGroup({ club, finances }: { club: number; finances: Finances | 
       ) : (
         <p className="note">{text.noFinances}</p>
       )}
+      <ClubDiagnostics club={club} />
     </section>
+  );
+}
+
+/** Temporary: shows why this club's finance and team records do or do not check out. */
+function ClubDiagnostics({ club }: { club: number }) {
+  const [report, setReport] = useState<string | null>(null);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          clubDiagnostics(club).then(setReport, (error) => setReport(`Error: ${describeError(error)}`));
+        }}
+      >
+        Diagnostic (debug)
+      </button>
+      {report !== null && <pre style={{ userSelect: "text", whiteSpace: "pre-wrap" }}>{report}</pre>}
+    </div>
   );
 }
 

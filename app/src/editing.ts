@@ -102,6 +102,7 @@ export const maxStaffAttributes = (id: number) => call<MassReport>("max_staff_at
 export const listNations = () => call<Nation[]>("list_nations");
 
 /** Every editable field of one player or member of staff, as stored, read from the game now. */
+export const clubDiagnostics = (uid: number) => call<string>("club_diagnostics", { uid });
 export const readValues = (entity: Entity, uid: number) => call<FieldValues>("read_values", { entity, uid });
 
 /** Writes `edits` (values as stored). Each one is checked and written on its own; refused ones change nothing. */
