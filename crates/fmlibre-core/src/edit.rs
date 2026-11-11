@@ -473,6 +473,8 @@ fn staff_fields(layout: &Layout) -> Vec<Field> {
         field("reputation.current", s.current_reputation, Kind::U16, 0..=10_000),
         field("reputation.world", s.world_reputation, Kind::U16, 0..=10_000),
         field("nation", s.nation, Kind::Pointer, POINTERS).single(),
+        // Any birth date from 1930 to 2008; the game works out the age from it. The same place and kind as a player's.
+        field("date_of_birth", s.date_of_birth, Kind::Date, 19300101..=20081231).plausible(19000101..=21001231),
     ];
     out.extend(crate::STAFF_ATTRIBUTE_GROUPS.iter().flat_map(|(_, keys)| keys.iter()).filter_map(|key| {
         if let Some(&offset) = s.attributes.get(*key) {
@@ -615,8 +617,15 @@ impl StaffSummary {
             "potential_ability" => self.potential_ability = value as i16,
             "contract.expires" => self.contract_expires = FmDate::from_number(value),
             "nation" => self.nation_address = value as u64,
+            // The age follows from the game's date, which the caller has (see `note_birth`).
+            "date_of_birth" => self.date_of_birth = FmDate::from_number(value),
             _ => {}
         }
+    }
+
+    /// Works the age out again on `today`, the game's date, after the birth date changed.
+    pub fn note_birth(&mut self, today: Option<FmDate>) {
+        self.age = self.date_of_birth.zip(today).and_then(|(born, today)| born.age_on(today));
     }
 }
 
@@ -1261,11 +1270,11 @@ mod tests {
         assert!(!players.iter().any(|f| f.key == "position.sw"));
         let staff = fields(&layout, Entity::Staff);
         let staff_attributes = layout.staff.attributes.len() + layout.staff.ratings.len();
-        assert_eq!(staff.len(), 6 + staff_attributes + PERSONALITY.len() + 2);
+        assert_eq!(staff.len(), 7 + staff_attributes + PERSONALITY.len() + 2);
         let clubs = fields(&layout, Entity::Club);
-        // Reputation, the 5 facilities and the 4 amounts of money; and the 4 capacities of the stadium where the layout
-        // knows it (Windows so far).
-        assert_eq!(clubs.len(), 10 + if layout.stadium.is_some() { 4 } else { 0 });
+        // Reputation, the 5 facilities and the 3 amounts of money (the spent wage budget is not editable); and the 4
+        // capacities of the stadium where the layout knows it (Windows so far).
+        assert_eq!(clubs.len(), 9 + if layout.stadium.is_some() { 4 } else { 0 });
         if layout.stadium.is_some() {
             assert_eq!(key(&clubs, "stadium.capacity").place, Place::Stadium);
             // A count of seats, not money, which the app shows with a pound sign.

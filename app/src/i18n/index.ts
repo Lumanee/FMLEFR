@@ -6,6 +6,7 @@
 import { saveSnapshot } from "../restore";
 import { en, type Strings } from "./en";
 import { es } from "./es";
+import { fr } from "./fr";
 import { id } from "./id";
 import { it } from "./it";
 import { tr } from "./tr";
@@ -20,6 +21,7 @@ const LANGUAGES = {
   es: { strings: es, intl: "es-ES" },
   id: { strings: id, intl: "id-ID" },
   it: { strings: it, intl: "it-IT" },
+  fr: { strings: fr, intl: "fr-FR" },
 } satisfies Record<string, { strings: Strings; intl: string }>;
 
 export type Locale = keyof typeof LANGUAGES;
