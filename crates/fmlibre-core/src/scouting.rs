@@ -930,6 +930,8 @@ pub struct ScoutRequest {
     pub min_probability: Option<u8>,
     /// Leave out players without a club.
     pub no_free_agents: bool,
+    /// Only players whose nation's name contains this, accents and case ignored; none or empty means any nation.
+    pub nation: Option<String>,
     pub order: ScoutOrder,
     /// How many to return; 50 when none.
     pub limit: Option<usize>,
@@ -1189,6 +1191,9 @@ impl Session {
                 continue;
             }
             if player.woman.is_some_and(|woman| woman != buyer.club.women) {
+                continue;
+            }
+            if !crate::filter::contains(player.nation.as_deref(), request.nation.as_deref()) {
                 continue;
             }
             if let Some(age) = player.age {

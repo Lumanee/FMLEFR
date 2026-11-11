@@ -507,8 +507,7 @@ fn club_fields(layout: &Layout) -> Vec<Field> {
         facility("facilities.corporate", f.corporate, Place::ClubFinance),
         money("finance.balance", f.balance, -2_000_000_000..=2_000_000_000),
         money("finance.transfer_budget", f.transfer_budget, 0..=2_000_000_000),
-        money("finance.wage_budget", f.wage_budget, 0..=100_000_000),
-        money("finance.total_wage_budget", f.total_wage_budget, 0..=100_000_000),
+        // The two wage budgets are not editable: the board's own figures stay as the game set them.
     ];
     // Capacities, as stored. The biggest stadium of the test save held 115,109.
     if let Some(s) = &layout.stadium {

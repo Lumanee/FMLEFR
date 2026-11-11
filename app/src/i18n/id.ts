@@ -762,6 +762,12 @@ export const id: Strings = {
     liftBansTitle: "Cabut setiap larangan bermain pemain ini di game",
 
     maxAttributes: "Maksimalkan atribut",
+
+    bulkSet: "Setel ke",
+
+    bulkAll: "Semua atribut",
+
+    bulkTitle: "Mengisi kolom dengan nilai ini; tidak ada yang ditulis sebelum Terapkan",
     maxAttributesTitle:
       "Atur setiap atribut pemain ini ke nilai terbaiknya: 20, dan 1 untuk kerentanan cedera dan kekasaran",
     maxAttributesDone: (count: number) =>

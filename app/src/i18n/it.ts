@@ -845,6 +845,9 @@ export const it: Strings = {
 
     // Sopra gli attributi, mentre il profilo si legge
     maxAttributes: "Attributi al massimo",
+    bulkSet: "Imposta a",
+    bulkAll: "Tutti gli attributi",
+    bulkTitle: "Riempie i campi con questo valore; non si scrive nulla finché non premi Applica",
     maxAttributesTitle:
       "Porta ogni attributo di questo giocatore al suo meglio: 20, e 1 per propensione agli infortuni e fallosità",
     maxAttributesDone: (count) =>

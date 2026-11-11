@@ -7,7 +7,8 @@ import { scoutingSuggest } from "./editing";
 import { currencySymbol, describeError, fold, formatMoney, formatNumber, formatPercent } from "./format";
 import { InfoTip } from "./InfoTip";
 import { intlLocale } from "./i18n";
-import { positionLabel, scoutingText as text } from "./labels";
+import { NationInput } from "./FilterBar";
+import { playerListText, positionLabel, scoutingText as text } from "./labels";
 import {
   ClubLine,
   depthLineName,
@@ -54,6 +55,7 @@ export interface Brief {
   maxFee: string;
   minProbability: string;
   noFreeAgents: boolean;
+  nation: string;
 }
 
 export const PURPOSES: Purpose[] = ["firstTeam", "rotation", "future", "any"];
@@ -69,6 +71,7 @@ export const DEFAULT_BRIEF: Brief = {
   maxFee: "",
   minProbability: "",
   noFreeAgents: false,
+  nation: "",
 };
 
 /** The positions in the order of the pitch, attack at the top: [key, column, row]. */
@@ -230,6 +233,7 @@ export function ScoutRecommendations({ overview, version, brief, onBrief, onOpen
       maxFee: fee === null ? null : toPounds(Math.max(0, fee)),
       minProbability: wholeNumber(brief.minProbability),
       noFreeAgents: brief.noFreeAgents,
+      nation: brief.nation.trim() || null,
       order: "score",
       limit,
     };
@@ -423,6 +427,13 @@ export function ScoutRecommendations({ overview, version, brief, onBrief, onOpen
                 ))}
               </select>
             </label>
+            <div className="scout-field wide">
+              <NationInput
+                label={playerListText.filters.nation}
+                value={brief.nation}
+                onChange={(nation) => onBrief({ nation })}
+              />
+            </div>
             <label className="scout-check wide">
               <input
                 type="checkbox"

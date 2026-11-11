@@ -9,6 +9,7 @@ import {
   FilterBar,
   GenderInput,
   NO_PERSON_FILTERS,
+  NationInput,
   TextInput,
   toPersonFilter,
   type PersonFilterFields,
@@ -108,7 +109,7 @@ export function PlayerFilterBar({ fields, onChange, active, genderKnown, actions
         title={text.minPotentialAbilityTitle}
         {...input("minPotentialAbility")}
       />
-      <TextInput label={text.nation} {...input("nation")} />
+      <NationInput label={text.nation} {...input("nation")} />
       <TextInput label={text.club} {...input("club")} />
       <CheckInput label={text.freeAgentsOnly} {...input("freeAgents")} />
       <ContractEndInput {...input("contractExpiresBy")} />

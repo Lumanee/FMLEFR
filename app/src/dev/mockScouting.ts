@@ -334,6 +334,7 @@ export function scoutingSuggest(f: ScoutingFixtures, request: ScoutRequest): Sco
     .filter((p) => rating(f, p.uid, request.position) >= 10)
     .filter((p) => (request.minAge == null || (p.age ?? 0) >= request.minAge) && (request.maxAge == null || (p.age ?? 99) <= request.maxAge))
     .filter((p) => !(request.noFreeAgents && p.clubUid === null))
+    .filter((p) => !request.nation || (p.nation ?? "").toLowerCase().includes(request.nation.toLowerCase()))
     .filter((p) => purpose !== "future" || ((p.age ?? 99) <= 21 && p.potentialAbility - p.currentAbility >= 15));
   let suggestions = fitting.map((p) => suggestion(f, p, request, club));
   if (purpose === "firstTeam") suggestions = suggestions.filter((s) => s.fit > bestOwn);
