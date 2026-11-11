@@ -61,6 +61,13 @@ const FLAGS: Record<Locale, ReactNode> = {
       <rect x="2" width="1" height="2" fill="#ce2b37" shapeRendering="crispEdges" />
     </svg>
   ),
+  fr: (
+    <svg className="language-flag" viewBox="0 0 3 2" aria-hidden="true">
+      <rect width="3" height="2" fill="#fff" />
+      <rect width="1" height="2" fill="#002654" shapeRendering="crispEdges" />
+      <rect x="2" width="1" height="2" fill="#ce1126" shapeRendering="crispEdges" />
+    </svg>
+  ),
 };
 
 /** The languages on offer, in the order of the menu, each with its own name. */
@@ -70,6 +77,7 @@ const LANGUAGES: readonly { id: Locale; name: string }[] = [
   { id: "es", name: "Español" },
   { id: "id", name: "Bahasa Indonesia" },
   { id: "it", name: "Italiano" },
+  { id: "fr", name: "Français" },
 ];
 
 /** The name and hover text of the button: "Settings: English, Euro". */
