@@ -1,9 +1,18 @@
 # Personal build of this fork: the portable Windows app, with no installer and no signing key needed.
-# Run it by hand (Actions tab > Personal build > Run workflow), then download the zip from the finished run.
+# Every push to main builds it and updates the "latest" release with the zip, whose download link never changes:
+#   https://github.com/Lumanee/FMLEFR/releases/latest/download/FMLEFR-portable.zip
+# It can also be run by hand (Actions tab > Personal build > Run workflow).
 name: Personal build
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   windows:
@@ -45,3 +54,18 @@ jobs:
         with:
           name: FMLEFR-portable
           path: FMLEFR-portable.zip
+
+      - name: Update the latest release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = "Build of $env:GITHUB_SHA"
+          gh release view latest *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload latest FMLEFR-portable.zip --clobber
+            gh release edit latest --notes $notes
+          } else {
+            gh release create latest FMLEFR-portable.zip --title "FMLEFR (latest build)" --notes $notes --target $env:GITHUB_SHA
+          }
