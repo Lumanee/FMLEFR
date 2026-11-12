@@ -1,0 +1,13 @@
+level,nom,type,nb_groupes,clubs_par_groupe,statut,remarque
+1,Ligue 1,national,1,18,pro,a verifier selon la saison
+2,Ligue 2,national,1,18,pro,a verifier selon la saison
+3,National 1,national,1,18,semi-pro,
+4,National 2,national,4,16,semi-pro/amateur,
+5,National 3,national,12,14,amateur,
+6,Regional 1,regional,,,amateur,par ligue regionale ; effectif variable
+7,Regional 2,regional,,,amateur,par ligue regionale ; poules variables
+8,Regional 3,regional,,,amateur,par ligue regionale ; absent dans certaines ligues
+9,Departemental 1,district,,,amateur,par district
+10,Departemental 2,district,,,amateur,par district
+11,Departemental 3,district,,,amateur,par district
+12,Departemental 4,district,,,amateur,par district ; nombre de niveaux variable
