@@ -1,0 +1,14 @@
+ligue_id,nom,region,verifie
+ARA,Ligue Auvergne-Rhone-Alpes,Auvergne-Rhone-Alpes,non
+BFC,Ligue Bourgogne-Franche-Comte,Bourgogne-Franche-Comte,non
+BRE,Ligue de Bretagne,Bretagne,non
+CVL,Ligue Centre-Val de Loire,Centre-Val de Loire,non
+COR,Ligue Corse,Corse,non
+GES,Ligue Grand Est,Grand Est,non
+HDF,Ligue Hauts-de-France,Hauts-de-France,non
+IDF,Ligue de Paris Ile-de-France,Ile-de-France,non
+NOR,Ligue de Normandie,Normandie,non
+NAQ,Ligue Nouvelle-Aquitaine,Nouvelle-Aquitaine,non
+OCC,Ligue Occitanie,Occitanie,non
+PDL,Ligue Pays de la Loire,Pays de la Loire,non
+PAC,Ligue Mediterranee,Provence-Alpes-Cote d'Azur,non
