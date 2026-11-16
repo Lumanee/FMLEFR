@@ -1223,13 +1223,15 @@ export const ru: Strings = {
     mensTeam: "Мужская сборная",
     reputationShort: "РЕП",
     reputationTitle: "Репутация основной команды, от 0 до 10 000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count) => `Игроки основной команды (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "Игроки основной команды",
-    squadNote: "Игроки, которых игра перечисляет у основной команды, в её порядке. Вызовы, капитаны и контракт тренера здесь не редактируются.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "У этой сборной в игре нет основной команды, поэтому показывать нечего: ни состава, ни репутации.",
+    teamKinds: { 0: "Основная команда", 9: "U-23", 10: "U-21", 18: "U-20", 11: "U-19", 12: "U-18" },
+    teamType: (kind) => `Тип ${kind}`,
+    teamsLabel: "Команды этой сборной",
+    teamReputation: (team) => `Репутация (${team})`,
+    teamReputationTitle: "Репутация этой команды, от 0 до 10 000",
+    squadHeading: (team, count) => `${team}: игроков — ${format(count)}`,
+    squadLabel: (team) => `Игроки сборной: ${team}`,
+    squadNote: "Игроки, которых игра перечисляет у этой команды, в её порядке. Вызовы, капитаны и контракт тренера здесь не редактируются.",
+    noTeams: "У этой сборной в игре нет команд, поэтому показывать нечего: ни состава, ни репутации.",
     reading: "Чтение состава…",
     noPlayers: "Игра не перечисляет игроков этой команды.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

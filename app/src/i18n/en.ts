@@ -1249,13 +1249,26 @@ export const en = {
     mensTeam: "Men's national team",
     reputationShort: "REP",
     reputationTitle: "Reputation of the senior team, from 0 to 10,000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count: number) => `Senior team players (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "Players of the senior team",
-    squadNote: "The players the game lists for the senior team, in its order. Calling players up, captains and the manager's contract are not edited here.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "The game keeps no senior team for this one, so there is no squad or reputation to show.",
+    /**
+     * The game's names of a nation's teams by the code of their kind, as its national team screens name them; a kind
+     * missing here is named by `teamType`. Kind 0 is the senior team.
+     */
+    teamKinds: { 0: "Senior team", 9: "Under 23", 10: "Under 21", 18: "Under 20", 11: "Under 19", 12: "Under 18" } as Partial<Record<number, string>>,
+    /** A team of a kind the editor has no name for: the game's code for it. */
+    teamType: (kind: number) => `Type ${kind}`,
+    /** The name of the group of buttons that picks one of the nation's teams, for assistive technology. */
+    teamsLabel: "Teams of this nation",
+    /** The name of the reputation of a team other than the senior one, in the Changes view; `team` is its name. */
+    teamReputation: (team: string) => `Reputation (${team})`,
+    /** Hover text of the reputation of the team picked, other than the senior one. */
+    teamReputationTitle: "Reputation of this team, from 0 to 10,000",
+    /** Over the squad; `team` is the name of the team picked and `count` how many players it lists. */
+    squadHeading: (team: string, count: number) => `${team}: ${format(count)} ${count === 1 ? "player" : "players"}`,
+    /** The name of the squad table for assistive technology; `team` is the name of the team picked. */
+    squadLabel: (team: string) => `Players of the national team: ${team}`,
+    squadNote: "The players the game lists for this team, in its order. Calling players up, captains and the manager's contract are not edited here.",
+    /** For a nation the game keeps no team for. */
+    noTeams: "The game keeps no teams for this one, so there is no squad or reputation to show.",
     reading: "Reading the squad…",
     noPlayers: "The game lists no players for this team.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

@@ -415,8 +415,12 @@ export const clubSquads = (uid: number) => call<ClubTeam[]>("club_squads", { uid
 /** Whether this build of the game has national teams to show, and if not, why. */
 export const nationalStatus = () => call<NationalStatus>("national_status");
 
-/** The national team `uid` as its profile shows it: its list row and its senior team with the players, read now. */
-export const nationalProfile = (uid: number) => call<NationalProfile>("national_squad", { uid });
+/**
+ * The national team `uid` as its profile shows it, read now: its list row, its teams, and its team of kind `kind` with
+ * the players (its senior team when `kind` is null, or when it has no team of that kind).
+ */
+export const nationalProfile = (uid: number, kind: number | null) =>
+  call<NationalProfile>("national_squad", { uid, kind });
 
 /**
  * Makes the player `uid` the captain or vice-captain of the club's team `team` (see `ClubTeam.index`); he must play

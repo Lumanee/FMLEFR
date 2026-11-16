@@ -1160,13 +1160,15 @@ export const id: Strings = {
     mensTeam: "Tim nasional pria",
     reputationShort: "REP",
     reputationTitle: "Reputasi tim utama, dari 0 sampai 10.000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count: number) => `Pemain tim utama (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "Pemain tim utama",
-    squadNote: "Pemain yang dicantumkan game untuk tim utama, menurut urutannya. Pemanggilan pemain, kapten, dan kontrak pelatih tidak diedit di sini.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "Game tidak menyimpan tim utama untuk tim ini, jadi tidak ada skuad atau reputasi yang bisa ditampilkan.",
+    teamKinds: { 0: "Tim utama", 9: "U-23", 10: "U-21", 18: "U-20", 11: "U-19", 12: "U-18" },
+    teamType: (kind: number) => `Tipe ${kind}`,
+    teamsLabel: "Tim negara ini",
+    teamReputation: (team: string) => `Reputasi (${team})`,
+    teamReputationTitle: "Reputasi tim ini, dari 0 sampai 10.000",
+    squadHeading: (team: string, count: number) => `${team}: ${format(count)} pemain`,
+    squadLabel: (team: string) => `Pemain tim nasional: ${team}`,
+    squadNote: "Pemain yang dicantumkan game untuk tim ini, menurut urutannya. Pemanggilan pemain, kapten, dan kontrak pelatih tidak diedit di sini.",
+    noTeams: "Game tidak menyimpan tim apa pun untuk tim nasional ini, jadi tidak ada skuad atau reputasi yang bisa ditampilkan.",
     reading: "Membaca skuad…",
     noPlayers: "Game tidak mencantumkan pemain untuk tim ini.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
