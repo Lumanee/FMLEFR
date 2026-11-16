@@ -1536,6 +1536,7 @@ mod tests {
                 "FM27 Steam build 26340721 (27.0.0)",
                 "FM27 Steam build 26340721 (27.0.0, macOS, Apple silicon)",
                 "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
+                "FM27 Steam build 26577676",
             ]
         );
     }
