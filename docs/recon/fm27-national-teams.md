@@ -123,11 +123,12 @@ The captain was not found on these screens: Donnarumma's profile does not say he
 
 ## In the editor
 
-The National teams tab (#169) reads the containers from the two arrays above, lists each nation's men's and women's
-team with the reputation of its senior team, shows the squad as the game lists it (a player's name opens his profile)
-and edits the reputation through the same guarded write as a club's. Calling players up, the captains and the
-manager's contract are not in it. It works where the build's profile names the two arrays (`[national_teams]`) and the
-layout the containers (`[national]`): so far the Mac build above. On the same build and a save of 19 September 2026,
+The Clubs tab's National teams list (#169) reads the containers from the two arrays above, lists each nation's men's
+and women's team with the reputation of its senior team, shows the squad as the game lists it (a player's name opens
+his profile) and edits the reputation through the same guarded write as a club's. Calling players up, the captains and
+the manager's contract are not in it. It works where the build's profile names the two arrays (`[national_teams]`) and
+the layout the containers (`[national]`): the Mac build above, and the Windows builds below. On the Mac build and a save
+of 19 September 2026,
 Italia's men's team lists 26 players now (23 when the notes above were written) from Donnarumma, Di Lorenzo, Bastoni
 and Mancini, with a reputation of 8500; all 502 containers read. The men's team of The United Kingdom of Great Britain
 and Ireland (UID 145174) has no senior team of kind 0, so it lists with no reputation and an empty squad; the other three

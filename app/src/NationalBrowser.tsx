@@ -1,9 +1,10 @@
-// The National teams tab: each nation's men's and women's team with the reputation of its senior team, and, beside the
-// list, the profile of the one picked: its reputation, which can be edited, and the squad the game lists for the senior
-// team. Calling players up, the captains and the manager's contract are not here (see docs/recon/fm27-national-teams.md).
-// Where this version of the game has no national teams to read, the tab says why instead of the list.
+// The national teams, which the Clubs tab lists behind its switch (see `TeamsSwitch`): each nation's men's and women's
+// team with the reputation of its senior team, and, beside the list, the profile of the one picked: its reputation,
+// which can be edited, and the squad the game lists for the senior team. Calling players up, the captains and the
+// manager's contract are not here (see docs/recon/fm27-national-teams.md). Where this version of the game has no
+// national teams to read, it says why instead of the list.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Ability } from "./Ability";
 import { EditableValue } from "./EditControls";
 import { nationalProfile, nationalStatus } from "./editing";
@@ -29,10 +30,12 @@ interface NationalBrowserProps {
   active: boolean;
   /** What the command palette asks of the list (see `ListRequest`). */
   request?: ListRequest<NationalTeamSummary> | null;
+  /** Over the list, and over the note when there is none: the switch back to the clubs (see `TeamsSwitch`). */
+  scope?: ReactNode;
 }
 
 /** The nations' teams with the profile of the selected one beside them; or the reason there are none to show. */
-export function NationalBrowser({ version, active, request = null }: NationalBrowserProps) {
+export function NationalBrowser({ version, active, request = null, scope }: NationalBrowserProps) {
   const [status, setStatus] = useState<NationalStatus | null>(null);
   const [kind, setKind] = useState<Kind>(() => restored("nationalKind", readKind));
   useSnapshot("nationalKind", () => kind);
@@ -52,6 +55,7 @@ export function NationalBrowser({ version, active, request = null }: NationalBro
   if (status?.available === false) {
     return (
       <section className="national-unavailable" hidden={!active} aria-live="polite">
+        {scope}
         <h2>{text.unavailableTitle}</h2>
         <p>{status.reason === "unreadable" ? text.unavailableUnreadable : text.unavailableBuild}</p>
       </section>
@@ -70,6 +74,7 @@ export function NationalBrowser({ version, active, request = null }: NationalBro
       placeholder={text.search}
       summary={text.summary}
       empty={(query) => text.empty(query, kind !== "all")}
+      scope={scope}
       filterBar={
         <FilterBar active={kind === "all" ? 0 : 1} onClear={() => setKind("all")}>
           <label className="filter-field">

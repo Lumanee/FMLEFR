@@ -131,7 +131,7 @@ export const clubStaffText = strings.clubStaff;
 /** The club list, with the sidebar entry and the status-line count that go with it. */
 export const clubListText = strings.clubList;
 
-/** The National teams tab: the list, the profile of a national team and why the tab may show none. */
+/** The Clubs tab's national teams: the list, the profile of a national team and why there may be none. */
 export const nationalText = strings.national;
 
 /**

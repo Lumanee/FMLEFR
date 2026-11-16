@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ClubFilterBar, countClubFilters, readClubFields, toClubFilter, type ClubFilterFields } from "./ClubFilters";
 import { ClubProfile, readTab, type ClubTab } from "./ClubProfile";
 import { ExportButton } from "./ExportDialog";
@@ -17,10 +17,12 @@ interface ClubBrowserProps {
   active: boolean;
   /** What the command palette asks of the list (see `ListRequest`). */
   request: ListRequest<ClubSummary> | null;
+  /** Over the list: the switch to the national teams the tab also lists (see `TeamsSwitch`). */
+  scope?: ReactNode;
 }
 
 /** The clubs table with the profile of the selected club beside it. */
-export function ClubBrowser({ version, active, request }: ClubBrowserProps) {
+export function ClubBrowser({ version, active, request, scope }: ClubBrowserProps) {
   // It starts as it was before the language was switched, if it was (see `restore.ts`).
   const [fields, setFields] = useState<ClubFilterFields>(() => restored("clubFilters", readClubFields));
   useSnapshot("clubFilters", () => fields);
@@ -40,6 +42,7 @@ export function ClubBrowser({ version, active, request }: ClubBrowserProps) {
       placeholder={clubListText.search}
       summary={clubListText.summary}
       empty={(query) => clubListText.empty(query, filter !== undefined)}
+      scope={scope}
       filterBar={
         <ClubFilterBar fields={fields} onChange={setFields} active={countClubFilters(filter)} version={version} />
       }

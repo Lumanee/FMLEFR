@@ -1156,10 +1156,11 @@ export const tr: Strings = {
       maxReputation: "En yüksek itibar",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "Milli takımlar",
+    switchLabel: "Kulüpler veya milli takımlar",
     search: "Ada, koda veya UID'ye göre milli takım ara",
     summary: (total, shown) =>
       total > shown ? `Milli takımlar: ${format(total)} · itibara göre ilk ${shown} gösteriliyor` : `Milli takımlar: ${format(total)}`,

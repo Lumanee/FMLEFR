@@ -1247,10 +1247,11 @@ export const de: Strings = {
       maxReputation: "Höchstes Ansehen",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "Nationalteams",
+    switchLabel: "Vereine oder Nationalteams",
     search: "Nationalteams nach Name, Kürzel oder UID suchen",
     summary: (total, shown) =>
       total > shown ? `Nationalteams: ${format(total)} · die besten ${shown} nach Ansehen` : `Nationalteams: ${format(total)}`,

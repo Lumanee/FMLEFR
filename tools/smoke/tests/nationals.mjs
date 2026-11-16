@@ -1,8 +1,9 @@
-// The National teams tab (#169): every nation's men's and women's team, read from the two arrays of containers the
-// build profile places, with the reputation of each senior team and the players the game lists for it, as the probe
-// reads them; the tab's list, its search and its filter, a team's profile with its squad, a player opened from it, and
-// Edit offering the reputation (nothing is applied: the edit itself is in the `edit` test). Writes nothing. On a build
-// whose profile places no national teams, the tab's note saying why.
+// The national teams (#169), which the Clubs tab lists behind its switch: every nation's men's and women's team, read
+// from the two arrays of containers the build profile places, with the reputation of each senior team and the players
+// the game lists for it, as the probe reads them; no tab of their own; the switch, the list, its search and its filter,
+// a team's profile with its squad, a player opened from it, Edit offering the reputation (nothing is applied: the edit
+// itself is in the `edit` test), and the switch back to the clubs. Writes nothing. On a build whose profile places no
+// national teams, the note saying why, with the switch back.
 import { SHOWN, VIS } from "../lib/app.mjs";
 
 export const name = "nationals";
@@ -14,6 +15,17 @@ const ALL = 1000;
 const ROWS = `[...document.querySelectorAll("table.national-grid tbody tr")].filter(${SHOWN})`;
 const PROFILE = `${VIS}(".profile:not(.popup)")`;
 const POPUP = `document.querySelector(".modal-backdrop .profile.popup")`;
+/** The button of the Clubs tab's switch for "clubs" or "nationals", in the list on show. */
+const SWITCH = (teams) => `${VIS}('.teams-switch [data-teams="${teams}"]')`;
+const TAB_NAMES = `[...document.querySelectorAll("nav.tabs button")].map((b) => b.firstChild?.textContent.trim())`;
+
+/** Opens the Clubs tab on one of its two lists, by its switch. */
+async function showTeams(app, teams) {
+  await app.openTab("Clubs");
+  await app.waitFor(SWITCH(teams), "the Clubs tab's switch");
+  await app.click(SWITCH(teams), teams === "clubs" ? "Clubs" : "National teams");
+  await app.waitFor(`${SWITCH(teams)}?.getAttribute("aria-pressed") === "true"`, `the ${teams} on show`);
+}
 
 /**
  * What `fmlibre-probe national-teams UID --squad` reads of one team: its row, and its squad's UIDs in their order. A row
@@ -35,12 +47,17 @@ function probeTeam(probe, uid) {
 }
 
 export async function run({ app, report, probe }) {
+  const tabs = await app.js(TAB_NAMES);
+  report.check("the national teams have no tab of their own", tabs.includes("Clubs") && !tabs.includes("National teams"),
+    tabs.join(", "));
   const status = await app.must("national_status");
   if (!status.available) {
-    // The tab says why, and nothing else.
-    await app.openTab("National teams");
-    const note = await app.waitFor(`${VIS}(".national-unavailable h2")?.textContent`, "the tab's note");
-    report.check("the tab says why it shows no national teams", /not available/.test(note), `${status.reason}: ${note}`);
+    // The note says why, and the switch takes the tab back to the clubs.
+    await showTeams(app, "nationals");
+    const note = await app.waitFor(`${VIS}(".national-unavailable h2")?.textContent`, "the note");
+    report.check("the Clubs tab says why it shows no national teams", /not available/.test(note), `${status.reason}: ${note}`);
+    await showTeams(app, "clubs");
+    report.check("the switch takes it back to the clubs", await app.js(`!!${VIS}("table.club-grid:not(.national-grid)")`));
     report.skip("the national teams", `this build has none to read (${status.reason})`);
     return;
   }
@@ -87,8 +104,12 @@ export async function run({ app, report, probe }) {
   report.check("its reputation is the one field to edit", fields.length === 1 && fields[0].key === "reputation",
     fields.map((field) => field.key).join(", "));
 
-  // The same in the tab: found by its code, its profile and its squad, a player opened over it.
-  await app.openTab("National teams");
+  // The same in the Clubs tab, by its switch: found by its code, its profile and its squad, a player opened over it.
+  await showTeams(app, "nationals");
+  report.check("the switch shows the national teams in place of the clubs",
+    await app.js(`!!${VIS}("table.national-grid") && !${VIS}("table.club-grid:not(.national-grid)")`));
+  await app.waitFor(`${ROWS}.length > 0`, "the national teams' rows");
+  await app.shot("nationals-list");
   await app.waitFor(`${VIS}(".search input")`, "the search");
   await app.setInput(`${VIS}(".search input")`, team.code);
   const row = `${ROWS}.find((tr) => tr.querySelector(".col-uid")?.textContent.trim() === ${JSON.stringify(String(team.uid))})`;
@@ -126,4 +147,10 @@ export async function run({ app, report, probe }) {
   }
   await app.setInput(`${VIS}(".search input")`, "");
   await app.press("Escape");
+
+  // Back to the clubs, as the tests after this one expect the Clubs tab.
+  await showTeams(app, "clubs");
+  report.check("the switch takes the tab back to the clubs",
+    await app.js(`!!${VIS}("table.club-grid:not(.national-grid)") && !${VIS}("table.national-grid")`));
+  await app.shot("nationals-back-to-clubs");
 }

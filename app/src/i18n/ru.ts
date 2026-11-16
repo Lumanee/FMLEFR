@@ -1187,10 +1187,11 @@ export const ru: Strings = {
       maxReputation: "Максимальная репутация",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "Сборные",
+    switchLabel: "Клубы или сборные",
     search: "Поиск сборных по названию, коду или UID",
     summary: (total, shown) =>
       total > shown ? `Сборные: ${format(total)} · показаны первые ${shown} по репутации` : `Сборные: ${format(total)}`,

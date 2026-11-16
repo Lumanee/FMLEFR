@@ -1153,10 +1153,11 @@ export const ja: Strings = {
       maxReputation: "評価の上限",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "代表チーム",
+    switchLabel: "クラブまたは代表チーム",
     search: "名前、コード、UIDで代表チームを検索",
     summary: (total: number, shown: number) =>
       total > shown ? `代表チーム：${format(total)} · 評価の上位${shown}チームを表示` : `代表チーム：${format(total)}`,

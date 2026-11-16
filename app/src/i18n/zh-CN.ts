@@ -1270,10 +1270,11 @@ export const zhCN: Strings = {
       maxReputation: "最高声望",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "国家队",
+    switchLabel: "俱乐部或国家队",
     search: "按名称、代码或 UID 搜索国家队",
     summary: (total: number, shown: number) =>
       total > shown ? `国家队：${format(total)} · 按声望显示前 ${shown} 支` : `国家队：${format(total)}`,

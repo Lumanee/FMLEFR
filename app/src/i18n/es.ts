@@ -1179,10 +1179,11 @@ export const es: Strings = {
       maxReputation: "Reputación máxima",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "Selecciones",
+    switchLabel: "Clubes o selecciones",
     search: "Buscar selecciones por nombre, código o UID",
     summary: (total, shown) =>
       total > shown ? `Selecciones: ${format(total)} · se muestran las ${shown} primeras por reputación` : `Selecciones: ${format(total)}`,

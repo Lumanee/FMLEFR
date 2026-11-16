@@ -1179,10 +1179,11 @@ export const ko: Strings = {
       maxReputation: "최고 명성",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "국가대표",
+    switchLabel: "구단 또는 국가대표",
     search: "이름, 코드 또는 UID로 국가대표 검색",
     summary: (total, shown) =>
       total > shown ? `국가대표: ${format(total)} · 명성 상위 ${shown}개 표시` : `국가대표: ${format(total)}`,

@@ -1212,10 +1212,12 @@ export const en = {
       maxReputation: "Highest reputation",
     },
   },
-  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
   national: {
-    /** The entry in the sidebar. */
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
     nav: "National teams",
+    /** The name of the Clubs tab's switch between the clubs and the national teams, for assistive technology. */
+    switchLabel: "Clubs or national teams",
     search: "Search nations by name, code or UID",
     summary: (total: number, shown: number) =>
       total > shown ? `${format(total)} national teams · showing the top ${shown} by reputation` : `${format(total)} national teams`,
