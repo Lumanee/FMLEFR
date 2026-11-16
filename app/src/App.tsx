@@ -4,6 +4,7 @@ import { call, inTauri } from "./api";
 import { BridgeSetup } from "./BridgeSetup";
 import { ChangesView, useChangeFilter, useChangeLog } from "./ChangesView";
 import { ClubBrowser } from "./ClubBrowser";
+import { NationalBrowser } from "./NationalBrowser";
 import { CommandPalette, Keys, SearchIcon, type Command, type Found, type FoundKind } from "./CommandPalette";
 import { CompatibilityNotice } from "./CompatibilityNotice";
 import { CopyDiagnostics } from "./CopyDiagnostics";
@@ -16,6 +17,7 @@ import {
   appText,
   changesText,
   clubListText,
+  nationalText,
   homeText,
   paletteText,
   playerListText,
@@ -51,13 +53,14 @@ import { useWhatsNew } from "./whatsNew";
 import { WhatsNewDialog } from "./WhatsNewDialog";
 import "./App.css";
 
-type View = "home" | "players" | "staff" | "clubs" | "scouting" | "changes";
+type View = "home" | "players" | "staff" | "clubs" | "nationals" | "scouting" | "changes";
 
 const VIEWS: { id: View; label: string }[] = [
   { id: "home", label: homeText.nav },
   { id: "players", label: playerListText.nav },
   { id: "staff", label: staffListText.nav },
   { id: "clubs", label: clubListText.nav },
+  { id: "nationals", label: nationalText.nav },
   { id: "scouting", label: scoutingText.nav },
   { id: "changes", label: changesText.nav },
 ];
@@ -533,6 +536,7 @@ function App() {
                   active={view === "clubs"}
                   request={request?.kind === "club" ? request.ask : null}
                 />
+                <NationalBrowser version={dataVersion} active={view === "nationals"} />
                 <ScoutingBrowser version={dataVersion} active={view === "scouting"} gameDate={connection.gameDate} />
                 {view === "changes" && (
                   <ChangesView

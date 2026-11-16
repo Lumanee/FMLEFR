@@ -17,7 +17,7 @@ import { applyEdits, readValues } from "./editing";
 import { fieldTable } from "./fieldTables";
 import { describeError } from "./format";
 import { editText, fieldLabel } from "./labels";
-import type { EditField, Entity, FieldValues, LoggedChange } from "./types";
+import type { EditEntity, EditField, FieldValues, LoggedChange } from "./types";
 
 /** What the app tells the profiles about editing. */
 export interface EditorState {
@@ -36,7 +36,7 @@ export const EditorContext = createContext<EditorState>({ editable: false, readO
 
 /** The inputs of the profile being edited (header and body), for the components that draw them. */
 export interface EditSession {
-  entity: Entity;
+  entity: EditEntity;
   /** Whether the field with this key can be edited here. */
   has: (key: string) => boolean;
   input: (key: string) => InputState | null;
@@ -140,7 +140,7 @@ const openProfiles: RefObject<ProfileKeys | null>[] = [];
 export const profileOnTop = (): ProfileKeys | null => openProfiles[openProfiles.length - 1]?.current ?? null;
 
 /** The editing of the player, member of staff or club `uid`, as `entity` says. Mount it with `key={uid}`. */
-export function useProfileEditing(entity: Entity, uid: number): ProfileEditing {
+export function useProfileEditing(entity: EditEntity, uid: number): ProfileEditing {
   const { editable, onEdited } = useContext(EditorContext);
   const [stage, setStage] = useState<Stage>("view");
   const [fields, setFields] = useState<EditField[]>([]);

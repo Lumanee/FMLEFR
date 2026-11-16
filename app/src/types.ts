@@ -141,7 +141,7 @@ export interface ChangeExportRow {
   time: string;
   name: string;
   uid: number;
-  entity: Entity;
+  entity: EditEntity;
   /** The field's key. */
   field: string;
   /** The field's name in the language of the window. */
@@ -236,6 +236,39 @@ export interface ClubSummary {
   league: string | null;
   leagueUid: number | null;
   leagueNation: string | null;
+}
+
+/** A nation's men's or women's national team, as the National teams list shows it (see `search_national_teams`). */
+export interface NationalTeamSummary {
+  /** The UID of its container: the nation's for a men's team, a number of its own for a women's. */
+  uid: number;
+  /** The nation's name, in the game's language, and its three-letter code. */
+  name: string;
+  code: string | null;
+  nationUid: number;
+  /** A women's team. */
+  women: boolean;
+  /** 0–10000, from the senior team; null for the one team the game gives none. */
+  reputation: number | null;
+  /** How many players the senior team lists. */
+  players: number;
+}
+
+/** A national team as its profile shows it (see `national_squad`): its list row and its senior team's players. */
+export interface NationalProfile {
+  team: NationalTeamSummary;
+  squad: ClubTeam;
+}
+
+/**
+ * Whether this build of the game has national teams the editor can show: when it has not, `reason` says "build" (nobody
+ * has found where this build keeps them) or "unreadable" (the profile places them, but what is there does not read as
+ * the game's).
+ */
+export interface NationalStatus {
+  available: boolean;
+  reason?: "build" | "unreadable";
+  teams: number;
 }
 
 /** A league the clubs play in, for the club list's filter (see `club_leagues`). */
@@ -719,6 +752,9 @@ export interface Ban {
 /** What an edit is for. */
 export type Entity = "player" | "staff" | "club";
 
+/** What a change can be made to: the lists' entities, and a nation's national team (its senior team's reputation). */
+export type EditEntity = Entity | "nationalTeam";
+
 /** A value of a player, member of staff or club that the editor can change, from `edit_fields`. */
 export interface EditField {
   /**
@@ -731,7 +767,7 @@ export interface EditField {
    * "finance.wage_budget", "finance.total_wage_budget".
    */
   key: string;
-  entity: Entity;
+  entity: EditEntity;
   /**
    * "date": values are numbers like 20290630 (see `dateFromNumber` in editing.ts); "i32": money in pounds; "u32": a
    * count, such as a stadium's capacity; "flag": 0 or 1, a yes-or-no such as being on the transfer list; "pointer":
@@ -781,7 +817,7 @@ export interface LoggedChange {
   at: number;
   /** The person's name when it was written. */
   name: string;
-  entity: Entity;
+  entity: EditEntity;
   uid: number;
   /** The field's key. */
   field: string;

@@ -1153,6 +1153,55 @@ export const ja: Strings = {
       maxReputation: "評価の上限",
     },
   },
+  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  national: {
+    /** The entry in the sidebar. */
+    nav: "代表チーム",
+    search: "名前、コード、UIDで代表チームを検索",
+    summary: (total: number, shown: number) =>
+      total > shown ? `代表チーム：${format(total)} · 評価の上位${shown}チームを表示` : `代表チーム：${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query: string, filtered: boolean) => {
+      if (query === "") {
+        return filtered ? "このフィルターに一致する代表チームはありません。" : "代表チームが見つかりません。";
+      }
+      return filtered ? `このフィルターで「${query}」に一致する代表チームはありません。` : `「${query}」に一致する代表チームはありません。`;
+    },
+    /** The small tag on a women's team. */
+    women: "女子",
+    columns: {
+      name: "国",
+      code: "コード",
+      reputation: "評価",
+      players: "選手",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "表示するチーム",
+      all: "すべてのチーム",
+      men: "男子代表",
+      women: "女子代表",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "女子代表チーム",
+    mensTeam: "男子代表チーム",
+    reputationShort: "評価",
+    reputationTitle: "トップチームの評価（0〜10,000）",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count: number) => `トップチームの選手 (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "トップチームの選手",
+    squadNote: "ゲームがトップチームに載せている選手を、ゲームの順に表示します。招集、キャプテン、監督の契約はここでは編集しません。",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "ゲームにはこのチームのトップチームがないため、表示できる選手や評価はありません。",
+    reading: "選手を読み込み中…",
+    noPlayers: "ゲームはこのチームに選手を載せていません。",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "このバージョンのゲームでは代表チームを利用できません",
+    unavailableBuild: "このバージョンのゲームが代表チームをどこに持っているかはまだ誰も見つけていないため、誤ったメモリを読まないよう、エディターは何も表示しません。",
+    unavailableUnreadable: "エディターはこのバージョンのゲームで代表チームがあるはずの場所を調べましたが、見つかったものがゲームのデータとは読み取れないため、何も表示しません。",
+  },
 
   app: {
     stage: "ベータ",
@@ -1396,7 +1445,7 @@ export const ja: Strings = {
       change: "変更",
       status: "状態",
     },
-    kinds: { player: "選手", staff: "スタッフ", club: "クラブ" },
+    kinds: { player: "選手", staff: "スタッフ", club: "クラブ", nationalTeam: "代表チーム" },
     stored: (change: string) => `内部値 ${change}`,
     undone: (time: string) => `${time}に元に戻しました`,
     undo: "元に戻す",

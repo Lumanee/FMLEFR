@@ -7566,3 +7566,24 @@ kbd {
 .toolbar .clear-question ~ button {
   flex: none;
 }
+
+/* The National teams tab on a version of the game that has none to show: what it says instead of the list. */
+.national-unavailable {
+  max-width: 60ch;
+  padding: 32px 24px;
+}
+
+.national-unavailable h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.national-unavailable p {
+  margin: 0;
+  color: var(--muted, inherit);
+}
+
+/* The national teams table: the code takes the place of the league. */
+.national-grid td.col-league {
+  width: 18%;
+}

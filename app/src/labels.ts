@@ -13,7 +13,7 @@
 import { formatNumber } from "./format";
 import { intlLocale, strings } from "./i18n";
 import type { Strings } from "./i18n/en";
-import type { CaptainRole, City, Entity, Nation } from "./types";
+import type { CaptainRole, City, EditEntity, Nation } from "./types";
 
 export const ATTRIBUTE_LABELS = strings.attributes;
 
@@ -130,6 +130,9 @@ export const clubStaffText = strings.clubStaff;
 
 /** The club list, with the sidebar entry and the status-line count that go with it. */
 export const clubListText = strings.clubList;
+
+/** The National teams tab: the list, the profile of a national team and why the tab may show none. */
+export const nationalText = strings.national;
 
 /**
  * The app around the lists: the sidebar (and the note at its foot, which depends on the connection, see
@@ -250,7 +253,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = strings.fields;
  * The name of an editable field, from the key `edit_fields` gives it ("current_ability", "attribute.finishing",
  * "position.st", "contract.wage", "finance.balance", …). A key it does not know is returned as it is.
  */
-export function fieldLabel(entity: Entity, key: string): string {
+export function fieldLabel(entity: EditEntity, key: string): string {
   const fixed = labelIn(FIELD_LABELS, key);
   if (fixed !== undefined) {
     return fixed;

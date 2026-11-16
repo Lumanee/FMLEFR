@@ -1187,6 +1187,55 @@ export const ru: Strings = {
       maxReputation: "Максимальная репутация",
     },
   },
+  /** The National teams tab: each nation's men's and women's team, the squad of its senior team and its reputation. */
+  national: {
+    /** The entry in the sidebar. */
+    nav: "Сборные",
+    search: "Поиск сборных по названию, коду или UID",
+    summary: (total, shown) =>
+      total > shown ? `Сборные: ${format(total)} · показаны первые ${shown} по репутации` : `Сборные: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "Нет сборных, подходящих под этот фильтр." : "Сборные не найдены.";
+      }
+      return filtered ? `Нет сборных по запросу «${query}» с этим фильтром.` : `Нет сборных по запросу «${query}».`;
+    },
+    /** The small tag on a women's team. */
+    women: "Жен.",
+    columns: {
+      name: "Страна",
+      code: "Код",
+      reputation: "Репутация",
+      players: "Игроки",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Какие сборные показывать",
+      all: "Все сборные",
+      men: "Мужские сборные",
+      women: "Женские сборные",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Женская сборная",
+    mensTeam: "Мужская сборная",
+    reputationShort: "РЕП",
+    reputationTitle: "Репутация основной команды, от 0 до 10 000",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count) => `Игроки основной команды (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "Игроки основной команды",
+    squadNote: "Игроки, которых игра перечисляет у основной команды, в её порядке. Вызовы, капитаны и контракт тренера здесь не редактируются.",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "У этой сборной в игре нет основной команды, поэтому показывать нечего: ни состава, ни репутации.",
+    reading: "Чтение состава…",
+    noPlayers: "Игра не перечисляет игроков этой команды.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "Сборные недоступны в этой версии игры",
+    unavailableBuild: "Пока никто не нашёл, где эта версия игры хранит сборные, поэтому редактор не показывает их, вместо того чтобы читать не ту память.",
+    unavailableUnreadable: "Редактор заглянул туда, где ожидает сборные в этой версии игры, но найденное не похоже на данные игры, поэтому он их не показывает.",
+  },
 
   app: {
     stage: "бета",
@@ -1430,7 +1479,7 @@ export const ru: Strings = {
       change: "Изменение",
       status: "Статус",
     },
-    kinds: { player: "Игрок", staff: "Персонал", club: "Клуб" },
+    kinds: { player: "Игрок", staff: "Персонал", club: "Клуб", nationalTeam: "Сборная" },
     stored: (change) => `хранится ${change}`,
     undone: (time) => `Отменено в ${time}`,
     undo: "Отменить",

@@ -13,6 +13,7 @@ import type {
   ClubStaffRow,
   ClubTeam,
   EditField,
+  EditEntity,
   Entity,
   FieldEdit,
   FieldValues,
@@ -27,6 +28,8 @@ import type {
   MoveTerms,
   NameKind,
   Nation,
+  NationalProfile,
+  NationalStatus,
   PersonNames,
   RoomMaker,
   StadiumName,
@@ -36,7 +39,7 @@ import type {
 } from "./types";
 
 /** The fields of players or of staff the editor can change, in display order. */
-export const editFields = (entity: Entity) => call<EditField[]>("edit_fields", { entity });
+export const editFields = (entity: EditEntity) => call<EditField[]>("edit_fields", { entity });
 
 /**
  * Brings the player `uid` back from his loan: it now ends on the game's date, its last day, and he is back at his club
@@ -105,10 +108,10 @@ export const maxStaffAttributes = (id: number) => call<MassReport>("max_staff_at
 export const listNations = () => call<Nation[]>("list_nations");
 
 /** Every editable field of one player or member of staff, as stored, read from the game now. */
-export const readValues = (entity: Entity, uid: number) => call<FieldValues>("read_values", { entity, uid });
+export const readValues = (entity: EditEntity, uid: number) => call<FieldValues>("read_values", { entity, uid });
 
 /** Writes `edits` (values as stored). Each one is checked and written on its own; refused ones change nothing. */
-export const applyEdits = (entity: Entity, uid: number, edits: FieldEdit[]) =>
+export const applyEdits = (entity: EditEntity, uid: number, edits: FieldEdit[]) =>
   call<ApplyReport>("apply_edits", { entity, uid, edits });
 
 /**
@@ -408,6 +411,12 @@ export const keepPlaying = (uid: number) => call<LoggedChange>("keep_playing", {
 
 /** The teams of a club, the senior team first, with their players and the live values a squad screen shows. */
 export const clubSquads = (uid: number) => call<ClubTeam[]>("club_squads", { uid });
+
+/** Whether this build of the game has national teams to show, and if not, why. */
+export const nationalStatus = () => call<NationalStatus>("national_status");
+
+/** The national team `uid` as its profile shows it: its list row and its senior team with the players, read now. */
+export const nationalProfile = (uid: number) => call<NationalProfile>("national_squad", { uid });
 
 /**
  * Makes the player `uid` the captain or vice-captain of the club's team `team` (see `ClubTeam.index`); he must play
