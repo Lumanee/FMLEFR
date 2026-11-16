@@ -304,16 +304,13 @@ mod tests {
 
     #[test]
     fn the_reputation_is_the_only_field_and_follows_the_layout() {
-        let mac = crate::layout_for(27).expect("FM27 layout");
-        let fields = crate::fields(&mac, crate::Entity::NationalTeam);
-        if mac.national.is_some() {
-            assert_eq!(fields.len(), 1);
-            assert_eq!(fields[0].key, "reputation");
-            assert!(fields[0].takes(10_000) && !fields[0].takes(10_001));
-        } else {
-            // The Windows layout does not place national teams: nothing is offered to edit.
-            assert!(fields.is_empty());
-        }
+        // Both layouts place national teams, the Mac's and the Windows one.
+        let layout = crate::layout_for(27).expect("FM27 layout");
+        assert!(layout.national.is_some());
+        let fields = crate::fields(&layout, crate::Entity::NationalTeam);
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].key, "reputation");
+        assert!(fields[0].takes(10_000) && !fields[0].takes(10_001));
     }
 
     #[test]
@@ -322,6 +319,6 @@ mod tests {
             .filter(|profile| profile.national_teams.is_some())
             .map(|profile| profile.name)
             .collect();
-        assert_eq!(placed, ["FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"]);
+        assert_eq!(placed, ["FM27 0.9.2435.0 (Game Pass)", "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"]);
     }
 }

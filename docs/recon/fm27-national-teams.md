@@ -133,6 +133,28 @@ and Mancini, with a reputation of 8500; all 502 containers read. The men's team 
 and Ireland (UID 145174) has no senior team of kind 0, so it lists with no reputation and an empty squad; the other three
 of its four have a senior team that lists no players, with a reputation of 1.
 
+## On Windows
+
+Read on Game Pass 0.9.2435.0, on a save of 18 January 2028 (English, no women's football), with the probe only:
+
+- The two arrays sit where they do on the Mac, counted from the players' pair: the men's 0xA8 past it
+  (`game_plugin.dll+0x53B7E88`), the women's 0xC0 (`+0x53B7EA0`); 251 containers each, the men's from Algeria (UID 5)
+  and the women's from UID 2000169482.
+- A container (`db::NATIONAL_TEAM_CONTAINER`, 0x898 bytes apart, 0x8A0 on the Mac) holds what the editor reads where the
+  Mac's does: its UID at `+0x0C`, its teams at `+0x18`, the women's flag at `+0xB9` (0 at all 251 men's, 1 at all 251
+  women's) and its nation at `+0x170`.
+- A nation (`db::NATION`, 0x200 bytes apart, 0x208 on the Mac) has its name, short name, code ("ITA") and nationality
+  ("Italian") at `+0x18` to `+0x30`, as on the Mac, but everything from its capital on 8 bytes earlier: the capital at
+  `+0xE8`, the continent `+0xF0`, the region `+0xF8`, the currency `+0x100`, and its two containers at `+0x108` and
+  `+0x110`. Its population is at `+0x1E4` (Italy 58,952,704).
+- A national team (`db::NATIONAL_TEAM`) reads as on the Mac and as a club's team: kind `+0x28`, age limit `+0x2C`, its
+  container `+0x30`, players `+0x38`, this season's competition `+0x50`, manager `+0x80`, captain and vice-captain
+  `+0x88` and `+0x90`, reputation `+0xA8`. Italy's senior team lists 23 players from Donnarumma, Kayode, Bastoni and
+  Mancini, with a reputation of 8322; its container lists 7 teams.
+- All 502 containers read; the men's team of The United Kingdom of Great Britain and Ireland (145174) has no senior team,
+  as on the Mac. `fmlibre-probe fields national-team --stats`: 502 read, reputations 1 to 9,950, none implausible.
+  `fmlibre-probe set national-team 776 reputation 8323 --restore` wrote and put back Italy's reputation.
+
 ## What a tab could take from this
 
 - A list of nations from the two arrays of containers, each container leading to its nation (name, code, flag by
@@ -146,6 +168,6 @@ of its four have a senior team that lists no players, with a reputation of 1.
   turns the reputation into words ("Mondiale").
 - Where a national team's manager keeps his contract, and the world ranking (15 for Italia), which none of the three
   objects holds as a byte.
-- The same places on the Windows Steam and Game Pass builds, and the two arrays' places in each build profile.
+- The two arrays' places on the Windows Steam builds (Game Pass 0.9.2435.0 is read: see [On Windows](#on-windows)).
 - The names of the team kinds, and what the numbers from `+0x180` of a nation are.
 - What a national team's 0x50 bytes past a club team's end hold.

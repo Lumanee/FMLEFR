@@ -39,5 +39,9 @@ players = 0x53B7DE0
 staff = 0x53B7E28
 clubs = 0x53B7F98
 
-# [national_teams] is not here: the places of the national teams were not read on this build, so the National teams
-# tab shows nothing on it (see docs/DEVELOPING.md, National teams).
+# RVAs of the pairs of the arrays of national teams' containers (docs/recon/fm27-national-teams.md): 251 for the men's
+# teams and 251 for the women's, 0xA8 and 0xC0 past the players pair as on the Mac's Steam build 26385295. Read on a
+# save of January 2028 and checked there against the nations that point at them.
+[national_teams]
+men = 0x53B7E88
+women = 0x53B7EA0

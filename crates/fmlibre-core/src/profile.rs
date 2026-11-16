@@ -1246,6 +1246,16 @@ mod tests {
         assert_eq!(mac.competition, windows.competition);
         assert_eq!(mac.player.identity() - mac.player.person_block, mac.staff.identity() - mac.staff.person_block);
 
+        // A nation's containers of national teams read alike; the nation keeps its pointers to them 8 bytes later on
+        // the Mac, as everything from its capital on.
+        let (w, m) =
+            (windows.national.as_ref().expect("national teams"), mac.national.as_ref().expect("national teams"));
+        assert_eq!(
+            (m.container_uid, m.container_teams, m.container_women, m.container_nation, m.nation_code),
+            (w.container_uid, w.container_teams, w.container_women, w.container_nation, w.nation_code)
+        );
+        assert_eq!((m.nation_men, m.nation_women), (w.nation_men + 8, w.nation_women + 8));
+
         // The tables of names are reached and laid out alike.
         assert!(windows.names.is_some());
         assert_eq!(mac.names, windows.names);

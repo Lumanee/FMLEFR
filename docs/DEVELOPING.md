@@ -79,12 +79,14 @@ Copy diagnostics (and `fmlibre-probe diagnostics`) says where the count was read
 The National teams tab reads the nations' national teams from two arrays of containers in the game plugin's writable
 data (see [fm27-national-teams.md](recon/fm27-national-teams.md)). Where they are is a matter of the build, and a build
 profile names them under `[national_teams]` (`men` and `women`, the RVAs of their `(begin, end)` pairs); how a
-container reads is the layout's `[national]` section, so far in `layout-macos.toml` only. A build whose profile has no
-`[national_teams]`, or whose arrays do not read as the game's (a container must point at a nation that points back at
-it, with the kind it is in; nearly all of them must), shows the tab with a note saying why instead of the list, and
-reads nothing else. The profiles that name them: Steam build 26385295 on macOS, Apple silicon. For another build, find
-the two arrays as the recon note says (`fmlibre-probe instances db::NATION` leads to the nations, which point at the
-containers; the arrays are the two pairs of pointers to them that sit next to the clubs' array) and add them; the unit
+container reads is the layout's `[national]` section, in `layout.toml` and `layout-macos.toml` (the nation points at
+its containers 8 bytes earlier on Windows). A build whose profile has no `[national_teams]`, or whose arrays do not read
+as the game's (a container must point at a nation that points back at it, with the kind it is in; nearly all of them
+must), shows the tab with a note saying why instead of the list, and reads nothing else. The profiles that name them:
+Game Pass 0.9.2435.0, and Steam build 26385295 on macOS, Apple silicon. For another build, find the two arrays as the
+recon note says (`fmlibre-probe instances db::NATION` leads to the nations, which point at the containers; the arrays
+are the two pairs of pointers to them that sit next to the clubs' array: on both of those builds 0xA8 and 0xC0 past the
+players' pair, which `fmlibre-probe column game_plugin.dll+<RVA> 0x0C` shows as 251 UIDs each) and add them; the unit
 test `only_the_builds_read_place_the_national_teams` lists the builds that have them.
 
 ### After an update of the game
