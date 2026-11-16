@@ -131,8 +131,8 @@ export const clubStaffText = strings.clubStaff;
 /** The club list, with the sidebar entry and the status-line count that go with it. */
 export const clubListText = strings.clubList;
 
-/** The Prize money tab: what each competition pays by final position and per match, read only. */
-export const prizeText = strings.prizeMoney;
+/** A club's league prize money, in its finances: what the league pays this season, and changing it. */
+export const leaguePrizesText = strings.leaguePrizes;
 /** The Clubs tab's national teams: the list, the profile of a national team and why there may be none. */
 export const nationalText = strings.national;
 
@@ -271,6 +271,11 @@ export function fieldLabel(entity: EditEntity, key: string): string {
     case "position": {
       const position = labelIn(POSITION_LABELS, name);
       return position === undefined ? key : editText.positionRating(position);
+    }
+    case "prize": {
+      // A final position's amount: `prize.place.3`; the amounts per match have labels of their own.
+      const place = Number(key.split(".")[2]);
+      return name === "place" && Number.isInteger(place) ? strings.leaguePrizes.placeField(place) : key;
     }
     default:
       return key;

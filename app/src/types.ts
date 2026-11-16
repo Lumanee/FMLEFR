@@ -284,14 +284,25 @@ export interface League {
   reputation: number;
 }
 
-/** Why the Prize money tab shows nothing on this version of the game (`prize_money`). */
+/** Why a club's finances show no prize money on this version of the game (`league_prizes`). */
 export type PrizeUnavailable = "build" | "unreadable";
 
-/** What the competitions that pay prize money pay, or why this version of the game shows none (`prize_money`). */
-export interface PrizeMoneyView {
+/** What the league of a club pays, or why this version of the game shows none (`league_prizes`). */
+export interface LeaguePrizes {
   unavailable: PrizeUnavailable | null;
-  /** By name. */
-  competitions: CompetitionPrizes[];
+  /** None where the club plays in no league, or its league pays nothing. */
+  league: CompetitionPrizes | null;
+}
+
+/** An amount of prize money to set, in pounds (`set_league_prizes`). */
+export type PrizeInput =
+  | { kind: "place"; place: number; pounds: number }
+  | { kind: "win" | "draw" | "loss"; pounds: number };
+
+/** The changes `set_league_prizes` logged, and what the league pays now. */
+export interface LeaguePrizesSet {
+  changes: LoggedChange[];
+  league: CompetitionPrizes | null;
 }
 
 /** A competition that pays prize money, and what its stages pay. */
@@ -307,11 +318,11 @@ export interface CompetitionPrizes {
   stages: StagePrizes[];
 }
 
-/** What one or more of a competition's stages pay, alike in every amount, in pounds. */
+/** What one or more settings of a competition's stages pay, alike in every amount, in pounds. */
 export interface StagePrizes {
   /** Whether the stage has not started yet. */
   future: boolean;
-  /** How many of them pay these amounts: one per group of a group stage. */
+  /** How many settings pay these amounts: one per group of a group stage. A change is written to each of them. */
   count: number;
   /** By final position, the first place first; empty where the stage pays only per match. */
   byPosition: number[];
@@ -889,6 +900,11 @@ export interface LoggedChange {
    * names, which outlive the addresses; null where no name was found.
    */
   objects?: { from: string | null; to: string | null };
+  /**
+   * For an amount of prize money a club's league pays, logged as a change of the club's `prize.place.N`, `prize.win`,
+   * `prize.draw` or `prize.loss` in pounds: the league, and how many of its settings were changed alike.
+   */
+  prize?: { league: string; leagueUid: number; settings: number };
   // Healing (`heal_player`) is logged as a change of the player's field "injuries" from how many he had to 0, and
   // lifting his bans (`lift_bans`) as a change of his field "bans", and keeping him from retiring (`keep_playing`) as
   // a change of his field "retirement" from the date he was to retire on (a number like 20270630; 0 for none) to 0.

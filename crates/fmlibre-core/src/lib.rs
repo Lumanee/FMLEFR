@@ -95,7 +95,7 @@ pub use object_pool::ObjectPool;
 pub use players::{Nation, PLAYABLE_RATING, PlayerIndex, PlayerSummary, is_woman, nations, read_players};
 pub use prize_money::{
     Competition, CompetitionPrizes, MOST_PRIZE, PrizeAmount, PrizeChange, PrizeEdit, PrizeError, PrizeMoney,
-    PrizeReadError, PrizeStage, PrizeUnavailable, StagePrizes,
+    PrizeReadError, PrizeStage, PrizeUnavailable, StagePrizes, competition_prizes,
 };
 pub use profile::{
     ArrayRvas, BuildProfile, ContractLayout, GameLayout, Layout, PlayerLayout, PluginFingerprint, ProfileNotes,

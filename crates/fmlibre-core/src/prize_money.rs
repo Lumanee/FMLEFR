@@ -12,8 +12,10 @@
 //! same way. Whether the game pays from these amounts, and whether a change lasts through a save and a reload, is what
 //! the probe's `prizes` is there to find out.
 //!
-//! The app only reads them, grouped by competition ([`Session::competition_prizes`]), and only on the builds whose
-//! profile says they were read there and matched to the game's screens ([`crate::BuildProfile::prize_money`]).
+//! The app shows them in a club's finances, what the club's league pays, grouped as [`competition_prizes`] groups them,
+//! and changes them there, in every settings of the stage alike; only on the builds whose profile says they were read
+//! there and matched to the game's screens ([`crate::BuildProfile::prize_money`]). The game pays from these amounts and
+//! keeps them in its saves, but sets the next season's stages up from its database again.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -21,6 +23,7 @@ use std::fmt;
 use fmlibre_mem::is_user_pointer;
 use serde::Serialize;
 
+use crate::coded::Coded;
 use crate::profile::{CompetitionLayout, PrizeMoneyLayout};
 use crate::rtti;
 use crate::session::Session;
@@ -104,6 +107,18 @@ pub enum PrizeAmount {
     Loss,
 }
 
+impl PrizeAmount {
+    /// The amount as the change log names it: `prize.place.3`, `prize.win`, `prize.draw`, `prize.loss`.
+    pub fn key(self) -> String {
+        match self {
+            PrizeAmount::Place(place) => format!("prize.place.{place}"),
+            PrizeAmount::Win => "prize.win".to_owned(),
+            PrizeAmount::Draw => "prize.draw".to_owned(),
+            PrizeAmount::Loss => "prize.loss".to_owned(),
+        }
+    }
+}
+
 impl fmt::Display for PrizeAmount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -131,6 +146,28 @@ pub struct PrizeChange {
     patches: Vec<Patch>,
     /// For each settings changed: what the stage that holds them and the settings held when they were read.
     holders: Vec<Holder>,
+}
+
+impl PrizeChange {
+    /// Brings `found`, the settings as read before, up to date after this change was written, or undone.
+    pub fn note(&self, found: &mut [PrizeMoney], undone: bool) {
+        for edit in &self.edits {
+            let Some(prize) = found.iter_mut().find(|prize| prize.settings == edit.settings) else {
+                continue;
+            };
+            let value = if undone { edit.from } else { edit.to };
+            match edit.amount {
+                PrizeAmount::Place(place) => {
+                    if let Some(slot) = place.checked_sub(1).and_then(|at| prize.by_position.get_mut(at)) {
+                        *slot = value;
+                    }
+                }
+                PrizeAmount::Win => (prize.win, prize.win_again) = (value, value),
+                PrizeAmount::Draw => prize.draw = value,
+                PrizeAmount::Loss => prize.loss = value,
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,6 +227,35 @@ impl fmt::Display for PrizeError {
 }
 
 impl std::error::Error for PrizeError {}
+
+impl Coded for PrizeError {
+    fn code(&self) -> &'static str {
+        match self {
+            PrizeError::NotInLayout => "prize.notInLayout",
+            PrizeError::NoClass { .. } => "prize.noClass",
+            PrizeError::Unheld { .. } => "prize.unheld",
+            PrizeError::NoPlace { .. } => "prize.noPlace",
+            PrizeError::TooMuch { .. } => "prize.tooMuch",
+            PrizeError::Gone { .. } => "prize.gone",
+            PrizeError::Write(err) => err.code(),
+            PrizeError::Memory(err) => err.code(),
+        }
+    }
+
+    fn params(&self) -> Vec<(&'static str, String)> {
+        match self {
+            PrizeError::NoClass { class } => vec![("class", class.clone())],
+            PrizeError::Unheld { settings } | PrizeError::Gone { settings } => {
+                vec![("address", format!("{settings:#x}"))]
+            }
+            PrizeError::NoPlace { place, places } => vec![("place", place.to_string()), ("places", places.to_string())],
+            PrizeError::TooMuch { amount } => vec![("amount", amount.to_string()), ("most", MOST_PRIZE.to_string())],
+            PrizeError::Write(err) => err.params(),
+            PrizeError::Memory(err) => err.params(),
+            PrizeError::NotInLayout => Vec::new(),
+        }
+    }
+}
 
 impl From<fmlibre_mem::Error> for PrizeError {
     fn from(err: fmlibre_mem::Error) -> Self {
@@ -463,6 +529,9 @@ pub struct StagePrizes {
     pub win: u32,
     pub draw: u32,
     pub loss: u32,
+    /// The settings that pay these amounts, which a change of them is written to.
+    #[serde(skip)]
+    pub settings: Vec<u64>,
 }
 
 /// The least share of the settings a stage holds that must lead to a competition that reads (a UID and a name) for the
@@ -470,9 +539,10 @@ pub struct StagePrizes {
 const LEAST_NAMED: f64 = 0.9;
 
 impl Session {
-    /// What each competition pays that pays anything, by its name; read for the app, on the builds whose profile says
-    /// the prize money was checked there. One pass over the game's memory, which takes a few seconds.
-    pub fn competition_prizes(&self) -> Result<Vec<CompetitionPrizes>, PrizeReadError> {
+    /// Every league's settings, as [`Session::prize_money`] reads them, for the app: on the builds whose profile says
+    /// the prize money was checked there, and when what was found reads as the game's. One pass over the game's memory,
+    /// which takes a few seconds; [`competition_prizes`] groups them.
+    pub fn checked_prize_money(&self) -> Result<Vec<PrizeMoney>, PrizeReadError> {
         let unavailable = |reason| Err(PrizeReadError::Unavailable(reason));
         if !self.profile.as_ref().is_some_and(|profile| profile.prize_money) {
             return unavailable(PrizeUnavailable::Build);
@@ -486,7 +556,7 @@ impl Session {
         if !reads_as_the_games(&found) {
             return unavailable(PrizeUnavailable::Unreadable);
         }
-        Ok(by_competition(&found))
+        Ok(found)
     }
 }
 
@@ -500,7 +570,7 @@ fn reads_as_the_games(found: &[PrizeMoney]) -> bool {
 
 /// The competitions that pay anything, by their name, each with what its stages pay; settings left over, and those
 /// whose competition does not read, are left out.
-fn by_competition(found: &[PrizeMoney]) -> Vec<CompetitionPrizes> {
+pub fn competition_prizes(found: &[PrizeMoney]) -> Vec<CompetitionPrizes> {
     let mut competitions: Vec<CompetitionPrizes> = Vec::new();
     let mut at: HashMap<u32, usize> = HashMap::new();
     for prize in found.iter().filter(|prize| prize.stage != PrizeStage::Unheld && prize.pays()) {
@@ -518,12 +588,19 @@ fn by_competition(found: &[PrizeMoney]) -> Vec<CompetitionPrizes> {
             win: prize.win,
             draw: prize.draw,
             loss: prize.loss,
+            settings: vec![prize.settings],
         };
         let stages = &mut competitions[index].stages;
         // The second word per win is the same as the first in every settings seen: only the first is shown.
-        let alike = |other: &StagePrizes| StagePrizes { count: 1, ..other.clone() } == stage;
+        let alike = |other: &StagePrizes| {
+            (other.future, &other.by_position, other.win, other.draw, other.loss)
+                == (stage.future, &stage.by_position, stage.win, stage.draw, stage.loss)
+        };
         match stages.iter_mut().find(|other| alike(other)) {
-            Some(other) => other.count += 1,
+            Some(other) => {
+                other.count += 1;
+                other.settings.push(prize.settings);
+            }
             None => stages.push(stage),
         }
     }
@@ -624,7 +701,7 @@ mod tests {
             held(1_301_394, "Champions League", PrizeStage::Future, vec![10_222_480], 1_803_967),
             held(1_301_394, "Champions League", PrizeStage::Started, Vec::new(), 74_205),
         ];
-        let listed = by_competition(&found);
+        let listed = competition_prizes(&found);
         let names: Vec<&str> = listed.iter().map(|c| c.competition.name.as_str()).collect();
         assert_eq!(names, ["Champions League", "Premier League", "Vertu Trophy"]);
         let cl = &listed[0].stages;
@@ -633,6 +710,42 @@ mod tests {
         assert!(cl[1].future && cl[1].by_position == [10_222_480]);
         assert_eq!(listed[2].stages.len(), 1);
         assert_eq!(listed[2].stages[0].count, 2);
+    }
+
+    #[test]
+    fn a_change_written_or_undone_is_noted_in_the_settings_read() {
+        let mut found = vec![
+            PrizeMoney { settings: 0x10, ..held(33, "Serie BKT", PrizeStage::Started, vec![2_147_580; 3], 0) },
+            PrizeMoney { settings: 0x20, ..held(33, "Serie BKT", PrizeStage::Started, vec![2_147_580; 3], 0) },
+        ];
+        let edit = |settings, amount, from, to| PrizeEdit { settings, amount, from, to };
+        let change = PrizeChange {
+            edits: vec![
+                edit(0x10, PrizeAmount::Place(2), 2_147_580, 2_600_023),
+                edit(0x10, PrizeAmount::Win, 0, 111_111),
+                edit(0x20, PrizeAmount::Loss, 0, 22_222),
+            ],
+            patches: Vec::new(),
+            holders: Vec::new(),
+        };
+        change.note(&mut found, false);
+        assert_eq!(found[0].by_position, [2_147_580, 2_600_023, 2_147_580]);
+        assert_eq!((found[0].win, found[0].win_again), (111_111, 111_111));
+        assert_eq!((found[1].loss, found[1].win), (22_222, 0));
+        change.note(&mut found, true);
+        assert_eq!(found[0].by_position, [2_147_580; 3]);
+        assert_eq!((found[0].win, found[0].win_again, found[1].loss), (0, 0, 0));
+        assert_eq!(PrizeAmount::Place(3).key(), "prize.place.3");
+        assert_eq!(PrizeAmount::Win.key(), "prize.win");
+    }
+
+    #[test]
+    fn alike_settings_are_listed_with_each_of_their_addresses() {
+        let group =
+            |settings| PrizeMoney { settings, ..held(5, "Vertu Trophy", PrizeStage::Started, Vec::new(), 10_000) };
+        let listed = competition_prizes(&[group(0x10), group(0x20), group(0x30)]);
+        assert_eq!(listed[0].stages[0].settings, [0x10, 0x20, 0x30]);
+        assert_eq!(listed[0].stages[0].count, 3);
     }
 
     #[test]

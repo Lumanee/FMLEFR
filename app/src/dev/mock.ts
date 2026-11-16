@@ -29,7 +29,9 @@ import type {
   ClubFilter,
   CompetitionPrizes,
   League,
-  PrizeMoneyView,
+  LeaguePrizes,
+  LeaguePrizesSet,
+  PrizeInput,
   ClubPage,
   ClubStaffRow,
   ClubSummary,
@@ -2032,6 +2034,18 @@ function undoChange(id: number): LoggedChange {
     entry.undoneAt = Date.now();
     return { ...entry };
   }
+  const prizeStage = prizeUndo.get(entry.id);
+  if (prizeStage) {
+    // The real Undo writes the stage's settings back as they were, for every club in the league.
+    const place = Number(entry.field.split(".")[2]);
+    if (Number.isInteger(place)) {
+      prizeStage.byPosition[place - 1] = entry.old;
+    } else {
+      prizeStage[entry.field.slice("prize.".length) as "win" | "draw" | "loss"] = entry.old;
+    }
+    entry.undoneAt = Date.now();
+    return { ...entry };
+  }
   const staffRow = entry.entity === "staff" ? staffUndo.get(entry.id) : undefined;
   if (staffRow) {
     Object.assign(staff.find((s) => s.uid === entry.uid)!, staffRow);
@@ -3180,10 +3194,30 @@ function clubMatches(club: ClubSummary, filter: ClubFilter, leagues = false): bo
 }
 
 /**
- * `prize_money`: a few competitions as the game pays them, by name. The amounts are those read from FM27 for #123: a
- * list by position, a stage paying per match in several groups alike, and a league phase not started yet.
+ * What the fixture leagues pay, by UID, as the editor changed them: the amounts read from FM27 for #123, a list by
+ * position as long as the league has clubs (the Premier League's, cut short or carried on), and for one league a stage
+ * that pays per match only, in several groups alike.
  */
-function mockPrizeMoney(): PrizeMoneyView {
+const leaguePrizeSets = new Map<number, CompetitionPrizes>();
+
+/** The stage of a league prize change, by the change's id, which its Undo writes the old amount back into. */
+const prizeUndo = new Map<number, CompetitionPrizes["stages"][number]>();
+
+const PREMIER_LIST = [
+  53_100_000, 50_400_000, 47_700_000, 45_000_000, 42_400_000, 39_800_000, 37_100_000, 34_500_000, 31_900_000, 29_100_000,
+  26_500_000, 23_800_000, 21_200_000, 18_600_000, 15_900_000, 13_300_000, 10_700_000, 7_900_000, 5_300_000, 2_600_000,
+];
+
+function mockLeague(club: ClubSummary): CompetitionPrizes | null {
+  const uid = club.leagueUid;
+  if (uid === null) {
+    return null;
+  }
+  const kept = leaguePrizeSets.get(uid);
+  if (kept) {
+    return kept;
+  }
+  const places = clubs.filter((c) => c.leagueUid === uid).length;
   const stage = (byPosition: number[], win = 0, draw = 0, loss = 0, count = 1, future = false) => ({
     future,
     count,
@@ -3192,46 +3226,63 @@ function mockPrizeMoney(): PrizeMoneyView {
     draw,
     loss,
   });
-  const premier = [
-    53_100_000, 50_400_000, 47_700_000, 45_000_000, 42_400_000, 39_800_000, 37_100_000, 34_500_000, 31_900_000,
-    29_100_000, 26_500_000, 23_800_000, 21_200_000, 18_600_000, 15_900_000, 13_300_000, 10_700_000, 7_900_000,
-    5_300_000, 2_600_000,
-  ];
-  const competitions: CompetitionPrizes[] = [
-    {
-      uid: 127286,
-      name: "AFC Champions League Elite",
-      shortName: null,
-      nationUid: null,
-      nation: null,
-      stages: [stage([], 74_205, 0, 0, 2)],
-    },
-    {
-      uid: 1301394,
-      name: "Champions League",
-      shortName: null,
-      nationUid: null,
-      nation: null,
-      stages: [stage([10_222_480, 9_998_105, 236_234], 1_803_967, 601_323, 0, 1, true)],
-    },
-    {
-      uid: 11,
-      name: "Premier League",
-      shortName: null,
-      nationUid: 765,
-      nation: "England",
-      stages: [stage(premier)],
-    },
-    {
-      uid: 130286,
-      name: "Süper Lig",
-      shortName: null,
-      nationUid: 776,
-      nation: "Türkiye",
-      stages: [stage([], 114_699, 57_964, 1_229)],
-    },
-  ];
-  return { unavailable: null, competitions };
+  const league: CompetitionPrizes = {
+    uid,
+    name: club.league ?? "",
+    shortName: null,
+    nationUid: null,
+    nation: club.leagueNation,
+    stages:
+      uid === 12
+        ? // The second division: per match only, in two groups alike, and a play-off not started yet.
+          [stage([], 114_699, 57_964, 1_229, 2), stage([2_147_580, 2_147_580, 2_147_580], 0, 0, 0, 1, true)]
+        : [stage(Array.from({ length: Math.max(places, 2) }, (_, at) => PREMIER_LIST[Math.min(at, 19)] - at * 1000))],
+  };
+  leaguePrizeSets.set(uid, league);
+  return league;
+}
+
+/** `league_prizes`: what the league of the club `uid` pays. */
+function mockLeaguePrizes(uid: number): LeaguePrizes {
+  const club = clubs.find((c) => c.uid === uid);
+  return { unavailable: null, league: club ? mockLeague(club) : null };
+}
+
+/** `set_league_prizes`: sets `amounts` in the stage `index` of the club's league, logging each amount changed. */
+function setLeaguePrizes(uid: number, index: number, amounts: PrizeInput[]): LeaguePrizesSet {
+  const club = clubs.find((c) => c.uid === uid)!;
+  const league = mockLeague(club)!;
+  const stage = league.stages[index];
+  const logged: LoggedChange[] = [];
+  const batch = amounts.length > 1 ? 900 + changes.length : null;
+  for (const amount of amounts) {
+    const field = amount.kind === "place" ? `prize.place.${amount.place}` : `prize.${amount.kind}`;
+    const old = amount.kind === "place" ? stage.byPosition[amount.place - 1] : stage[amount.kind];
+    if (amount.kind === "place") {
+      stage.byPosition[amount.place - 1] = amount.pounds;
+    } else {
+      stage[amount.kind] = amount.pounds;
+    }
+    const change: LoggedChange = {
+      id: changes.length + 1,
+      at: Date.now(),
+      name: club.name,
+      entity: "club",
+      uid,
+      field,
+      old,
+      new: amount.pounds,
+      undoneAt: null,
+      earlier: false,
+      undoable: true,
+      batch,
+      prize: { league: league.name, leagueUid: league.uid, settings: stage.count },
+    };
+    changes.push(change);
+    prizeUndo.set(change.id, stage);
+    logged.push({ ...change });
+  }
+  return { changes: logged, league: structuredClone(league) };
 }
 
 /** `club_leagues`: the leagues the clubs `filter` selects play in, by nation, a nation's best known first. */
@@ -3696,8 +3747,10 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return nationalProfile(Number(args?.uid)) as T;
     case "club_leagues":
       return mockLeagues((args?.filter ?? {}) as ClubFilter) as T;
-    case "prize_money":
-      return mockPrizeMoney() as T;
+    case "league_prizes":
+      return mockLeaguePrizes(Number(args?.club)) as T;
+    case "set_league_prizes":
+      return setLeaguePrizes(Number(args?.club), Number(args?.stage), (args?.amounts ?? []) as PrizeInput[]) as T;
     case "club_details": {
       const uid = Number(args?.uid);
       const club = clubs.find((c) => c.uid === uid);

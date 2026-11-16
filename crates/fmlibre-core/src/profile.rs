@@ -999,7 +999,7 @@ pub struct BuildProfile {
     /// history of training of the human managers' players.
     pub training_manager: Option<u64>,
     /// Whether the prize money competitions pay ([`PrizeMoneyLayout`]) was read on this build and found to be what the
-    /// game shows. The app shows it only on such builds; the probe reads it on any.
+    /// game shows. The app shows and changes it only on such builds; the probe reads it on any.
     #[serde(default)]
     pub prize_money: bool,
     /// Where the build keeps its arrays of national teams' containers, for the builds they were read on; none where
