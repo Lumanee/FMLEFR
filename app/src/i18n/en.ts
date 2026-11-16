@@ -15,6 +15,7 @@
 import type {
   CheckKey,
   Concern,
+  EditEntity,
   Entity,
   ExportEntity,
   ExportFormat,
@@ -1211,6 +1212,57 @@ export const en = {
       maxReputation: "Highest reputation",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "National teams",
+    /** The name of the Clubs tab's switch between the clubs and the national teams, for assistive technology. */
+    switchLabel: "Clubs or national teams",
+    search: "Search nations by name, code or UID",
+    summary: (total: number, shown: number) =>
+      total > shown ? `${format(total)} national teams · showing the top ${shown} by reputation` : `${format(total)} national teams`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query: string, filtered: boolean) => {
+      if (query === "") {
+        return filtered ? "No national teams match this filter." : "No national teams found.";
+      }
+      return filtered ? `No national teams match “${query}” with this filter.` : `No national teams match “${query}”.`;
+    },
+    /** The small tag on a women's team. */
+    women: "Women",
+    columns: {
+      name: "Nation",
+      code: "Code",
+      reputation: "Reputation",
+      players: "Players",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Teams to show",
+      all: "All teams",
+      men: "Men's teams",
+      women: "Women's teams",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Women's national team",
+    mensTeam: "Men's national team",
+    reputationShort: "REP",
+    reputationTitle: "Reputation of the senior team, from 0 to 10,000",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count: number) => `Senior team players (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "Players of the senior team",
+    squadNote: "The players the game lists for the senior team, in its order. Calling players up, captains and the manager's contract are not edited here.",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "The game keeps no senior team for this one, so there is no squad or reputation to show.",
+    reading: "Reading the squad…",
+    noPlayers: "The game lists no players for this team.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "National teams are not available on this version of the game",
+    unavailableBuild: "Nobody has found yet where this version of the game keeps its national teams, so the editor shows none rather than read the wrong memory.",
+    unavailableUnreadable: "The editor looked where it expects the national teams on this version of the game, but what it found does not read as the game's, so it shows none.",
+  },
 
   /** The app around the lists: the sidebar, the status line and the connect panel. */
   app: {
@@ -1550,7 +1602,7 @@ export const en = {
       status: "Status",
     },
     /** The small tag after a name. */
-    kinds: { player: "Player", staff: "Staff", club: "Club" } satisfies Record<Entity, string>,
+    kinds: { player: "Player", staff: "Staff", club: "Club", nationalTeam: "National team" } satisfies Record<EditEntity, string>,
     /** Hover text of a change of an attribute: the values as stored; `change` is from `valueChange`. */
     stored: (change: string) => `stored ${change}`,
     undone: (time: string) => `Undone at ${time}`,

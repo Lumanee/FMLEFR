@@ -74,6 +74,27 @@ pub struct Layout {
     /// in.
     #[serde(default)]
     pub names: Option<NamesLayout>,
+    /// The nations' national teams (see `national.rs`); only in the layouts they have been checked in.
+    #[serde(default)]
+    pub national: Option<NationalLayout>,
+}
+
+/// How the game keeps a nation's national teams (see `national.rs`): each nation has two containers, one for its men's
+/// teams and one for its women's, whose teams are laid out as a club's ([`TeamLayout`]), with the container where a
+/// club's team points at its club.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NationalLayout {
+    /// In a container: its `u32` UID, the teams as `(begin, end, capacity)` of pointers with the senior team first, a
+    /// `u8` that is 1 for a women's container, and the pointer back to its nation.
+    pub container_uid: u64,
+    pub container_teams: u64,
+    pub container_women: u64,
+    pub container_nation: u64,
+    /// In a nation: its three-letter code as an FM string pointer, and the pointers to its men's and women's container.
+    pub nation_code: u64,
+    pub nation_men: u64,
+    pub nation_women: u64,
 }
 
 /// The game's tables of first, last and common names (see `names.rs`): where it keeps the list of each table's entries
@@ -977,6 +998,19 @@ pub struct BuildProfile {
     /// RVA in the game plugin of the static pointer to the training manager (`TRAINING_MANAGER`), which keeps the
     /// history of training of the human managers' players.
     pub training_manager: Option<u64>,
+    /// Where the build keeps its arrays of national teams' containers, for the builds they were read on; none where
+    /// they were not, which leaves the National teams tab off.
+    #[serde(default)]
+    pub national_teams: Option<NationalArrays>,
+}
+
+/// RVAs in the game plugin of the `(begin, end)` pointer pairs of the arrays of national teams' containers: one holds a
+/// container for each nation's men's teams and the other for its women's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NationalArrays {
+    pub men: u64,
+    pub women: u64,
 }
 
 /// Identifies a build of the game plugin from its headers as mapped in memory.
@@ -1145,6 +1179,11 @@ pub fn profile_text(profile: &BuildProfile, notes: &ProfileNotes) -> String {
     let ArrayRvas { players, staff, clubs } = profile.arrays;
     text += "\n# RVAs in game_plugin of the (begin, end) pointer pairs of the entity arrays.\n[arrays]\n";
     text += &format!("players = {players:#X}\nstaff = {staff:#X}\nclubs = {clubs:#X}\n");
+    if let Some(NationalArrays { men, women }) = profile.national_teams {
+        text += &format!(
+            "\n# RVAs of the pairs of the arrays of national teams' containers.\n[national_teams]\nmen = {men:#X}\nwomen = {women:#X}\n"
+        );
+    }
     text
 }
 
@@ -1206,6 +1245,16 @@ mod tests {
         assert_eq!(mac.prize_money, windows.prize_money);
         assert_eq!(mac.competition, windows.competition);
         assert_eq!(mac.player.identity() - mac.player.person_block, mac.staff.identity() - mac.staff.person_block);
+
+        // A nation's containers of national teams read alike; the nation keeps its pointers to them 8 bytes later on
+        // the Mac, as everything from its capital on.
+        let (w, m) =
+            (windows.national.as_ref().expect("national teams"), mac.national.as_ref().expect("national teams"));
+        assert_eq!(
+            (m.container_uid, m.container_teams, m.container_women, m.container_nation, m.nation_code),
+            (w.container_uid, w.container_teams, w.container_women, w.container_nation, w.nation_code)
+        );
+        assert_eq!((m.nation_men, m.nation_women), (w.nation_men + 8, w.nation_women + 8));
 
         // The tables of names are reached and laid out alike.
         assert!(windows.names.is_some());

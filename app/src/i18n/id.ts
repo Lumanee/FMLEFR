@@ -1124,6 +1124,56 @@ export const id: Strings = {
       maxReputation: "Reputasi tertinggi",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "Tim nasional",
+    switchLabel: "Klub atau tim nasional",
+    search: "Cari tim nasional berdasarkan nama, kode, atau UID",
+    summary: (total: number, shown: number) =>
+      total > shown ? `Tim nasional: ${format(total)} · ${shown} teratas menurut reputasi` : `Tim nasional: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query: string, filtered: boolean) => {
+      if (query === "") {
+        return filtered ? "Tidak ada tim nasional yang cocok dengan filter ini." : "Tidak ada tim nasional.";
+      }
+      return filtered ? `Tidak ada tim nasional yang cocok dengan “${query}” dengan filter ini.` : `Tidak ada tim nasional yang cocok dengan “${query}”.`;
+    },
+    /** The small tag on a women's team. */
+    women: "Wanita",
+    columns: {
+      name: "Negara",
+      code: "Kode",
+      reputation: "Reputasi",
+      players: "Pemain",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Tim yang ditampilkan",
+      all: "Semua tim",
+      men: "Tim pria",
+      women: "Tim wanita",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Tim nasional wanita",
+    mensTeam: "Tim nasional pria",
+    reputationShort: "REP",
+    reputationTitle: "Reputasi tim utama, dari 0 sampai 10.000",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count: number) => `Pemain tim utama (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "Pemain tim utama",
+    squadNote: "Pemain yang dicantumkan game untuk tim utama, menurut urutannya. Pemanggilan pemain, kapten, dan kontrak pelatih tidak diedit di sini.",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "Game tidak menyimpan tim utama untuk tim ini, jadi tidak ada skuad atau reputasi yang bisa ditampilkan.",
+    reading: "Membaca skuad…",
+    noPlayers: "Game tidak mencantumkan pemain untuk tim ini.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "Tim nasional tidak tersedia di versi game ini",
+    unavailableBuild: "Belum ada yang menemukan di mana versi game ini menyimpan tim nasionalnya, jadi editor tidak menampilkan satu pun daripada membaca memori yang salah.",
+    unavailableUnreadable: "Editor melihat ke tempat yang diperkirakan menyimpan tim nasional di versi game ini, tetapi yang ditemukan tidak tampak seperti data game, jadi editor tidak menampilkan satu pun.",
+  },
 
   app: {
     stage: "beta",
@@ -1370,7 +1420,7 @@ export const id: Strings = {
       change: "Perubahan",
       status: "Status",
     },
-    kinds: { player: "Pemain", staff: "Staf", club: "Klub" },
+    kinds: { player: "Pemain", staff: "Staf", club: "Klub", nationalTeam: "Tim nasional" },
     stored: (change: string) => `tersimpan ${change}`,
     undone: (time: string) => `Diurungkan pada ${time}`,
     undo: "Urungkan",

@@ -6,6 +6,7 @@
 
 import type {
   Concern,
+  EditEntity,
   Entity,
   MassOperationKind,
   MassPreview,
@@ -1155,6 +1156,56 @@ export const tr: Strings = {
       maxReputation: "En yüksek itibar",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "Milli takımlar",
+    switchLabel: "Kulüpler veya milli takımlar",
+    search: "Ada, koda veya UID'ye göre milli takım ara",
+    summary: (total, shown) =>
+      total > shown ? `Milli takımlar: ${format(total)} · itibara göre ilk ${shown} gösteriliyor` : `Milli takımlar: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "Bu filtreye uyan milli takım yok." : "Milli takım bulunamadı.";
+      }
+      return filtered ? `“${query}” aramasına ve bu filtreye uyan milli takım yok.` : `“${query}” aramasına uyan milli takım yok.`;
+    },
+    /** The small tag on a women's team. */
+    women: "Kadın",
+    columns: {
+      name: "Ülke",
+      code: "Kod",
+      reputation: "İtibar",
+      players: "Oyuncu",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Gösterilecek takımlar",
+      all: "Tüm takımlar",
+      men: "Erkek takımları",
+      women: "Kadın takımları",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Kadın milli takımı",
+    mensTeam: "Erkek milli takımı",
+    reputationShort: "İTB",
+    reputationTitle: "A takımın itibarı, 0 ile 10.000 arası",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count) => `A takım oyuncuları (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "A takım oyuncuları",
+    squadNote: "Oyunun A takım için listelediği oyuncular, oyunun sırasıyla. Çağrılar, kaptanlar ve teknik direktörün sözleşmesi burada düzenlenmez.",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "Oyun bu takım için bir A takım tutmuyor, bu yüzden gösterilecek kadro veya itibar yok.",
+    reading: "Kadro okunuyor…",
+    noPlayers: "Oyun bu takım için oyuncu listelemiyor.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "Milli takımlar oyunun bu sürümünde kullanılamıyor",
+    unavailableBuild: "Oyunun bu sürümünün milli takımları nerede tuttuğunu henüz kimse bulmadı; bu yüzden editör yanlış belleği okumak yerine hiçbirini göstermiyor.",
+    unavailableUnreadable: "Editör, oyunun bu sürümünde milli takımları beklediği yere baktı ama bulduğu şey oyunun verisine benzemiyor; bu yüzden hiçbirini göstermiyor.",
+  },
 
   app: {
     stage: "beta",
@@ -1409,7 +1460,7 @@ export const tr: Strings = {
       change: "Değişiklik",
       status: "Durum",
     },
-    kinds: { player: "Oyuncu", staff: "Personel", club: "Kulüp" } satisfies Record<Entity, string>,
+    kinds: { player: "Oyuncu", staff: "Personel", club: "Kulüp", nationalTeam: "Milli takım" } satisfies Record<EditEntity, string>,
     stored: (change) => `saklanan ${change}`,
     undone: (time) => `Geri alındı: ${time}`,
     undo: "Geri al",

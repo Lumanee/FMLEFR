@@ -1268,6 +1268,56 @@ export const fr: Strings = {
       maxReputation: "Réputation maximale",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "Sélections",
+    switchLabel: "Clubs ou sélections",
+    search: "Rechercher des sélections par nom, code ou UID",
+    summary: (total, shown) =>
+      total > shown ? `Sélections\u00a0: ${format(total)} · les ${shown} premières par réputation` : `Sélections\u00a0: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "Aucune sélection ne correspond à ce filtre." : "Aucune sélection trouvée.";
+      }
+      return filtered ? `Aucune sélection ne correspond à «\u00a0${query}\u00a0» avec ce filtre.` : `Aucune sélection ne correspond à «\u00a0${query}\u00a0».`;
+    },
+    /** The small tag on a women's team. */
+    women: "Féminin",
+    columns: {
+      name: "Nation",
+      code: "Code",
+      reputation: "Réputation",
+      players: "Joueurs",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Sélections à afficher",
+      all: "Toutes les sélections",
+      men: "Sélections masculines",
+      women: "Sélections féminines",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Sélection féminine",
+    mensTeam: "Sélection masculine",
+    reputationShort: "RÉP",
+    reputationTitle: "Réputation de l'équipe première, de 0 à 10\u00a0000",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count) => `Joueurs de l'équipe première (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "Joueurs de l'équipe première",
+    squadNote: "Les joueurs que le jeu liste pour l'équipe première, dans son ordre. Les convocations, les capitaines et le contrat du sélectionneur ne se modifient pas ici.",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "Le jeu ne tient pas d'équipe première pour cette sélection : il n'y a ni effectif ni réputation à montrer.",
+    reading: "Lecture de l'effectif…",
+    noPlayers: "Le jeu ne liste aucun joueur pour cette équipe.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "Les sélections ne sont pas disponibles dans cette version du jeu",
+    unavailableBuild: "Personne n'a encore trouvé où cette version du jeu garde ses sélections : l'éditeur n'en montre donc aucune plutôt que de lire la mauvaise mémoire.",
+    unavailableUnreadable: "L'éditeur a regardé là où il attend les sélections dans cette version du jeu, mais ce qu'il a trouvé ne ressemble pas aux données du jeu : il n'en montre donc aucune.",
+  },
 
   app: {
     stage: "bêta",
@@ -1537,7 +1587,7 @@ export const fr: Strings = {
       change: "Modification",
       status: "Statut",
     },
-    kinds: { player: "Joueur", staff: "Staff", club: "Club" },
+    kinds: { player: "Joueur", staff: "Staff", club: "Club", nationalTeam: "Sélection" },
     stored: (change) => `valeur brute ${change}`,
     undone: (time) => `Annulée à ${time}`,
     undo: "Annuler",

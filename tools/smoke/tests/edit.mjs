@@ -1,7 +1,8 @@
 // Editing a player: fields written through the app's commands, read back by the probe, and undone from the change
 // log; his city of birth set to another city of his nation and back, and refused a nation in its place; the squad
-// numbers of two players of one team, where the undo that would give both one number is refused; then one attribute
-// through his profile's Edit mode, undone from the Changes tab.
+// numbers of two players of one team, where the undo that would give both one number is refused; a national team's
+// reputation, where the build has national teams; then one attribute through his profile's Edit mode, undone from the
+// Changes tab.
 import { SHOWN, VIS } from "../lib/app.mjs";
 import { clubPlayers, topClubs } from "../lib/witness.mjs";
 
@@ -42,6 +43,7 @@ export async function run({ app, report, probe }) {
 
   await cityOfBirth({ app, report, probe, club });
   await squadNumbers({ app, report, probe, club });
+  await nationalReputation({ app, report, probe });
 
   // The same through his profile.
   await app.openTab("Players");
@@ -177,4 +179,40 @@ async function squadNumbers({ app, report, probe, club }) {
     JSON.stringify([undoneGiven.error, undoneGone.error]),
   );
   report.check("the probe reads both numbers as they were", read(first) === was && read(second) === took, numbersNow());
+}
+
+/**
+ * The reputation of the best known national team's senior team, where the build has national teams (#169): written
+ * through the app's command, read back by the probe and in the list's row, and undone.
+ */
+async function nationalReputation({ app, report, probe }) {
+  const status = await app.must("national_status");
+  if (!status.available) {
+    report.skip("a national team's reputation", `this build has no national teams to read (${status.reason})`);
+    return;
+  }
+  const [team] = (await app.must("search_national_teams", { query: "", limit: 1 })).rows;
+  const label = `${team.name}${team.women ? " (women)" : ""}`;
+  const read = () => probe.get("national-team", team.uid, ["reputation"]).reputation;
+  const row = async () =>
+    (await app.must("search_national_teams", { query: String(team.uid), limit: 5 })).rows.find((t) => t.uid === team.uid);
+  const before = (await app.must("read_values", { entity: "nationalTeam", uid: team.uid })).reputation;
+  report.check(`the probe reads ${label}'s reputation as the app does`, read() === before && team.reputation === before,
+    `${before}`);
+  const value = before < 10000 ? before + 1 : before - 1;
+  const applied = await app.must("apply_edits", {
+    entity: "nationalTeam",
+    uid: team.uid,
+    edits: [{ field: "reputation", value }],
+  });
+  report.check("writes a national team's reputation", applied.applied.length === 1 && applied.failed.length === 0,
+    JSON.stringify(applied.failed));
+  if (applied.applied.length !== 1) return;
+  report.check("the probe reads the new reputation, and the list's row shows it", read() === value &&
+    (await row())?.reputation === value, `${before} → ${value}`);
+  const logged = (await app.must("change_log")).find((change) => change.id === applied.applied[0].id);
+  report.check("the change log names the national team", logged?.entity === "nationalTeam" && logged?.name === team.name,
+    JSON.stringify({ entity: logged?.entity, name: logged?.name }));
+  await app.must("undo_change", { id: applied.applied[0].id });
+  report.check("the undo puts it back", read() === before && (await row())?.reputation === before, `${read()}`);
 }

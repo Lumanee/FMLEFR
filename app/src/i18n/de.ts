@@ -1247,6 +1247,56 @@ export const de: Strings = {
       maxReputation: "Höchstes Ansehen",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "Nationalteams",
+    switchLabel: "Vereine oder Nationalteams",
+    search: "Nationalteams nach Name, Kürzel oder UID suchen",
+    summary: (total, shown) =>
+      total > shown ? `Nationalteams: ${format(total)} · die besten ${shown} nach Ansehen` : `Nationalteams: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "Kein Nationalteam passt zu diesem Filter." : "Keine Nationalteams gefunden.";
+      }
+      return filtered ? `Mit diesem Filter passt kein Nationalteam zu „${query}“.` : `Kein Nationalteam passt zu „${query}“.`;
+    },
+    /** The small tag on a women's team. */
+    women: "Frauen",
+    columns: {
+      name: "Nation",
+      code: "Kürzel",
+      reputation: "Ansehen",
+      players: "Spieler",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Angezeigte Nationalteams",
+      all: "Alle Nationalteams",
+      men: "Männerteams",
+      women: "Frauenteams",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Frauen-Nationalteam",
+    mensTeam: "Männer-Nationalteam",
+    reputationShort: "ANS",
+    reputationTitle: "Ansehen der ersten Mannschaft, von 0 bis 10.000",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count) => `Spieler der ersten Mannschaft (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "Spieler der ersten Mannschaft",
+    squadNote: "Die Spieler, die das Spiel für die erste Mannschaft aufführt, in seiner Reihenfolge. Nominierungen, Kapitäne und der Vertrag des Trainers werden hier nicht bearbeitet.",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "Das Spiel führt für dieses Team keine erste Mannschaft, daher gibt es keinen Kader und kein Ansehen zu zeigen.",
+    reading: "Kader wird gelesen …",
+    noPlayers: "Das Spiel führt für dieses Team keine Spieler auf.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "Nationalteams sind in dieser Version des Spiels nicht verfügbar",
+    unavailableBuild: "Noch hat niemand gefunden, wo diese Version des Spiels ihre Nationalteams ablegt. Der Editor zeigt daher keine, statt den falschen Speicher zu lesen.",
+    unavailableUnreadable: "Der Editor hat dort nachgesehen, wo er die Nationalteams in dieser Version des Spiels erwartet, aber was er fand, sieht nicht nach den Daten des Spiels aus. Deshalb zeigt er keine.",
+  },
 
   app: {
     stage: "Beta",
@@ -1517,7 +1567,7 @@ export const de: Strings = {
       change: "Änderung",
       status: "Status",
     },
-    kinds: { player: "Spieler", staff: "Mitarbeiter", club: "Verein" },
+    kinds: { player: "Spieler", staff: "Mitarbeiter", club: "Verein", nationalTeam: "Nationalteam" },
     stored: (change) => `Rohwerte ${change}`,
     undone: (time) => `Rückgängig gemacht um ${time}`,
     undo: "Rückgängig",

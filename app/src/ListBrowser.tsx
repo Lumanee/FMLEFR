@@ -73,6 +73,8 @@ interface ListBrowserProps<Row extends { uid: number }> {
   summary: (total: number, shown: number) => string;
   /** The message under an empty table. */
   empty: (query: string) => string;
+  /** Over the toolbar: the switch between this list and another one the same tab shows (see `TeamsSwitch`). */
+  scope?: ReactNode;
   /** The filters of the list, between the search box and the table. */
   filterBar?: ReactNode;
   /** Buttons at the end of the toolbar, e.g. Mass edit; they get the search text and the total. */
@@ -92,7 +94,7 @@ interface ListBrowserProps<Row extends { uid: number }> {
 /** A searchable table with the profile of the selected row beside it. */
 export function ListBrowser<Row extends { uid: number }>(props: ListBrowserProps<Row>) {
   const { command, requestArgs, version, active, placeholder, summary, empty, filterBar, toolbarActions } = props;
-  const { name, request, footer, tableClass, header, cells, profile } = props;
+  const { name, request, scope, footer, tableClass, header, cells, profile } = props;
   // What the list held before the language was switched, if it was: the search text, and the UID of the row to select
   // as soon as the rows are there again.
   const [start] = useState(() => restored(name, readList));
@@ -200,6 +202,7 @@ export function ListBrowser<Row extends { uid: number }>(props: ListBrowserProps
   return (
     <div className={className}>
       <section className="players">
+        {scope}
         <div className="toolbar">
           <label className="search">
             <svg viewBox="0 0 20 20" aria-hidden="true">

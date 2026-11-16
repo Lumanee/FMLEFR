@@ -26,7 +26,7 @@ import { describeError, formatDateTime, formatTime } from "./format";
 import { changesText as text, exportText, fieldLabel, massEditText, profileText, valueChange } from "./labels";
 import { undoFailureLines } from "./massDraft";
 import { restored, useSnapshot } from "./restore";
-import type { EditField, Entity, ExportReport, LoggedChange } from "./types";
+import type { EditEntity, EditField, ExportReport, LoggedChange } from "./types";
 
 /**
  * The change log of the career the game has loaded: this connection's changes and the earlier ones from the app's
@@ -75,7 +75,7 @@ function useFieldIndex(): { fields: ReadonlyMap<string, EditField> | null; error
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fieldTable("player"), fieldTable("staff"), fieldTable("club")]).then(
+    Promise.all([fieldTable("player"), fieldTable("staff"), fieldTable("club"), fieldTable("nationalTeam")]).then(
       (tables) => {
         if (!cancelled) {
           setFields(new Map(tables.flat().map((field) => [`${field.entity}:${field.key}`, field] as const)));
@@ -125,7 +125,7 @@ function pageOf<T>(rows: readonly T[], page: number): T[] {
 interface Batch {
   id: number;
   /** What it changed: a mass edit is made in one list. */
-  entity: Entity;
+  entity: EditEntity;
   /** Its changes, newest first, as the log has them. */
   changes: LoggedChange[];
   /** The changes the search and the filters leave, in the same order: those shown when it is opened. */

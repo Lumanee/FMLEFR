@@ -28,6 +28,8 @@ pub enum Entity {
     Player,
     Staff,
     Club,
+    /// A nation's national team, by the UID of its container (see `national.rs`): the senior team is the one edited.
+    NationalTeam,
 }
 
 impl fmt::Display for Entity {
@@ -36,6 +38,7 @@ impl fmt::Display for Entity {
             Entity::Player => "player",
             Entity::Staff => "staff",
             Entity::Club => "club",
+            Entity::NationalTeam => "national team",
         })
     }
 }
@@ -318,7 +321,17 @@ pub fn fields(layout: &Layout, entity: Entity) -> Vec<Field> {
         Entity::Player => player_fields(layout),
         Entity::Staff => staff_fields(layout),
         Entity::Club => club_fields(layout),
+        Entity::NationalTeam => national_team_fields(layout),
     }
+}
+
+/// What can be changed of a national team: the reputation of its senior team, where the layout places national teams.
+fn national_team_fields(layout: &Layout) -> Vec<Field> {
+    if layout.national.is_none() {
+        return Vec::new();
+    }
+    let reputation = layout.team.reputation;
+    vec![Field::new(Entity::NationalTeam, "reputation", reputation, Kind::U16, 0..=10_000).in_record(Place::SeniorTeam)]
 }
 
 /// A wage in pounds per week, and a contract end between 2000 and 2100.
@@ -1091,6 +1104,10 @@ impl Session {
             Entity::Player => self.layout.player.at(self.layout.player.uid, target.shift),
             Entity::Staff => self.layout.staff.at(self.layout.staff.uid, target.shift),
             Entity::Club => self.layout.club.uid,
+            Entity::NationalTeam => match &self.layout.national {
+                Some(national) => national.container_uid,
+                None => return Err(EditError::Moved { entity: target.entity, uid: target.uid }),
+            },
         };
         if self.process.read_u32(target.address + uid_offset)? != target.uid {
             return Err(EditError::Moved { entity: target.entity, uid: target.uid });
@@ -1142,6 +1159,24 @@ impl Session {
                 let team = self.process.read_u64(teams)?;
                 let belongs =
                     is_user_pointer(team) && self.process.read_u64(team + self.layout.team.club)? == target.address;
+                belongs.then_some(team)
+            }
+            (Place::SeniorTeam, Entity::NationalTeam) => {
+                let Some(national) = &self.layout.national else {
+                    return Ok(None);
+                };
+                let (begin, end) = (
+                    self.process.read_u64(target.address + national.container_teams)?,
+                    self.process.read_u64(target.address + national.container_teams + 8)?,
+                );
+                if !is_user_pointer(begin) || end <= begin {
+                    return Ok(None);
+                }
+                // The first team of the container, a team of kind 0, which points back at the container.
+                let team = self.process.read_u64(begin)?;
+                let belongs = is_user_pointer(team)
+                    && self.process.read_u64(team + self.layout.team.club)? == target.address
+                    && self.process.read_bytes(team + self.layout.team.kind, 1)? == [0];
                 belongs.then_some(team)
             }
             (Place::Concerns, Entity::Player) => {
@@ -1460,7 +1495,7 @@ mod tests {
     #[test]
     fn keys_are_unique() {
         let layout = crate::layout_for(27).expect("FM27 layout");
-        for entity in [Entity::Player, Entity::Staff, Entity::Club] {
+        for entity in [Entity::Player, Entity::Staff, Entity::Club, Entity::NationalTeam] {
             let mut keys: Vec<String> = fields(&layout, entity).into_iter().map(|f| f.key).collect();
             let all = keys.len();
             keys.sort();

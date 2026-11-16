@@ -459,10 +459,12 @@ dd,
 
 /* A segmented switch: two or three buttons in one frame; the pressed one is the choice in effect. The mode switch of
    the move dialog (see Moving a player) is one, so is the switch between the teams of a squad (see Club squad), and so
-   is the choice of sessions in the Changes view (see Changes: search and filters). */
+   is the choice of sessions in the Changes view (see Changes: search and filters), and the Clubs tab's switch between
+   the clubs and the national teams (see National teams). */
 .move-mode,
 .squad-teams,
-.change-session {
+.change-session,
+.teams-switch {
   display: inline-flex;
   align-self: flex-start;
   overflow: hidden;
@@ -472,7 +474,8 @@ dd,
 
 .move-mode button,
 .squad-teams button,
-.change-session button {
+.change-session button,
+.teams-switch button {
   min-width: 40px;
   min-height: 26px;
   padding: 3px 10px;
@@ -487,27 +490,31 @@ dd,
 
 .move-mode button + button,
 .squad-teams button + button,
-.change-session button + button {
+.change-session button + button,
+.teams-switch button + button {
   border-left: 1px solid var(--border-strong);
 }
 
 .move-mode button:hover:not(:disabled, [aria-pressed="true"]),
 .squad-teams button:hover:not(:disabled, [aria-pressed="true"]),
-.change-session button:hover:not(:disabled, [aria-pressed="true"]) {
+.change-session button:hover:not(:disabled, [aria-pressed="true"]),
+.teams-switch button:hover:not(:disabled, [aria-pressed="true"]) {
   background: var(--hover);
   color: var(--text);
 }
 
 .move-mode button[aria-pressed="true"],
 .squad-teams button[aria-pressed="true"],
-.change-session button[aria-pressed="true"] {
+.change-session button[aria-pressed="true"],
+.teams-switch button[aria-pressed="true"] {
   background: var(--accent);
   color: var(--on-accent);
 }
 
 .move-mode button:focus-visible,
 .squad-teams button:focus-visible,
-.change-session button:focus-visible {
+.change-session button:focus-visible,
+.teams-switch button:focus-visible {
   outline-offset: -2px;
 }
 
@@ -7565,4 +7572,30 @@ kbd {
 
 .toolbar .clear-question ~ button {
   flex: none;
+}
+
+/* The Clubs tab's switch between the clubs and the national teams, over the list's search. */
+.teams-switch {
+  margin-bottom: 10px;
+}
+
+/* The national teams on a version of the game that has none to show: what the Clubs tab says instead of the list. */
+.national-unavailable {
+  max-width: 60ch;
+  padding: 32px 24px;
+}
+
+.national-unavailable h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.national-unavailable p {
+  margin: 0;
+  color: var(--muted, inherit);
+}
+
+/* The national teams table: the code takes the place of the league. */
+.national-grid td.col-league {
+  width: 18%;
 }

@@ -115,6 +115,19 @@ enum Command {
         #[arg(long, requires = "export")]
         semicolon: bool,
     },
+    /// List the nations' men's and women's national teams, highest reputation first, optionally only those matching TEXT
+    /// (a name, a code or a UID); with --squad, also the players the game lists for the first one's senior team. Only
+    /// reads memory.
+    NationalTeams {
+        /// Words to look for in the nations' names or codes (accents and case are ignored), or a UID.
+        text: Option<String>,
+        /// How many to print.
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+        /// Print the squad of the first match.
+        #[arg(long)]
+        squad: bool,
+    },
     /// List clubs, highest reputation first, optionally only those matching TEXT.
     Clubs {
         /// Words to look for in club names (accents and case are ignored), or a UID.
@@ -1102,6 +1115,7 @@ enum EntityArg {
     Player,
     Staff,
     Club,
+    NationalTeam,
 }
 
 impl From<EntityArg> for Entity {
@@ -1110,6 +1124,7 @@ impl From<EntityArg> for Entity {
             EntityArg::Player => Entity::Player,
             EntityArg::Staff => Entity::Staff,
             EntityArg::Club => Entity::Club,
+            EntityArg::NationalTeam => Entity::NationalTeam,
         }
     }
 }
@@ -1269,6 +1284,10 @@ fn run(cli: Cli) -> Result<()> {
         }
         Command::StaffRefs { ids, back, show } => {
             staff_refs(&connect(process, ArraySource::ProfileFirst)?, &ids, parse_hex(&back)?, show.as_deref())
+        }
+        Command::NationalTeams { text, limit, squad } => {
+            let session = connect(process, ArraySource::ProfileFirst)?;
+            national_teams(&session, text.as_deref(), limit, squad)
         }
         Command::Clubs { text, limit, export, semicolon } => {
             let session = connect(process, ArraySource::ProfileFirst)?;
@@ -3534,6 +3553,7 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         // Not looked for: kept from the built-in profile.
         tactics_manager: session.profile.as_ref().and_then(|profile| profile.tactics_manager),
         training_manager: session.profile.as_ref().and_then(|profile| profile.training_manager),
+        national_teams: session.profile.as_ref().and_then(|profile| profile.national_teams),
     };
 
     let failed = health.failed();
@@ -4682,6 +4702,12 @@ fn targets(session: &Session, entity: Entity) -> Result<Vec<(Target, String)>> {
         Entity::Player => session.players()?.into_iter().map(|p| (p.target(), p.name)).collect(),
         Entity::Staff => session.staff()?.into_iter().map(|s| (s.target(), s.name)).collect(),
         Entity::Club => session.clubs()?.into_iter().map(|c| (c.target(), c.name)).collect(),
+        Entity::NationalTeam => session
+            .national_teams()
+            .map_err(|reason| anyhow::anyhow!("no national teams to read on this build ({reason:?})"))?
+            .into_iter()
+            .map(|t| (t.target(), if t.women { format!("{} (women)", t.name) } else { t.name }))
+            .collect(),
     })
 }
 
@@ -6377,6 +6403,59 @@ fn clubs(session: &Session, text: Option<&str>, limit: usize, export: Option<(&P
             c.reputation.map_or_else(String::new, |r| r.to_string()),
             c.founded.map_or_else(String::new, |y| y.to_string())
         );
+    }
+    Ok(())
+}
+
+fn national_teams(session: &Session, text: Option<&str>, limit: usize, squad: bool) -> Result<()> {
+    let started = Instant::now();
+    let teams = session
+        .national_teams()
+        .map_err(|reason| anyhow::anyhow!("this build has no national teams to read ({reason:?})"))?;
+    let elapsed = started.elapsed();
+    let index = fmlibre_core::NationalIndex::new(teams);
+    let hits = index.search(text.unwrap_or(""));
+    println!(
+        "Read {} national teams in {:.2} s; {} shown of {} matching.",
+        index.len(),
+        elapsed.as_secs_f64(),
+        hits.len().min(limit),
+        hits.len()
+    );
+    println!();
+    println!("{:>12}  {:<32}  {:<5}  {:>5}  {:>7}", "UID", "Nation", "Code", "Rep", "Players");
+    for team in hits.iter().take(limit) {
+        let name = if team.women { format!("{} (women)", team.name) } else { team.name.clone() };
+        println!(
+            "{:>12}  {:<32}  {:<5}  {:>5}  {:>7}",
+            team.uid,
+            clip(&name, 32),
+            team.code.as_deref().unwrap_or("-"),
+            team.reputation.map_or_else(String::new, |r| r.to_string()),
+            team.players
+        );
+    }
+    if squad && let Some(team) = hits.first() {
+        let players = PlayerIndex::new(session.players()?);
+        let team_squad = session.national_squad(team, &players)?;
+        println!();
+        println!(
+            "Senior team of {} (kind {}): {} players the game lists",
+            team.name,
+            team_squad.kind,
+            team_squad.players.len()
+        );
+        for member in &team_squad.players {
+            if let Some(player) = players.get(member.uid) {
+                println!(
+                    "  {:>10}  {:<30}  {:<12}  {}",
+                    player.uid,
+                    clip(&player.name, 30),
+                    player.positions.join(" "),
+                    player.club.as_deref().unwrap_or("-")
+                );
+            }
+        }
     }
     Ok(())
 }

@@ -4,9 +4,9 @@
 import { editFields, listNations } from "./editing";
 import { nameCities, nameNations } from "./labels";
 import { birthCities } from "./scoutApi";
-import type { City, EditField, Entity, Nation } from "./types";
+import type { City, EditEntity, EditField, Nation } from "./types";
 
-const tables = new Map<Entity, Promise<EditField[]>>();
+const tables = new Map<EditEntity, Promise<EditField[]>>();
 let nations: Promise<Nation[]> | null = null;
 let cities: Promise<City[]> | null = null;
 
@@ -14,7 +14,7 @@ let cities: Promise<City[]> | null = null;
  * The editable fields of players, of staff or of clubs. The table never changes during a connection, so it is
  * fetched once.
  */
-export function fieldTable(entity: Entity): Promise<EditField[]> {
+export function fieldTable(entity: EditEntity): Promise<EditField[]> {
   let table = tables.get(entity);
   if (table === undefined) {
     const fetched = editFields(entity).then(withNations);

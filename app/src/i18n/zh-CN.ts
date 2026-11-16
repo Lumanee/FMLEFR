@@ -3,6 +3,7 @@
 import type {
   CheckKey,
   Concern,
+  EditEntity,
   Entity,
   ExportEntity,
   ExportFormat,
@@ -1269,6 +1270,56 @@ export const zhCN: Strings = {
       maxReputation: "最高声望",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "国家队",
+    switchLabel: "俱乐部或国家队",
+    search: "按名称、代码或 UID 搜索国家队",
+    summary: (total: number, shown: number) =>
+      total > shown ? `国家队：${format(total)} · 按声望显示前 ${shown} 支` : `国家队：${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query: string, filtered: boolean) => {
+      if (query === "") {
+        return filtered ? "没有符合筛选条件的国家队。" : "未找到国家队。";
+      }
+      return filtered ? `没有符合筛选条件且匹配“${query}”的国家队。` : `没有匹配“${query}”的国家队。`;
+    },
+    /** The small tag on a women's team. */
+    women: "女子",
+    columns: {
+      name: "国家",
+      code: "代码",
+      reputation: "声望",
+      players: "球员",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "显示球队",
+      all: "所有球队",
+      men: "男子球队",
+      women: "女子球队",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "女子国家队",
+    mensTeam: "男子国家队",
+    reputationShort: "声望",
+    reputationTitle: "一线队的声望，0 至 10,000",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count: number) => `一线队球员 (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "一线队球员",
+    squadNote: "游戏为一线队列出的球员，按游戏的顺序显示。征召、队长和主教练合同不在此处编辑。",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "游戏中这支球队没有一线队，因此没有可显示的阵容或声望。",
+    reading: "正在读取阵容…",
+    noPlayers: "游戏没有为这支球队列出球员。",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "此版本的游戏无法使用国家队",
+    unavailableBuild: "目前还没有人找到此版本的游戏把国家队放在哪里，因此编辑器不显示任何国家队，以免读到错误的内存。",
+    unavailableUnreadable: "编辑器查看了它预期此版本游戏中国家队所在的位置，但找到的内容不像游戏的数据，因此不显示任何国家队。",
+  },
 
   /** The app around the lists: the sidebar, the status line and the connect panel. */
   app: {
@@ -1590,7 +1641,7 @@ export const zhCN: Strings = {
       status: "状态",
     },
     /** The small tag after a name. */
-    kinds: { player: "球员", staff: "职员", club: "俱乐部" } satisfies Record<Entity, string>,
+    kinds: { player: "球员", staff: "职员", club: "俱乐部", nationalTeam: "国家队" } satisfies Record<EditEntity, string>,
     /** Hover text of a change of an attribute: the values as stored; `change` is from `valueChange`. */
     stored: (change: string) => `游戏中记录为：${change}`,
     undone: (time: string) => `已于 ${time} 撤销`,
