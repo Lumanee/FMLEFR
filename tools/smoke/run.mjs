@@ -24,6 +24,7 @@ import * as names from "./tests/names.mjs";
 import * as medical from "./tests/medical.mjs";
 import * as move from "./tests/move.mjs";
 import * as palette from "./tests/palette.mjs";
+import * as prizes from "./tests/prizes.mjs";
 import * as release from "./tests/release.mjs";
 import * as scouting from "./tests/scouting.mjs";
 import * as sign from "./tests/sign.mjs";
@@ -36,7 +37,7 @@ import * as whatsnew from "./tests/whatsnew.mjs";
 
 /** In the order they run: the ones that only read first. */
 const TESTS = [
-  connect, home, dialog, palette, scouting, clubs, whatsnew, edit, history, mass, changes, contract, move, sign, medical, loan, stadium, names, ties,
+  connect, home, dialog, palette, scouting, clubs, prizes, whatsnew, edit, history, mass, changes, contract, move, sign, medical, loan, stadium, names, ties,
   staff, release, tactics, freeze, unknown,
 ];
 
