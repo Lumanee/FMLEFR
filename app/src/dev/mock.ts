@@ -15,6 +15,10 @@ import type {
   CaptainRole,
   City,
   ClubTeam,
+  EditEntity,
+  NationalProfile,
+  NationalStatus,
+  NationalTeamSummary,
   ScoutRequest,
   SimilarRequest,
   SquadPlayer,
@@ -1129,7 +1133,7 @@ const STAFF_ATTRIBUTE_ORDER = [
 const INTERNATIONAL = { caps: "caps", goals: "goals", u21_caps: "u21Caps", u21_goals: "u21Goals" } as const;
 
 /** The editable fields, as the real `edit_fields` lists them. */
-function fieldTable(entity: Entity): EditField[] {
+function fieldTable(entity: EditEntity): EditField[] {
   const field = (
     key: string,
     kind: EditField["kind"],
@@ -1156,6 +1160,9 @@ function fieldTable(entity: Entity): EditField[] {
   const reputation = ["home", "current", "world"].map((key) => field(`reputation.${key}`, "u16", 0, 10_000));
   const personality = PERSONALITY.map((key) => field(`personality.${key}`, "u8", 1, 20));
   const contract = [field("contract.wage", "i32", 0, 10_000_000), field("contract.expires", "date", 20000101, 21001231)];
+  if (entity === "nationalTeam") {
+    return [{ ...field("reputation", "u16", 0, 10_000), mass: false }];
+  }
   if (entity === "club") {
     return [
       field("reputation", "u16", 0, 10_000),
@@ -1537,7 +1544,11 @@ function profileOf(entity: Entity, uid: number): PlayerDetails | StaffDetails | 
  * The stored value of every field that can be edited now, as `read_values` returns it: like the real command it
  * leaves out contract fields without a contract, a contract end that is not set, and a club's missing finances.
  */
-function currentValues(entity: Entity, uid: number): FieldValues {
+function currentValues(entity: EditEntity, uid: number): FieldValues {
+  if (entity === "nationalTeam") {
+    const reputation = nationals.find((n) => n.uid === uid)?.reputation;
+    return reputation === null || reputation === undefined ? {} : { reputation };
+  }
   const d = profileOf(entity, uid);
   const person = d as PlayerDetails & StaffDetails;
   const club = d as ClubDetails;
@@ -1630,7 +1641,14 @@ function currentValues(entity: Entity, uid: number): FieldValues {
 }
 
 /** Stores `value` as the game would: what the list rows show in them, the rest on top of the profiles. */
-function writeValue(entity: Entity, uid: number, key: string, value: number): void {
+function writeValue(entity: EditEntity, uid: number, key: string, value: number): void {
+  if (entity === "nationalTeam") {
+    const team = nationals.find((n) => n.uid === uid);
+    if (team && key === "reputation") {
+      team.reputation = value;
+    }
+    return;
+  }
   const [group, name = ""] = key.split(".");
   if (entity === "club") {
     const club = clubs.find((c) => c.uid === uid);
@@ -1677,8 +1695,11 @@ function writeValue(entity: Entity, uid: number, key: string, value: number): vo
 }
 
 /** `apply_edits`: every edit is checked and written on its own, like the real command, with the same messages. */
-function applyEdits(entity: Entity, uid: number, edits: FieldEdit[]): ApplyReport {
-  const name = profileOf(entity, uid).name;
+function applyEdits(entity: EditEntity, uid: number, edits: FieldEdit[]): ApplyReport {
+  const name =
+    entity === "nationalTeam"
+      ? (nationals.find((n) => n.uid === uid) ?? (() => { throw failure("app.notFound", `No national team ${uid}`, { entity, uid }); })()).name
+      : profileOf(entity, uid).name;
   const report: ApplyReport = { applied: [], failed: [] };
   for (const edit of edits) {
     const field = fieldTable(entity).find((f) => f.key === edit.field);
@@ -3090,6 +3111,62 @@ const clubs: ClubSummary[] = CLUBS.flatMap((name, i) => {
   ];
 });
 
+/**
+ * The national teams of the fixture nations, men's and women's. Add `?nationals=off` (or `?nationals=unreadable`) to the
+ * address of the dev page to see the tab as it is on a build of the game that has no place for them.
+ */
+const nationals: NationalTeamSummary[] = ALL_NATIONS.flatMap((name, i) => {
+  const nationUid = 1000 + i;
+  const code = name.slice(0, 3).toUpperCase();
+  return [
+    { uid: nationUid, name, code, nationUid, women: false, reputation: 9200 - i * 650, players: 23 },
+    { uid: 2_000_200_000 + i, name, code, nationUid, women: true, reputation: 7400 - i * 500, players: 23 },
+  ];
+});
+
+/** What the tab says of the fixture: it has national teams, unless the address of the page says it has not. */
+function mockNationalStatus(): NationalStatus {
+  const asked = new URLSearchParams(window.location.search).get("nationals");
+  if (asked === "off" || asked === "unreadable") {
+    return { available: false, reason: asked === "off" ? "build" : "unreadable", teams: 0 };
+  }
+  return { available: true, teams: nationals.length };
+}
+
+/** The senior team of a national team: the fixture's players of its nation, as the game lists a squad. */
+function nationalProfile(uid: number): NationalProfile {
+  const team = nationals.find((n) => n.uid === uid);
+  if (!team) {
+    throw failure("app.notFound", `No national team with id ${uid}`, { entity: "nationalTeam", uid });
+  }
+  const listed = players.filter((p) => p.nationUid === team.nationUid && (isWoman(p.uid) ?? false) === team.women);
+  const squad: SquadPlayer[] = listed.map((row) => {
+    const d = details(row);
+    return {
+      ...row,
+      playsHere: true,
+      loan: null,
+      condition: d.condition,
+      matchSharpness: d.matchSharpness,
+      jadedness: d.jadedness,
+      morale: d.morale,
+      cohesion: null,
+      tactics: null,
+      trains: false,
+      concernedTeammates: 0,
+      injuries: d.injuries.length,
+      bans: d.bans.length,
+      attributesFrozen: false,
+      fitnessFrozen: false,
+      positionsFrozen: false,
+    };
+  });
+  return {
+    team: { ...team, players: squad.length },
+    squad: { index: 0, kind: 0, ageLimit: null, captain: null, viceCaptain: null, players: squad },
+  };
+}
+
 /** Whether `club` keeps to `filter`, as the real `ClubFilter::matches` has it; `leagues` leaves the league out. */
 function clubMatches(club: ClubSummary, filter: ClubFilter, leagues = false): boolean {
   const nation = filter.nation?.trim();
@@ -3603,6 +3680,20 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       const page: ClubPage = { total: hits.length, rows: hits.slice(0, limit) };
       return page as T;
     }
+    case "national_status":
+      return mockNationalStatus() as T;
+    case "search_national_teams": {
+      const query = String(args?.query ?? "");
+      const limit = Number(args?.limit ?? 200);
+      const words = fold(query).split(/\s+/).filter(Boolean);
+      const hits = nationals
+        .filter((n) => String(n.uid) === query.trim() || words.every((w) => fold(`${n.name} ${n.code ?? ""}`).includes(w)))
+        .filter((n) => args?.women === undefined || args?.women === null || n.women === args.women)
+        .sort((a, b) => (b.reputation ?? -1) - (a.reputation ?? -1) || a.name.localeCompare(b.name));
+      return { total: hits.length, rows: hits.slice(0, limit) } as T;
+    }
+    case "national_squad":
+      return nationalProfile(Number(args?.uid)) as T;
     case "club_leagues":
       return mockLeagues((args?.filter ?? {}) as ClubFilter) as T;
     case "prize_money":
@@ -3649,7 +3740,7 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return details(player) as T;
     }
     case "edit_fields":
-      return fieldTable(args?.entity as Entity) as T;
+      return fieldTable(args?.entity as EditEntity) as T;
     case "freeze_money": {
       const club = Number(args?.club);
       if (args?.frozen) {
@@ -3767,9 +3858,9 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return nations.sort((a, b) => a.name.localeCompare(b.name)) as T;
     }
     case "read_values":
-      return currentValues(args?.entity as Entity, Number(args?.uid)) as T;
+      return currentValues(args?.entity as EditEntity, Number(args?.uid)) as T;
     case "apply_edits":
-      return applyEdits(args?.entity as Entity, Number(args?.uid), (args?.edits ?? []) as FieldEdit[]) as T;
+      return applyEdits(args?.entity as EditEntity, Number(args?.uid), (args?.edits ?? []) as FieldEdit[]) as T;
     case "recall_loan":
       return recallLoan(Number(args?.uid)) as T;
     case "extend_contract":

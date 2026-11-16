@@ -14,12 +14,13 @@ use fmlibre_core::{
     ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes, EditError, Entity,
     EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo,
     GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted,
-    Listed, Loan, Lock, MoveError, MovePlan, MoveTerms, NameChange, NameKind, Nation, NewContract, NewStaffContract,
-    Operation, Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder,
-    PlayerSummary, PrizeReadError, PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS,
-    ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped, SquadReport,
-    StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, TacticsSet,
-    Target, Tie, TieTarget, diagnostics_report, find_game, nations, sort_players, sort_staff,
+    Listed, Loan, Lock, MoveError, MovePlan, MoveTerms, NameChange, NameKind, Nation, NationalIndex,
+    NationalTeamSummary, NationalUnavailable, NewContract, NewStaffContract, Operation, Paid, People, PersonNames,
+    Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, PrizeReadError,
+    PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS, ScoutError, ScoutPosition,
+    ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped, SquadReport, StadiumName, StadiumRename,
+    StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, TacticsSet, Target, Tie, TieTarget,
+    diagnostics_report, find_game, nations, sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -51,6 +52,8 @@ struct Connection {
     players: PlayerIndex,
     staff: StaffIndex,
     clubs: ClubIndex,
+    /// The nations' men's and women's national teams, or why there are none to show on this build of the game.
+    nationals: Result<NationalIndex, NationalUnavailable>,
     /// The clubs human managers run: a player who leaves one leaves its team selections too.
     human_clubs: Vec<u32>,
     /// The changes written to the career the game has loaded: this connection's, after the earlier ones its history
@@ -633,6 +636,7 @@ impl Connection {
         let save = save_of(&session, &humans);
         let staff = StaffIndex::new(staff);
         let clubs = ClubIndex::new(session.clubs()?);
+        let nationals = session.national_teams().map(NationalIndex::new);
         let (history, log) = match kept {
             Some(kept) if kept.save == save => (kept.history, kept.log),
             _ => History::open(folder, save.as_deref()),
@@ -652,6 +656,7 @@ impl Connection {
             players,
             staff,
             clubs,
+            nationals,
             human_clubs,
             log,
             history,
@@ -675,11 +680,12 @@ impl Connection {
         if !self.log.iter().any(|logged| logged.earlier) {
             return;
         }
-        let fields: HashMap<(Entity, String), Field> = [Entity::Player, Entity::Staff, Entity::Club]
-            .into_iter()
-            .flat_map(|entity| self.session.fields(entity))
-            .map(|field| ((field.entity, field.key.clone()), field))
-            .collect();
+        let fields: HashMap<(Entity, String), Field> =
+            [Entity::Player, Entity::Staff, Entity::Club, Entity::NationalTeam]
+                .into_iter()
+                .flat_map(|entity| self.session.fields(entity))
+                .map(|field| ((field.entity, field.key.clone()), field))
+                .collect();
         let writes_back = |change: &Change| {
             let field = fields.get(&(change.entity, change.field.clone()));
             field.is_some_and(|field| field.kind != Kind::Pointer && field.takes(change.old))
@@ -1168,6 +1174,8 @@ impl Connection {
                 let hits = self.clubs.search(query).into_iter().filter(|c| filter.matches(c));
                 hits.map(|c| (c.target(), c.name.clone())).collect()
             }
+            // National teams have no mass edit: the reputation of one team at a time.
+            Entity::NationalTeam => Vec::new(),
         }
     }
 
@@ -1816,6 +1824,9 @@ impl Connection {
             Entity::Player => self.players.get(uid).map(|p| (p.target(), p.name.clone())),
             Entity::Staff => self.staff.get(uid).map(|s| (s.target(), s.name.clone())),
             Entity::Club => self.clubs.get(uid).map(|c| (c.target(), c.name.clone())),
+            Entity::NationalTeam => {
+                self.nationals.as_ref().ok().and_then(|n| n.get(uid)).map(|n| (n.target(), n.name.clone()))
+            }
         }
         .ok_or_else(|| not_found(entity, uid))
     }
@@ -1945,6 +1956,10 @@ impl Connection {
                 }
             }),
             Entity::Club => self.clubs.update(change.uid, |c| c.note_change(&change.field, value)),
+            Entity::NationalTeam => match self.nationals.as_mut() {
+                Ok(nationals) => nationals.update(change.uid, |n| n.note_change(&change.field, value)),
+                Err(_) => false,
+            },
         };
     }
 }
@@ -3027,6 +3042,113 @@ fn club_details(state: State<'_, AppState>, uid: u32) -> Result<ClubDetails, Fai
     let connection = guard.as_ref().ok_or_else(not_connected)?;
     let club = connection.clubs.get(uid).ok_or_else(|| not_found(Entity::Club, uid))?;
     connection.session.club_details(club)?.ok_or_else(data_changed)
+}
+
+/// Whether this build of the game has national teams the editor can show: the National teams tab says why when it has
+/// none. Only reads what the connection holds.
+#[tauri::command]
+fn national_status(state: State<'_, AppState>) -> Result<NationalStatus, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    Ok(match &connection.nationals {
+        Ok(nationals) => NationalStatus { available: true, reason: None, teams: nationals.len() },
+        Err(reason) => NationalStatus { available: false, reason: Some(*reason), teams: 0 },
+    })
+}
+
+/// Whether the National teams tab can show national teams, and if not, why.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NationalStatus {
+    available: bool,
+    /// "build": nobody has found where this build keeps them; "unreadable": the profile places them but what is there
+    /// does not read as the game's.
+    reason: Option<NationalUnavailable>,
+    teams: usize,
+}
+
+/// Nations' national teams matching `query` (a name or a code), the best known first; at most `limit` rows. `women`
+/// keeps to the men's or the women's teams.
+#[tauri::command]
+fn search_national_teams(
+    state: State<'_, AppState>,
+    query: String,
+    limit: usize,
+    women: Option<bool>,
+) -> Result<Page<NationalTeamSummary>, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let nationals = national_teams_of(connection)?;
+    Ok(page(nationals, &query, limit, |team| women.is_none_or(|women| team.women == women), |_| {}))
+}
+
+/// The nations' index, or the failure that says this build has none.
+fn national_teams_of(connection: &Connection) -> Result<&NationalIndex, Failure> {
+    connection.nationals.as_ref().map_err(|reason| {
+        Failure::new("national.unavailable", "The editor cannot read national teams on this version of the game.")
+            .with("reason", format!("{reason:?}"))
+    })
+}
+
+/// A national team as its profile shows it: its list row, and its senior team with the players.
+#[derive(Serialize)]
+struct NationalProfile {
+    team: NationalTeamSummary,
+    squad: TeamView,
+}
+
+/// The national team `uid` with its senior team's players, read now: each one's list row. Captains, cohesion and
+/// tactics are not read.
+#[tauri::command]
+fn national_squad(state: State<'_, AppState>, uid: u32) -> Result<NationalProfile, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let team = national_teams_of(connection)?.get(uid).ok_or_else(|| not_found(Entity::NationalTeam, uid))?;
+    // A team the game gives no senior team (a few of the United Kingdom's) has no squad to read.
+    let squad = match team.reputation {
+        Some(_) => connection.session.national_squad(team, &connection.players)?,
+        None => fmlibre_core::ClubTeam {
+            index: 0,
+            kind: 0,
+            age_limit: None,
+            captain: None,
+            vice_captain: None,
+            players: Vec::new(),
+        },
+    };
+    let squad = TeamView {
+        index: squad.index,
+        kind: squad.kind,
+        age_limit: squad.age_limit,
+        captain: None,
+        vice_captain: None,
+        players: squad
+            .players
+            .into_iter()
+            .filter_map(|member| {
+                let player = connection.players.get(member.uid)?.clone();
+                Some(SquadRow {
+                    player,
+                    plays_here: member.plays_here,
+                    loan: member.loan,
+                    condition: member.condition,
+                    match_sharpness: member.match_sharpness,
+                    jadedness: member.jadedness,
+                    morale: member.morale,
+                    cohesion: None,
+                    tactics: None,
+                    trains: false,
+                    concerned_teammates: 0,
+                    injuries: member.injuries,
+                    bans: member.bans,
+                    attributes_frozen: connection.frozen.attributes.contains_key(&member.uid),
+                    fitness_frozen: connection.frozen.fitness.contains_key(&member.uid),
+                    positions_frozen: connection.frozen.positions.contains_key(&member.uid),
+                })
+            })
+            .collect(),
+    };
+    Ok(NationalProfile { team: team.clone(), squad })
 }
 
 /// The full profile of the player with `uid`. Only reads memory.
@@ -4598,6 +4720,9 @@ pub fn run() {
             search_clubs,
             club_leagues,
             prize_money,
+            national_status,
+            search_national_teams,
+            national_squad,
             export_players,
             export_staff,
             export_clubs,

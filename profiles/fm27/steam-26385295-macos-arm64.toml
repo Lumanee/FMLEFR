@@ -41,3 +41,10 @@ uuid = "2A2D0ED6-324E-3D0D-A27D-10AEDBD0E270"
 players = 0x576EE50
 staff = 0x576EE98
 clubs = 0x576F008
+
+# RVAs of the pairs of the arrays of national teams' containers (docs/recon/fm27-national-teams.md): 251 for the men's
+# teams and 251 for the women's, read on a running save (14 September 2026) and checked there against the nations
+# that point at them. Only this build has them: the others' are not read.
+[national_teams]
+men = 0x576EEF8
+women = 0x576EF10

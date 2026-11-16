@@ -1179,6 +1179,56 @@ export const ko: Strings = {
       maxReputation: "최고 명성",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "국가대표",
+    switchLabel: "구단 또는 국가대표",
+    search: "이름, 코드 또는 UID로 국가대표 검색",
+    summary: (total, shown) =>
+      total > shown ? `국가대표: ${format(total)} · 명성 상위 ${shown}개 표시` : `국가대표: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "이 필터에 맞는 국가대표가 없습니다." : "국가대표를 찾지 못했습니다.";
+      }
+      return filtered ? `이 필터에서 “${query}”에 맞는 국가대표가 없습니다.` : `“${query}”에 맞는 국가대표가 없습니다.`;
+    },
+    /** The small tag on a women's team. */
+    women: "여자",
+    columns: {
+      name: "국가",
+      code: "코드",
+      reputation: "명성",
+      players: "선수",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "표시할 팀",
+      all: "모든 팀",
+      men: "남자 팀",
+      women: "여자 팀",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "여자 국가대표팀",
+    mensTeam: "남자 국가대표팀",
+    reputationShort: "명성",
+    reputationTitle: "1군의 명성, 0~10,000",
+    /** Over the squad; `count` is how many players the senior team lists. */
+    squadHeading: (count) => `1군 선수 (${format(count)})`,
+    /** The name of the squad table for assistive technology. */
+    squadLabel: "1군 선수",
+    squadNote: "게임이 1군으로 올려 둔 선수를 게임의 순서대로 보여 줍니다. 소집, 주장, 감독 계약은 여기서 편집하지 않습니다.",
+    /** For the one national team the game gives no senior team. */
+    noSeniorTeam: "게임에 이 팀의 1군이 없어서 보여 줄 선수단이나 명성이 없습니다.",
+    reading: "선수단을 읽는 중…",
+    noPlayers: "게임이 이 팀에 올려 둔 선수가 없습니다.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "이 게임 버전에서는 국가대표를 쓸 수 없습니다",
+    unavailableBuild: "이 게임 버전이 국가대표를 어디에 두는지 아직 아무도 찾지 못해서, 에디터는 엉뚱한 메모리를 읽는 대신 아무것도 보여 주지 않습니다.",
+    unavailableUnreadable: "에디터가 이 게임 버전에서 국가대표가 있을 것으로 예상한 곳을 살펴봤지만, 찾은 것이 게임의 데이터로 읽히지 않아 아무것도 보여 주지 않습니다.",
+  },
 
   prizeMoney: {
     nav: "상금",
@@ -1468,7 +1518,7 @@ export const ko: Strings = {
       change: "변경",
       status: "상태",
     },
-    kinds: { player: "선수", staff: "스태프", club: "구단" },
+    kinds: { player: "선수", staff: "스태프", club: "구단", nationalTeam: "국가대표" },
     stored: (change) => `저장된 값 ${change}`,
     undone: (time) => `${time}에 되돌림`,
     undo: "되돌리기",

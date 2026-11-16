@@ -124,7 +124,8 @@ impl Check {
         let key = field.key.as_str();
         match field.entity {
             Entity::Staff => Check::Staff,
-            Entity::Club => Check::Clubs,
+            // The senior team's reputation sits where a club's does, which the clubs' check reads.
+            Entity::Club | Entity::NationalTeam => Check::Clubs,
             Entity::Player if key.starts_with("attribute.") => Check::Attributes,
             Entity::Player if key.starts_with("position.") => Check::Positions,
             Entity::Player if key.starts_with("personality.") => Check::Personality,
@@ -217,6 +218,12 @@ impl DateEvidence {
             injuries: self.injuries.len() as u64,
         }
     }
+}
+
+/// A player can be born after the database cutoff in an old save: youth intakes keep being generated as the game
+/// advances. These are valid FM dates and must not make the player-field safety check fail.
+fn player_birth_date_fits(date: Option<FmDate>) -> bool {
+    date.is_some_and(|born| (1900..=2100).contains(&born.year))
 }
 
 /// How a date fits [`DateEvidence`].
@@ -540,7 +547,9 @@ pub(crate) fn check(session: &Session) -> Health {
     let p = &layout.player;
     let attribute = |player: &SampledPlayer, key: &str| p.attributes.get(key).map(|&at| player.u8(layout, at));
     for player in &players {
-        let born = player.date(layout, p.date_of_birth).is_some_and(|born| (1900..=2020).contains(&born.year));
+        // Saves can run beyond the database's original years: youth intakes generated in a 2041 save can be born
+        // after 2020. Their date is still a real date; don't let that make the whole player check fail and lock CA/PA.
+        let born = player_birth_date_fits(player.date(layout, p.date_of_birth));
         let height = (140..=220).contains(&player.u16(layout, p.height));
         let ability = (1..=200).contains(&player.u16(layout, p.current_ability));
         let potential = player.u16(layout, p.potential_ability) as i16;
@@ -1064,6 +1073,14 @@ mod tests {
         assert!(tally(LEAST_SAMPLED, LEAST_SAMPLED).holds(1.0));
     }
 
+    #[test]
+    fn player_birth_dates_cover_youth_intakes_from_later_seasons() {
+        assert!(player_birth_date_fits(Some(date(2041, 3, 24))));
+        assert!(player_birth_date_fits(Some(date(2100, 12, 31))));
+        assert!(!player_birth_date_fits(Some(date(2101, 1, 1))));
+        assert!(!player_birth_date_fits(None));
+    }
+
     fn date(year: u16, month: u8, day: u8) -> FmDate {
         FmDate { year, month, day }
     }
@@ -1292,5 +1309,9 @@ mod tests {
         assert_eq!(check(Entity::Player, "trait.49"), Check::Players);
         assert_eq!(check(Entity::Staff, "contract.wage"), Check::Staff);
         assert_eq!(check(Entity::Club, "finance.balance"), Check::Clubs);
+        // A national team's reputation sits where a club's does, where the layout places national teams.
+        if layout.national.is_some() {
+            assert_eq!(check(Entity::NationalTeam, "reputation"), Check::Clubs);
+        }
     }
 }

@@ -74,6 +74,22 @@ same object at the same place (read on Steam build 26385295, where loading the s
 Copy diagnostics (and `fmlibre-probe diagnostics`) says where the count was read, how it was found and what it is
 ("Saves loaded"), and its Writing line says when writes wait for Reload data.
 
+### National teams
+
+The Clubs tab lists the nations' national teams behind its National teams switch (`TeamsSwitch`), read from two arrays
+of containers in the game plugin's writable data (see [fm27-national-teams.md](recon/fm27-national-teams.md)). Where
+they are is a matter of the build, and a build profile names them under `[national_teams]` (`men` and `women`, the RVAs
+of their `(begin, end)` pairs); how a container reads is the layout's `[national]` section, in `layout.toml` and
+`layout-macos.toml` (the nation points at its containers 8 bytes earlier on Windows). A build whose profile has no
+`[national_teams]`, or whose arrays do not read as the game's (a container must point at a nation that points back at
+it, with the kind it is in; nearly all of them must), shows a note saying why in place of the list, and reads nothing
+else. The profiles that name them:
+Game Pass 0.9.2435.0 and Steam build 26577676 on Windows, and Steam build 26385295 on macOS, Apple silicon. For another
+build, find the two arrays as the recon note says (`fmlibre-probe instances db::NATION` leads to the nations, which
+point at the containers; the arrays are the two pairs of pointers to them that sit next to the clubs' array: on each of
+those builds 0xA8 and 0xC0 past the players' pair, which `fmlibre-probe column game_plugin.dll+<RVA> 0x0C` shows as 251
+UIDs each) and add them; the unit test `only_the_builds_read_place_the_national_teams` lists the builds that have them.
+
 ### After an update of the game
 
 Each build of the game moves its static data. A build profile in `profiles/` (identified by `game_plugin`'s headers)
@@ -344,6 +360,7 @@ fmlibre-probe players --max-age 21 --export young.csv   # every match to a file,
 fmlibre-probe player 7458500                         # everything read for one player
 fmlibre-probe staff arteta                           # search staff; staff-member <id> for details; --export FILE as players
 fmlibre-probe clubs tottenham                        # search clubs; club <uid> for details; --export FILE as players
+fmlibre-probe national-teams italia --squad            # a nation's men's and women's teams, and the first one's squad; no writes
 fmlibre-probe fields player                          # what the editor can change (also: staff)
 fmlibre-probe get player 7458500                     # those fields' values for one player
 fmlibre-probe set player 7458500 attribute.finishing 18 --shown   # change one: this writes to the game

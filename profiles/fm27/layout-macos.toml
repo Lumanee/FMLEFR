@@ -526,3 +526,17 @@ win = 0x148
 win_again = 0x14C
 draw = 0x150
 loss = 0x154
+
+# A nation's national teams (#169, docs/recon/fm27-national-teams.md), read on the Mac (Steam build 26385295, Apple
+# silicon, a save of 14 September 2026). Each nation has two containers (`db::NATIONAL_TEAM_CONTAINER`), one for its
+# men's teams and one for its women's: 251 of each, 502 in all. A container holds its teams as (begin, end, capacity)
+# of pointers, the senior team first; they are laid out as a club's team ([team]), with the container where a club's
+# team points at its club. The nation (`db::NATION`, [nation]) points at its two containers.
+[national]
+container_uid = 0x0C          # Italia's men's: 776, the nation's UID; the women's have a UID of their own
+container_teams = 0x18        # Italia's men's: 23 players in the senior team, a manager, a reputation of 8500
+container_women = 0xB9        # u8: 0 at all 251 men's containers, 1 at all 251 women's
+container_nation = 0x170      # pointer back to its nation, at all 502
+nation_code = 0x28            # an FM string: "ITA"
+nation_men = 0x110
+nation_women = 0x118

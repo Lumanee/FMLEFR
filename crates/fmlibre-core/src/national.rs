@@ -1,0 +1,331 @@
+//! The nations' national teams, as the National teams tab shows them (#169; see docs/recon/fm27-national-teams.md).
+//!
+//! A national team is not a club's: no array of clubs holds it. Each nation has two containers
+//! (`db::NATIONAL_TEAM_CONTAINER`), one for its men's teams and one for its women's, and each holds a list of teams that
+//! are laid out as a club's ([`TeamLayout`](crate::profile::TeamLayout)), the senior team first. Two arrays in the game
+//! plugin's writable data hold the 251 containers of each kind; where they are is a matter of the build, so only the
+//! builds whose profile names them (`national_teams`) can show the tab, and the others say why they cannot.
+//!
+//! What the editor does with them: lists the containers, reads the senior team's squad and reputation, and edits the
+//! reputation (through the same guarded write as a club's: see `Entity::NationalTeam`). Calling players up, the
+//! captains and the manager's contract are left alone: it is not known yet what the game makes of them.
+
+use std::collections::HashMap;
+
+use fmlibre_mem::is_user_pointer;
+use serde::Serialize;
+
+use crate::index::{Listed, SearchIndex};
+use crate::players::PlayerIndex;
+use crate::profile::NationalLayout;
+use crate::session::Session;
+use crate::squad::ClubTeam;
+use crate::text::read_fm_string;
+use crate::transfer::{MoveError, PointerList};
+
+/// The most national teams a container lists; the game keeps up to a dozen of the youth teams besides the senior one.
+const MOST_TEAMS: u64 = 64;
+
+/// The most players a national team lists.
+const MOST_PLAYERS: u64 = 256;
+
+/// How many of the containers read must check out for the arrays to count as the game's: the share of them that
+/// point at a nation that points back, with the right kind, a name and a list of teams.
+const MOST_CONTAINERS_FIT: f64 = 0.95;
+
+/// What the list shows of a nation's men's or women's team.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NationalTeamSummary {
+    /// The UID of its container: the nation's for a men's team, a number of its own for a women's.
+    pub uid: u32,
+    /// The nation's name, in the game's language, and its three-letter code.
+    pub name: String,
+    pub code: Option<String>,
+    pub nation_uid: u32,
+    /// A women's team.
+    pub women: bool,
+    /// 0–10000, from the senior team; none for the one container without a senior team.
+    pub reputation: Option<u16>,
+    /// How many players the senior team lists.
+    pub players: usize,
+    #[serde(skip)]
+    pub address: u64,
+}
+
+impl Listed for NationalTeamSummary {
+    fn uid(&self) -> u32 {
+        self.uid
+    }
+
+    fn names(&self) -> String {
+        match &self.code {
+            Some(code) => format!("{} {code}", self.name),
+            None => self.name.clone(),
+        }
+    }
+
+    fn display_name(&self) -> &str {
+        &self.name
+    }
+
+    fn rank(&self) -> i32 {
+        self.reputation.map_or(-1, i32::from)
+    }
+}
+
+pub type NationalIndex = SearchIndex<NationalTeamSummary>;
+
+impl NationalTeamSummary {
+    /// Brings the fields a list row shows up to date after `field` was set to `value`.
+    pub fn note_change(&mut self, field: &str, value: i64) {
+        if field == "reputation" {
+            self.reputation = Some(value as u16);
+        }
+    }
+
+    pub fn target(&self) -> crate::edit::Target {
+        crate::edit::Target {
+            entity: crate::edit::Entity::NationalTeam,
+            uid: self.uid,
+            address: self.address,
+            shift: 0,
+        }
+    }
+}
+
+/// A nation as a container leads to it: its UID, its name and its three-letter code.
+type NationRead = (u32, String, Option<String>);
+
+/// Why the editor shows no national teams.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NationalUnavailable {
+    /// Nobody has found where this build of the game keeps them: its profile does not place the two arrays, or the
+    /// editor has no profile for the build or was told to ignore them.
+    Build,
+    /// The profile places them, but what is there does not read as the game's national teams.
+    Unreadable,
+}
+
+impl Session {
+    /// The places of the two arrays of containers, for the builds whose profile has them and whose layout knows how a
+    /// container reads.
+    fn national_places(&self) -> Option<(&NationalLayout, u64, u64)> {
+        let layout = self.layout.national.as_ref()?;
+        let arrays = self.profile.as_ref()?.national_teams?;
+        Some((layout, arrays.men, arrays.women))
+    }
+
+    /// Whether this build of the game has a place for the national teams.
+    pub fn national_teams_placed(&self) -> bool {
+        self.national_places().is_some()
+    }
+
+    /// Reads every nation's men's and women's team: the men's first, then the women's. Containers that do not read
+    /// right are left out; when too many of them do not, the arrays are not the game's and it is an error. Only reads
+    /// memory.
+    pub fn national_teams(&self) -> Result<Vec<NationalTeamSummary>, NationalUnavailable> {
+        let (national, men, women) = self.national_places().ok_or(NationalUnavailable::Build)?;
+        let mut teams = Vec::new();
+        let (mut sampled, mut fit) = (0u64, 0u64);
+        let mut nations = HashMap::new();
+        for (rva, woman) in [(men, false), (women, true)] {
+            let pointers = self.container_pointers(rva).ok_or(NationalUnavailable::Unreadable)?;
+            for container in pointers {
+                sampled += 1;
+                if let Some(team) = self.read_container(national, container, woman, &mut nations) {
+                    fit += 1;
+                    teams.push(team);
+                }
+            }
+        }
+        let holds = sampled >= 2 && fit as f64 >= MOST_CONTAINERS_FIT * sampled as f64;
+        holds.then_some(teams).ok_or(NationalUnavailable::Unreadable)
+    }
+
+    /// The containers of the array whose `(begin, end)` pair is at `rva` in the game plugin; none when the pair does not
+    /// hold a plausible array of pointers.
+    fn container_pointers(&self, rva: u64) -> Option<Vec<u64>> {
+        let begin = self.process.read_u64(self.plugin.base + rva).ok()?;
+        let end = self.process.read_u64(self.plugin.base + rva + 8).ok()?;
+        let count = end.checked_sub(begin)? / 8;
+        if !is_user_pointer(begin) || !(1..=1_000).contains(&count) {
+            return None;
+        }
+        let bytes = self.process.read_bytes(begin, (count * 8) as usize).ok()?;
+        Some(bytes.as_chunks::<8>().0.iter().map(|chunk| u64::from_le_bytes(*chunk)).collect())
+    }
+
+    /// The team of the container at `address`, if it is a container of the kind asked for that points at a nation that
+    /// points back at it.
+    fn read_container(
+        &self,
+        national: &NationalLayout,
+        address: u64,
+        woman: bool,
+        nations: &mut HashMap<u64, Option<NationRead>>,
+    ) -> Option<NationalTeamSummary> {
+        let process = &self.process;
+        if !is_user_pointer(address) {
+            return None;
+        }
+        let bytes = process.read_bytes(address, (national.container_nation + 8) as usize).ok()?;
+        let u64_at = |at: u64| u64::from_le_bytes(bytes[at as usize..at as usize + 8].try_into().expect("8 bytes"));
+        if (bytes[national.container_women as usize] == 1) != woman || bytes[national.container_women as usize] > 1 {
+            return None;
+        }
+        let uid = u32::from_le_bytes(bytes[national.container_uid as usize..][..4].try_into().expect("4 bytes"));
+        let nation = u64_at(national.container_nation);
+        let (nation_uid, name, code) =
+            nations.entry(nation).or_insert_with(|| self.read_nation(national, nation)).clone()?;
+        // The nation points back at the container.
+        let back = if woman { national.nation_women } else { national.nation_men };
+        if process.read_u64(nation + back).ok()? != address {
+            return None;
+        }
+        let (reputation, players) = match self.senior_team_of(national, address, &bytes) {
+            Some((team, players)) => (Some(team), players),
+            None => (None, 0),
+        };
+        // A container with no teams at all is not one the game plays with.
+        PointerList::read(process, address + national.container_teams).ok().flatten()?;
+        Some(NationalTeamSummary { uid, name, code, nation_uid, women: woman, reputation, players, address })
+    }
+
+    /// The UID, name and code of the nation at `nation`.
+    fn read_nation(&self, national: &NationalLayout, nation: u64) -> Option<NationRead> {
+        if !is_user_pointer(nation) {
+            return None;
+        }
+        let n = &self.layout.nation;
+        let uid = self.process.read_u32(nation + n.uid).ok()?;
+        let name = read_fm_string(&self.process, self.process.read_u64(nation + n.name).ok()?)?;
+        let code =
+            self.process.read_u64(nation + national.nation_code).ok().and_then(|at| read_fm_string(&self.process, at));
+        Some((uid, name, code))
+    }
+
+    /// The senior team of the container at `container`, whose bytes are `bytes`: its reputation and how many players it
+    /// lists. It is the first of the container's teams, of kind 0, and points back at the container.
+    fn senior_team_of(&self, national: &NationalLayout, container: u64, bytes: &[u8]) -> Option<(u16, usize)> {
+        let team = self.national_senior_team(national, container, bytes)?;
+        let t = &self.layout.team;
+        let head = self.process.read_bytes(team, t.end() as usize).ok()?;
+        let reputation = u16::from_le_bytes([head[t.reputation as usize], head[t.reputation as usize + 1]]);
+        // A team that lists no players has a list of three zeros, with no buffer yet.
+        let players = if self.process.read_bytes(team + t.players, 24).ok()?.iter().all(|&byte| byte == 0) {
+            0
+        } else {
+            PointerList::read_up_to(&self.process, team + t.players, MOST_PLAYERS).ok().flatten()?.len()
+        };
+        (reputation <= 10_000).then_some((reputation, players as usize))
+    }
+
+    /// The address of the senior team of the container at `container`, if it has one: the first of its teams, of kind 0,
+    /// which points back at the container.
+    fn national_senior_team(&self, national: &NationalLayout, container: u64, bytes: &[u8]) -> Option<u64> {
+        let at = national.container_teams as usize;
+        let begin = u64::from_le_bytes(bytes[at..at + 8].try_into().expect("8 bytes"));
+        let end = u64::from_le_bytes(bytes[at + 8..at + 16].try_into().expect("8 bytes"));
+        if !is_user_pointer(begin) || end <= begin || (end - begin) / 8 > MOST_TEAMS {
+            return None;
+        }
+        let team = self.process.read_u64(begin).ok()?;
+        let t = &self.layout.team;
+        let belongs = is_user_pointer(team)
+            && self.process.read_u64(team + t.club).ok()? == container
+            && self.process.read_bytes(team + t.kind, 1).ok()? == [0];
+        belongs.then_some(team)
+    }
+
+    /// The senior team of the nation's team `national_team` with its players, read now: the players the game lists for it
+    /// (see `docs/recon/fm27-national-teams.md`), told apart by `players`, as the squad of a club's team is. Captains
+    /// are not read: where the game shows them is not known.
+    pub fn national_squad(&self, team: &NationalTeamSummary, players: &PlayerIndex) -> Result<ClubTeam, MoveError> {
+        let national = self.layout.national.as_ref().ok_or(MoveError::NotAClub { uid: team.uid })?;
+        let not_a_team = || MoveError::NotAClub { uid: team.uid };
+        let bytes = self.process.read_bytes(team.address, (national.container_nation + 8) as usize)?;
+        if u32::from_le_bytes(bytes[national.container_uid as usize..][..4].try_into().expect("4 bytes")) != team.uid {
+            return Err(not_a_team());
+        }
+        let object = self.national_senior_team(national, team.address, &bytes).ok_or_else(not_a_team)?;
+        let t = &self.layout.team;
+        let head = self.process.read_bytes(object, t.end() as usize)?;
+        let elements = match PointerList::read_up_to(&self.process, object + t.players, MOST_PLAYERS)? {
+            Some(list) => list.elements(&self.process)?,
+            None => Vec::new(),
+        };
+        let age_limit = head[t.age_limit as usize];
+        Ok(ClubTeam {
+            index: 0,
+            kind: head[t.kind as usize],
+            age_limit: (age_limit != 100).then_some(age_limit),
+            captain: None,
+            vice_captain: None,
+            players: elements
+                .into_iter()
+                .filter_map(|element| self.squad_member(None, object, element, players))
+                .collect(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summary(name: &str, code: Option<&str>, reputation: Option<u16>) -> NationalTeamSummary {
+        NationalTeamSummary {
+            uid: 1,
+            name: name.to_owned(),
+            code: code.map(str::to_owned),
+            nation_uid: 1,
+            women: false,
+            reputation,
+            players: 0,
+            address: 0,
+        }
+    }
+
+    #[test]
+    fn a_team_is_found_by_its_nation_s_name_or_code() {
+        let index = NationalIndex::new(vec![
+            summary("Italia", Some("ITA"), Some(8500)),
+            summary("San Marino", Some("SMR"), Some(1200)),
+            summary("Svizzera", Some("SUI"), None),
+        ]);
+        let names = |query: &str| index.search(query).iter().map(|team| team.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names("smr"), ["San Marino"]);
+        assert_eq!(names("ital"), ["Italia"]);
+        // The best known first, one with no senior team last.
+        assert_eq!(names(""), ["Italia", "San Marino", "Svizzera"]);
+    }
+
+    #[test]
+    fn the_reputation_is_the_only_field_and_follows_the_layout() {
+        // Both layouts place national teams, the Mac's and the Windows one.
+        let layout = crate::layout_for(27).expect("FM27 layout");
+        assert!(layout.national.is_some());
+        let fields = crate::fields(&layout, crate::Entity::NationalTeam);
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].key, "reputation");
+        assert!(fields[0].takes(10_000) && !fields[0].takes(10_001));
+    }
+
+    #[test]
+    fn only_the_builds_read_place_the_national_teams() {
+        let placed: Vec<String> = crate::profile::built_in_profiles()
+            .filter(|profile| profile.national_teams.is_some())
+            .map(|profile| profile.name)
+            .collect();
+        assert_eq!(
+            placed,
+            [
+                "FM27 0.9.2435.0 (Game Pass)",
+                "FM27 Steam build 26577676",
+                "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"
+            ]
+        );
+    }
+}

@@ -4,6 +4,7 @@ import { call, inTauri } from "./api";
 import { BridgeSetup } from "./BridgeSetup";
 import { ChangesView, useChangeFilter, useChangeLog } from "./ChangesView";
 import { ClubBrowser } from "./ClubBrowser";
+import { NationalBrowser } from "./NationalBrowser";
 import { CommandPalette, Keys, SearchIcon, type Command, type Found, type FoundKind } from "./CommandPalette";
 import { CompatibilityNotice } from "./CompatibilityNotice";
 import { CopyDiagnostics } from "./CopyDiagnostics";
@@ -16,6 +17,7 @@ import {
   appText,
   changesText,
   clubListText,
+  nationalText,
   homeText,
   paletteText,
   playerListText,
@@ -34,6 +36,7 @@ import { ScoutingBrowser } from "./ScoutingBrowser";
 import { MyClub } from "./MyClub";
 import { matches, SHORTCUTS, viewShortcut, withShortcut } from "./shortcuts";
 import { StaffBrowser } from "./StaffBrowser";
+import { readTeams, TeamsSwitch, type Teams } from "./TeamsSwitch";
 import type {
   BridgeInfo,
   ClubSummary,
@@ -55,6 +58,7 @@ import "./App.css";
 
 type View = "home" | "players" | "staff" | "clubs" | "prizes" | "scouting" | "changes";
 
+// The national teams are listed in the Clubs tab, behind its switch (see `TeamsSwitch`), not in a tab of their own.
 const VIEWS: { id: View; label: string }[] = [
   { id: "home", label: homeText.nav },
   { id: "players", label: playerListText.nav },
@@ -127,6 +131,9 @@ function App() {
   const [refrozen, setRefrozen] = useState<Refrozen | null>(null);
   const [view, setView] = useState<View>(() => restored("view", readView));
   useSnapshot("view", () => view);
+  // Which teams the Clubs tab lists: the clubs, or the nations' national teams.
+  const [teams, setTeams] = useState<Teams>(() => restored("teams", readTeams));
+  useSnapshot("teams", () => teams);
   // Whether the view on show is one that was asked for: a tab, a shortcut, the palette, or the view the window was in
   // before the language was switched. Until then the app is where it opened, on My club, and goes to the players
   // instead when the save has no club for that page (see `MyClub`).
@@ -271,10 +278,24 @@ function App() {
     }
   };
 
+  // The Clubs tab's switch between the clubs and the national teams: like another tab, it asks first while edits are
+  // pending in the open profile.
+  const showTeams = (next: Teams) => {
+    viewChosen.current = true;
+    if (next !== teams || view !== "clubs") {
+      askToLeave(() => {
+        setView("clubs");
+        setTeams(next);
+      });
+    }
+  };
+  const teamsSwitch = <TeamsSwitch teams={teams} onChange={showTeams} />;
+
   // A club's profile, opened from My club: the Clubs tab shows it.
   const openClub = (club: ClubSummary) => {
     viewChosen.current = true;
     setView("clubs");
+    setTeams("clubs");
     setRequest({ kind: "club", ask: { row: club } });
   };
 
@@ -304,6 +325,9 @@ function App() {
       askToLeave(() => {
         viewChosen.current = true;
         setView(VIEW_OF[found.kind]);
+        if (found.kind === "club") {
+          setTeams("clubs");
+        }
         setRequest(profileRequest(found));
       }),
     );
@@ -314,6 +338,9 @@ function App() {
       askToLeave(() => {
         viewChosen.current = true;
         setView(VIEW_OF[kind]);
+        if (kind === "club") {
+          setTeams("clubs");
+        }
         setRequest({ kind, ask: { query } });
       }),
     );
@@ -347,6 +374,12 @@ function App() {
         run: () => show(id),
       }),
     );
+    // The national teams have no tab of their own: the Clubs tab lists them behind its switch.
+    commands.push({
+      id: "view-nationals",
+      label: paletteText.goTo(nationalText.nav),
+      run: () => showTeams("nationals"),
+    });
     if (searchable) {
       commands.push({ id: "find", label: paletteText.searchList, shortcut: SHORTCUTS.find, run: focusListSearch });
     }
@@ -534,8 +567,14 @@ function App() {
                 />
                 <ClubBrowser
                   version={dataVersion}
-                  active={view === "clubs"}
+                  active={view === "clubs" && teams === "clubs"}
                   request={request?.kind === "club" ? request.ask : null}
+                  scope={teamsSwitch}
+                />
+                <NationalBrowser
+                  version={dataVersion}
+                  active={view === "clubs" && teams === "nationals"}
+                  scope={teamsSwitch}
                 />
                 <PrizeBrowser version={dataVersion} active={view === "prizes"} />
                 <ScoutingBrowser version={dataVersion} active={view === "scouting"} gameDate={connection.gameDate} />
