@@ -160,8 +160,10 @@ enum Place {
     ClubInfo,
     /// The club's finance record, written only when it is of the full class.
     ClubFinance,
-    /// The club's senior team, which points back at the club.
+    /// The club's senior team, which points back at the club; for a national team, its container's senior team.
     SeniorTeam,
+    /// The one team of a national team's container of this kind, which points back at the container.
+    NationalTeamOfKind(u8),
     /// The stadium the club's senior team plays at, written only when it is of the stadium class.
     Stadium,
     /// The record of a player's reasons to be unhappy, which his contract points at.
@@ -325,13 +327,21 @@ pub fn fields(layout: &Layout, entity: Entity) -> Vec<Field> {
     }
 }
 
-/// What can be changed of a national team: the reputation of its senior team, where the layout places national teams.
+/// What can be changed of a national team, where the layout places national teams: the reputation of its senior team,
+/// and that of each of its other teams by kind (`team.10.reputation` for the under-21s).
 fn national_team_fields(layout: &Layout) -> Vec<Field> {
     if layout.national.is_none() {
         return Vec::new();
     }
     let reputation = layout.team.reputation;
-    vec![Field::new(Entity::NationalTeam, "reputation", reputation, Kind::U16, 0..=10_000).in_record(Place::SeniorTeam)]
+    let senior =
+        Field::new(Entity::NationalTeam, "reputation", reputation, Kind::U16, 0..=10_000).in_record(Place::SeniorTeam);
+    std::iter::once(senior)
+        .chain(crate::national::OTHER_KINDS.iter().map(|&kind| {
+            Field::new(Entity::NationalTeam, format!("team.{kind}.reputation"), reputation, Kind::U16, 0..=10_000)
+                .in_record(Place::NationalTeamOfKind(kind))
+        }))
+        .collect()
 }
 
 /// A wage in pounds per week, and a contract end between 2000 and 2100.
@@ -1178,6 +1188,36 @@ impl Session {
                     && self.process.read_u64(team + self.layout.team.club)? == target.address
                     && self.process.read_bytes(team + self.layout.team.kind, 1)? == [0];
                 belongs.then_some(team)
+            }
+            (Place::NationalTeamOfKind(kind), Entity::NationalTeam) => {
+                let Some(national) = &self.layout.national else {
+                    return Ok(None);
+                };
+                let (begin, end) = (
+                    self.process.read_u64(target.address + national.container_teams)?,
+                    self.process.read_u64(target.address + national.container_teams + 8)?,
+                );
+                let count = end.saturating_sub(begin) / 8;
+                if !is_user_pointer(begin) || count == 0 || count > crate::national::MOST_TEAMS {
+                    return Ok(None);
+                }
+                let pointers = self.process.read_bytes(begin, (count * 8) as usize)?;
+                // The one team of that kind which points back at the container: none when two share it.
+                let t = &self.layout.team;
+                let mut found = None;
+                for chunk in pointers.as_chunks::<8>().0 {
+                    let team = u64::from_le_bytes(*chunk);
+                    if !is_user_pointer(team)
+                        || self.process.read_u64(team + t.club)? != target.address
+                        || self.process.read_bytes(team + t.kind, 1)? != [kind]
+                    {
+                        continue;
+                    }
+                    if found.replace(team).is_some() {
+                        return Ok(None);
+                    }
+                }
+                found
             }
             (Place::Concerns, Entity::Player) => {
                 let Some(contract) = self.record(target, Place::Contract)? else {
