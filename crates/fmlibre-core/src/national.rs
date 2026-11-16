@@ -319,6 +319,13 @@ mod tests {
             .filter(|profile| profile.national_teams.is_some())
             .map(|profile| profile.name)
             .collect();
-        assert_eq!(placed, ["FM27 0.9.2435.0 (Game Pass)", "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"]);
+        assert_eq!(
+            placed,
+            [
+                "FM27 0.9.2435.0 (Game Pass)",
+                "FM27 Steam build 26577676",
+                "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"
+            ]
+        );
     }
 }

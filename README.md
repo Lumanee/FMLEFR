@@ -29,8 +29,9 @@ How to install and use it: [docs/INSTALL.md](docs/INSTALL.md).
 - Browse, search and filter every player, member of staff and club; clubs by nation, league
   and reputation.
 - See each nation's men's and women's national team, the players the game lists for its senior team
-  and its reputation, which can be edited. So far on Game Pass 0.9.2435.0 and on Steam for macOS,
-  build 26385295 on Apple silicon; the other versions of the game show why the tab has nothing yet.
+  and its reputation, which can be edited. So far on Windows (Game Pass 0.9.2435.0 and Steam build
+  26577676) and on Steam for macOS, build 26385295 on Apple silicon; the other versions of the game
+  show why the tab has nothing yet.
 - Opens on **My club**: the club you manage, its money, who needs a look (the injured, the
   banned, low morale, the tired, unrest, contracts about to end) and the actions on the whole
   team one click away. With no club of your own, pick one to follow.

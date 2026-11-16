@@ -606,15 +606,16 @@ draw = 0x150              # u32 pounds per draw
 loss = 0x154              # u32 pounds per loss
 
 # A nation's national teams (#169, docs/recon/fm27-national-teams.md), read on Game Pass 0.9.2435.0 (a save of January
-# 2028). Each nation has two containers (`db::NATIONAL_TEAM_CONTAINER`, 0x898 bytes apart here, 0x8A0 on the Mac), one
-# for its men's teams and one for its women's: 251 of each, 502 in all. A container holds its teams as (begin, end,
-# capacity) of pointers, the senior team first; they are laid out as a club's team ([team]), with the container where a
-# club's team points at its club. What the editor reads of a container sits where it does on the Mac. The nation
-# (`db::NATION`, [nation], 0x200 bytes apart here and 0x208 on the Mac) keeps everything from its capital (+0xE8 here)
-# on 8 bytes earlier than the Mac does, its two containers too.
+# 2028) and on Steam build 26577676 (a save of October 2026). Each nation has two containers
+# (`db::NATIONAL_TEAM_CONTAINER`, 0x898 bytes apart here, 0x8A0 on the Mac), one for its men's teams and one for its
+# women's: 251 of each, 502 in all. A container holds its teams as (begin, end, capacity) of pointers, the senior team
+# first; they are laid out as a club's team ([team]), with the container where a club's team points at its club. What
+# the editor reads of a container sits where it does on the Mac. The nation (`db::NATION`, [nation], 0x200 bytes apart
+# here and 0x208 on the Mac) keeps everything from its capital (+0xE8 here) on 8 bytes earlier than the Mac does, its
+# two containers too.
 [national]
 container_uid = 0x0C          # Italy's men's: 776, the nation's UID; the women's have a UID of their own (2000169632)
-container_teams = 0x18        # Italy's men's: 7 teams, the senior one first, with 23 players and a reputation of 8322
+container_teams = 0x18        # Italy's men's on Game Pass: 7 teams, the senior one first, with 23 players
 container_women = 0xB9        # u8: 0 at all 251 men's containers, 1 at all 251 women's
 container_nation = 0x170      # pointer back to its nation
 nation_code = 0x28            # an FM string: "ITA"

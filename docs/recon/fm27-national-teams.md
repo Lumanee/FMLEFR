@@ -155,6 +155,11 @@ Read on Game Pass 0.9.2435.0, on a save of 18 January 2028 (English, no women's 
   as on the Mac. `fmlibre-probe fields national-team --stats`: 502 read, reputations 1 to 9,950, none implausible.
   `fmlibre-probe set national-team 776 reputation 8323 --restore` wrote and put back Italy's reputation.
 
+On Steam build 26577676, on a save of 14 October 2026, the arrays sit at the same distances from the players' pair
+(`game_plugin.dll+0x58208B8` and `+0x58208D0`), the containers 0x898 bytes apart, and the same layout reads all 502:
+Italy's senior team lists 26 players from Donnarumma, Di Lorenzo, Bastoni and Mancini (as on the Mac's save of
+September 2026), with a reputation of 8477.
+
 ## What a tab could take from this
 
 - A list of nations from the two arrays of containers, each container leading to its nation (name, code, flag by
@@ -168,6 +173,7 @@ Read on Game Pass 0.9.2435.0, on a save of 18 January 2028 (English, no women's 
   turns the reputation into words ("Mondiale").
 - Where a national team's manager keeps his contract, and the world ranking (15 for Italia), which none of the three
   objects holds as a byte.
-- The two arrays' places on the Windows Steam builds (Game Pass 0.9.2435.0 is read: see [On Windows](#on-windows)).
+- The two arrays' places on the Mac's Steam build 26577676 and on the Intel Macs (Windows Game Pass 0.9.2435.0 and
+  Steam build 26577676 are read: see [On Windows](#on-windows)).
 - The names of the team kinds, and what the numbers from `+0x180` of a nation are.
 - What a national team's 0x50 bytes past a club team's end hold.
