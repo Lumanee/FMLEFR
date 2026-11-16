@@ -7566,3 +7566,38 @@ kbd {
 .toolbar .clear-question ~ button {
   flex: none;
 }
+
+/* The Prize money tab on a version of the game that has none to show: what it says instead of the list. */
+.prize-unavailable {
+  max-width: 60ch;
+  padding: 32px 24px;
+}
+
+.prize-unavailable h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.prize-unavailable p {
+  margin: 0;
+  color: var(--muted, inherit);
+}
+
+/* The Prize money table: the name takes the room the amounts leave. */
+.prize-grid td.col-nation {
+  width: 16%;
+}
+
+.prize-note {
+  margin: 12px 16px;
+}
+
+/* A stage's list by position, in two columns once the panel is wide enough. */
+.prize-places {
+  columns: 2 14rem;
+  column-gap: 24px;
+}
+
+.prize-places .stat {
+  break-inside: avoid;
+}

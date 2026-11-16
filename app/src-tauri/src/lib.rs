@@ -11,15 +11,15 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fmlibre_core::{
     ArraySource, Buyer, COHESION_RANGE, CaptainRole, CaptainSet, Change, ChangeRow, Clause, ClauseSet, ClubDetails,
-    ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, EditError, Entity, EntityArrays, ExportFormat,
-    ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex,
-    HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MoveError,
-    MovePlan, MoveTerms, NameChange, NameKind, Nation, NewContract, NewStaffContract, Operation, Paid, People,
-    PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, ROLES,
-    RelationSet, RetirementSet, Role, SCOUT_POSITIONS, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex,
-    Session, SessionError, Skipped, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter,
-    StaffIndex, StaffOrder, StaffPlan, TacticsSet, Target, Tie, TieTarget, diagnostics_report, find_game, nations,
-    sort_players, sort_staff,
+    ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes, EditError, Entity,
+    EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo,
+    GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted,
+    Listed, Loan, Lock, MoveError, MovePlan, MoveTerms, NameChange, NameKind, Nation, NewContract, NewStaffContract,
+    Operation, Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder,
+    PlayerSummary, PrizeReadError, PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS,
+    ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped, SquadReport,
+    StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, TacticsSet,
+    Target, Tie, TieTarget, diagnostics_report, find_game, nations, sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -2816,6 +2816,36 @@ fn club_leagues(state: State<'_, AppState>, filter: Option<ClubFilter>) -> Resul
     Ok(fmlibre_core::leagues(connection.clubs.search("").into_iter().filter(|club| filter.matches(club))))
 }
 
+/// What the competitions that pay prize money pay, by position and per match, read from the game now; or why this
+/// version of the game shows none. Off the window's thread: it reads all of the game's memory once, which takes a few
+/// seconds, and longer the first time on macOS. Only reads.
+#[tauri::command]
+async fn prize_money(app: tauri::AppHandle) -> Result<PrizeMoneyView, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<PrizeMoneyView, Failure> {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        Ok(match connection.session.competition_prizes() {
+            Ok(competitions) => PrizeMoneyView { unavailable: None, competitions },
+            Err(PrizeReadError::Unavailable(reason)) => {
+                PrizeMoneyView { unavailable: Some(reason), competitions: Vec::new() }
+            }
+            Err(PrizeReadError::Memory(err)) => return Err(err.into()),
+        })
+    })
+    .await?
+}
+
+/// The Prize money tab's list, or why it has none on this version of the game.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrizeMoneyView {
+    /// "build": nobody has checked the prize money on this build yet; "unreadable": it was checked, but what the
+    /// editor found does not read as the game's.
+    unavailable: Option<PrizeUnavailable>,
+    competitions: Vec<CompetitionPrizes>,
+}
+
 /// Writes the players `query` and `filter` select, in `order`, to a new file in the exports folder as `format`: what
 /// their profiles hold, with the in-game date in the file and in its name ("players-2027-01-02.csv"; a second export
 /// that day "players-2027-01-02-2.csv"). Only reads memory.
@@ -4567,6 +4597,7 @@ pub fn run() {
             search_staff,
             search_clubs,
             club_leagues,
+            prize_money,
             export_players,
             export_staff,
             export_clubs,

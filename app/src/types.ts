@@ -251,6 +251,42 @@ export interface League {
   reputation: number;
 }
 
+/** Why the Prize money tab shows nothing on this version of the game (`prize_money`). */
+export type PrizeUnavailable = "build" | "unreadable";
+
+/** What the competitions that pay prize money pay, or why this version of the game shows none (`prize_money`). */
+export interface PrizeMoneyView {
+  unavailable: PrizeUnavailable | null;
+  /** By name. */
+  competitions: CompetitionPrizes[];
+}
+
+/** A competition that pays prize money, and what its stages pay. */
+export interface CompetitionPrizes {
+  uid: number;
+  /** In the game's language. */
+  name: string;
+  shortName: string | null;
+  /** The nation whose competition it is; none for a continent's. */
+  nationUid: number | null;
+  nation: string | null;
+  /** A stage being played before one that has not started yet, then the longest list first. */
+  stages: StagePrizes[];
+}
+
+/** What one or more of a competition's stages pay, alike in every amount, in pounds. */
+export interface StagePrizes {
+  /** Whether the stage has not started yet. */
+  future: boolean;
+  /** How many of them pay these amounts: one per group of a group stage. */
+  count: number;
+  /** By final position, the first place first; empty where the stage pays only per match. */
+  byPosition: number[];
+  win: number;
+  draw: number;
+  loss: number;
+}
+
 export interface ClubPage {
   total: number;
   rows: ClubSummary[];

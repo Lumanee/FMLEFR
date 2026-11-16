@@ -131,6 +131,9 @@ export const clubStaffText = strings.clubStaff;
 /** The club list, with the sidebar entry and the status-line count that go with it. */
 export const clubListText = strings.clubList;
 
+/** The Prize money tab: what each competition pays by final position and per match, read only. */
+export const prizeText = strings.prizeMoney;
+
 /**
  * The app around the lists: the sidebar (and the note at its foot, which depends on the connection, see
  * `ConnectionInfo.editable`), the status line and the connect panel.

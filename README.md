@@ -28,11 +28,15 @@ How to install and use it: [docs/INSTALL.md](docs/INSTALL.md).
 
 - Browse, search and filter every player, member of staff and club; clubs by nation, league
   and reputation.
+- See the prize money each competition pays this season, by final position and per win, draw
+  and loss (read only). So far on the versions of the game it was checked on: Steam build
+  26340721 on Windows and on Apple silicon Macs, Steam build 26385295 on Apple silicon Macs and
+  Game Pass 0.9.2409.0; the others say why the tab has nothing yet.
 - Opens on **My club**: the club you manage, its money, who needs a look (the injured, the
   banned, low morale, the tired, unrest, contracts about to end) and the actions on the whole
   team one click away. With no club of your own, pick one to follow.
 - Find anyone from anywhere: **Ctrl+K** (**⌘K** on macOS) opens one search over players, staff,
-  clubs and the app's commands. The tabs (Ctrl+1 to 6), the list's search (Ctrl+F), Edit
+  clubs and the app's commands. The tabs (Ctrl+1 to 7), the list's search (Ctrl+F), Edit
   (Ctrl+E), Apply (Ctrl+S) and Reload data (Ctrl+R) have shortcuts too, with ⌘ on macOS.
 - Edit attributes, abilities, positions, personality, traits, contracts with their bonuses and
   clauses, reputation, finances, stadiums and more.
