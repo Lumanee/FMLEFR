@@ -1097,6 +1097,7 @@ const BUILDS: &[&str] = &[
     include_str!("../../../profiles/fm27/gamepass-0.9.2355.0.toml"),
     include_str!("../../../profiles/fm27/gamepass-0.9.2409.0.toml"),
     include_str!("../../../profiles/fm27/gamepass-0.9.2435.0.toml"),
+    include_str!("../../../profiles/fm27/gamepass-0.9.2524.0.toml"),
     include_str!("../../../profiles/fm27/steam-26227640.toml"),
     include_str!("../../../profiles/fm27/steam-26340721.toml"),
     include_str!("../../../profiles/fm27/steam-26385295.toml"),
@@ -1407,6 +1408,27 @@ mod tests {
         let fingerprint = PluginFingerprint::Pe { size_of_image: 0x185F_A000, link_timestamp: 0x6AF3_8E5C };
         let update = profile_for(fingerprint).expect("Steam build 26577676 profile");
         assert_eq!((update.tactics_manager, update.training_manager), (steam.tactics_manager, steam.training_manager));
+
+        // The update of 17 November 2026 on Game Pass (0.9.2524.0): the statics moved again, and the retirement
+        // manager's no longer sits as far from the players pair, nor the game's own object's; the tactics manager's
+        // is still 0xD0 after the retirement manager's.
+        let fingerprint = PluginFingerprint::Pe { size_of_image: 0x179A_D000, link_timestamp: 0x6AF5_C8C6 };
+        let profile = profile_for(fingerprint).expect("Game Pass 0.9.2524.0 profile");
+        assert_eq!(
+            (profile.storefront, profile.package_version.as_deref()),
+            (Storefront::GamePass, Some("0.9.2524.0"))
+        );
+        assert_eq!(
+            (profile.arrays.players, profile.arrays.staff, profile.arrays.clubs),
+            (0x53F_AE88, 0x53F_AED0, 0x53F_B040)
+        );
+        assert_eq!(profile.current_date, Some(0x539_DD10));
+        assert_eq!(profile.retirement_manager, Some(profile.arrays.players - 0xD2E8));
+        assert_eq!(profile.game_ui, profile.retirement_manager.map(|rva| rva - 0x41E0));
+        assert_eq!(profile.tactics_manager, profile.retirement_manager.map(|rva| rva + 0xD0));
+        assert_eq!(profile.training_manager, Some(0x53E_A210));
+        let national = profile.national_teams.expect("the national teams' arrays");
+        assert_eq!((national.men, national.women), (profile.arrays.players + 0xA8, profile.arrays.players + 0xC0));
         // The Windows layout walks MSVC's maps; the Mac's does not say, and walks libc++'s.
         let familiarity = layout.familiarity.as_ref().expect("the Windows layout places familiarity");
         assert_eq!((familiarity.tree, layout.tactics.as_ref().map(|t| t.tree)), (Tree::Msvc, Some(Tree::Msvc)));
@@ -1536,6 +1558,7 @@ mod tests {
             [
                 "FM27 0.9.2409.0 (Game Pass)",
                 "FM27 0.9.2435.0 (Game Pass)",
+                "FM27 0.9.2524.0 (Game Pass)",
                 "FM27 Steam build 26340721 (27.0.0)",
                 "FM27 Steam build 26385295 (27.0.1)",
                 "FM27 Steam build 26577676",
