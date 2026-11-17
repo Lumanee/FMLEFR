@@ -1653,10 +1653,12 @@ mod tests {
             [
                 "FM27 0.9.2409.0 (Game Pass)",
                 "FM27 0.9.2435.0 (Game Pass)",
+                "FM27 0.9.2524.0 (Game Pass)",
                 "FM27 Steam build 26340721 (27.0.0)",
                 "FM27 Steam build 26340721 (27.0.0, macOS, Apple silicon)",
                 "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
                 "FM27 Steam build 26577676",
+                "FM27 Steam build 26620374",
             ]
         );
     }

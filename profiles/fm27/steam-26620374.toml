@@ -26,6 +26,12 @@ game_ui = 0x587C470
 tactics_manager = 0x586F920
 training_manager = 0x586BED0
 
+# The prize money competitions pay (layout.toml, [prize_money]; #123) was read on this build on a save of 14 October
+# 2026: 309 settings, all held by a stage. The Premier League pays its 20 places from £53,100,000 to £2,600,000, Serie
+# A from £28,691,666 to £773,129, and the Champions League's league phase 36 places from £10,222,480, £1,803,967 per
+# win and £601,323 per draw: to the pound what build 26577676 read on the same save.
+prize_money = true
+
 # game_plugin as mapped in memory; these values identify the build.
 [plugin]
 size_of_image = 0x18878000
