@@ -209,7 +209,11 @@ impl Session {
         let fingerprint = PluginFingerprint::read(&process, &plugin)?;
         let profile = if profiles_ignored() { None } else { profile_for(fingerprint) };
         let edition = profile.as_ref().map(|p| p.edition).or(game.edition);
-        let layout = edition.and_then(layout_for).ok_or(SessionError::UnsupportedEdition(edition))?;
+        let mut layout = edition.and_then(layout_for).ok_or(SessionError::UnsupportedEdition(edition))?;
+        // What the build lays out otherwise is a fact of the build, not a place to search for: kept with ScanOnly too.
+        if let Some(profile) = &profile {
+            profile.adjust(&mut layout);
+        }
         let hint = profile.as_ref().filter(|_| source == ArraySource::ProfileFirst).map(|p| &p.arrays);
         let arrays = calibrate(&process, &plugin, &layout, hint);
         if arrays.players.is_none() {

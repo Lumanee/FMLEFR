@@ -1006,6 +1006,11 @@ pub struct BuildProfile {
     /// they were not, which leaves the National teams tab off.
     #[serde(default)]
     pub national_teams: Option<NationalArrays>,
+    /// What the build's club finance record keeps elsewhere than the edition's layout says ([`ClubFinanceLayout`]):
+    /// since the update of 17 November 2026 (Game Pass 0.9.2524.0, Steam build 26620374) corporate facilities sit 4
+    /// bytes further on. None where the layout holds; see [`BuildProfile::adjust`].
+    #[serde(default)]
+    pub club_finance: Option<ClubFinanceOverride>,
 }
 
 /// RVAs in the game plugin of the `(begin, end)` pointer pairs of the arrays of national teams' containers: one holds a
@@ -1015,6 +1020,26 @@ pub struct BuildProfile {
 pub struct NationalArrays {
     pub men: u64,
     pub women: u64,
+}
+
+/// Where a build's club finance record keeps a value elsewhere than the edition's layout places it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClubFinanceOverride {
+    /// Corporate facilities, a u8 from 1 to 20 ([`ClubFinanceLayout::corporate`]).
+    pub corporate: u64,
+}
+
+impl BuildProfile {
+    /// The edition's `layout` as this build lays its objects out: what the profile places otherwise put where it says.
+    /// The finance record is told from the smaller class of the clubs outside the leagues being played by its values
+    /// (`finances_look_real` in clubs.rs), corporate facilities among them: read where the build does not keep them,
+    /// no club's finances read as real, and the editor neither shows nor writes any.
+    pub fn adjust(&self, layout: &mut Layout) {
+        if let Some(ClubFinanceOverride { corporate }) = self.club_finance {
+            layout.club_finance.corporate = corporate;
+        }
+    }
 }
 
 /// Identifies a build of the game plugin from its headers as mapped in memory.
@@ -1102,6 +1127,7 @@ const BUILDS: &[&str] = &[
     include_str!("../../../profiles/fm27/steam-26340721.toml"),
     include_str!("../../../profiles/fm27/steam-26385295.toml"),
     include_str!("../../../profiles/fm27/steam-26577676.toml"),
+    include_str!("../../../profiles/fm27/steam-26620374.toml"),
     include_str!("../../../profiles/fm27/steam-26227640-macos-x86_64.toml"),
     include_str!("../../../profiles/fm27/steam-26227640-macos-arm64.toml"),
     include_str!("../../../profiles/fm27/steam-26340721-macos-x86_64.toml"),
@@ -1190,6 +1216,11 @@ pub fn profile_text(profile: &BuildProfile, notes: &ProfileNotes) -> String {
     if let Some(NationalArrays { men, women }) = profile.national_teams {
         text += &format!(
             "\n# RVAs of the pairs of the arrays of national teams' containers.\n[national_teams]\nmen = {men:#X}\nwomen = {women:#X}\n"
+        );
+    }
+    if let Some(ClubFinanceOverride { corporate }) = profile.club_finance {
+        text += &format!(
+            "\n# Where the club finance record keeps what the layout places elsewhere.\n[club_finance]\ncorporate = {corporate:#X}\n"
         );
     }
     text
@@ -1424,11 +1455,27 @@ mod tests {
         );
         assert_eq!(profile.current_date, Some(0x539_DD10));
         assert_eq!(profile.retirement_manager, Some(profile.arrays.players - 0xD2E8));
-        assert_eq!(profile.game_ui, profile.retirement_manager.map(|rva| rva - 0x41E0));
+        assert_eq!(profile.game_ui, Some(profile.arrays.players + 0xBB8));
         assert_eq!(profile.tactics_manager, profile.retirement_manager.map(|rva| rva + 0xD0));
         assert_eq!(profile.training_manager, Some(0x53E_A210));
         let national = profile.national_teams.expect("the national teams' arrays");
         assert_eq!((national.men, national.women), (profile.arrays.players + 0xA8, profile.arrays.players + 0xC0));
+        // The same update on Steam (build 26620374): the game's own object as far from the players pair, the
+        // retirement manager not.
+        let fingerprint = PluginFingerprint::Pe { size_of_image: 0x1887_8000, link_timestamp: 0x6AF5_C68F };
+        let steam = profile_for(fingerprint).expect("Steam build 26620374 profile");
+        assert_eq!((steam.storefront, steam.package_version.as_deref()), (Storefront::Steam, None));
+        assert_eq!(
+            (steam.arrays.players, steam.arrays.staff, steam.arrays.clubs),
+            (0x587_B8B8, 0x587_B900, 0x587_BA70)
+        );
+        assert_eq!(steam.current_date, Some(0x582_68E0));
+        assert_eq!(steam.retirement_manager, Some(steam.arrays.players - 0xC068));
+        assert_eq!(steam.game_ui, Some(steam.arrays.players + 0xBB8));
+        assert_eq!(steam.tactics_manager, steam.retirement_manager.map(|rva| rva + 0xD0));
+        assert_eq!(steam.training_manager, Some(0x586_BED0));
+        let national = steam.national_teams.expect("the national teams' arrays");
+        assert_eq!((national.men, national.women), (steam.arrays.players + 0xA8, steam.arrays.players + 0xC0));
         // The Windows layout walks MSVC's maps; the Mac's does not say, and walks libc++'s.
         let familiarity = layout.familiarity.as_ref().expect("the Windows layout places familiarity");
         assert_eq!((familiarity.tree, layout.tactics.as_ref().map(|t| t.tree)), (Tree::Msvc, Some(Tree::Msvc)));
@@ -1562,6 +1609,7 @@ mod tests {
                 "FM27 Steam build 26340721 (27.0.0)",
                 "FM27 Steam build 26385295 (27.0.1)",
                 "FM27 Steam build 26577676",
+                "FM27 Steam build 26620374",
                 "FM27 Steam build 26385295 (27.0.1, macOS, Intel)",
                 "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
                 "FM27 Steam build 26577676 (macOS, Intel)",
@@ -1611,6 +1659,31 @@ mod tests {
                 "FM27 Steam build 26577676",
             ]
         );
+    }
+
+    /// Since the update of 17 November 2026 the club finance record keeps corporate facilities 4 bytes further on: the
+    /// profiles of its builds say so, and a session over one of them reads it there; every other build keeps the
+    /// layout's place, and nothing else of the record moves.
+    #[test]
+    fn builds_place_what_their_finance_record_keeps_elsewhere() {
+        let layout = layout_for(27).expect("FM27 layout");
+        assert_eq!(layout.club_finance.corporate, 0x8A9);
+        let moved: Vec<String> =
+            built_in_profiles().filter(|profile| profile.club_finance.is_some()).map(|profile| profile.name).collect();
+        assert_eq!(moved, ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374"]);
+        for profile in built_in_profiles() {
+            let mut adjusted = layout.clone();
+            profile.adjust(&mut adjusted);
+            let corporate = if profile.club_finance.is_some() { 0x8AD } else { 0x8A9 };
+            assert_eq!(adjusted.club_finance.corporate, corporate, "{}", profile.name);
+            let f = (&adjusted.club_finance, &layout.club_finance);
+            assert_eq!(
+                (f.0.balance, f.0.transfer_budget, f.0.total_wage_budget, f.0.wage_budget, f.0.ticket_price),
+                (f.1.balance, f.1.transfer_budget, f.1.total_wage_budget, f.1.wage_budget, f.1.ticket_price),
+                "{}",
+                profile.name
+            );
+        }
     }
 
     #[test]

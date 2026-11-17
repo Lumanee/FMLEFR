@@ -1,9 +1,9 @@
 # FM27 on Game Pass / Microsoft Store, 0.9.2524.0, the update of 17 November 2026, worked out by
-# `fmlibre-probe profile` on a save of 18 January 2028, where all 12 checks passed. The object layout is unchanged,
-# but the statics moved: the players pair sits 0x430A8 after that of 0.9.2435.0, and the statics around the
-# retirement manager no longer sit at the old distances from it (the manager's is 0xD2E8 before the players pair,
-# 0xED70 in 0.9.2435.0), so the guesses from the other builds held neither the manager nor the game's own object and
-# the search found both.
+# `fmlibre-probe profile` on a save of 18 January 2028, where all 12 checks passed. The statics moved: the players pair
+# sits 0x430A8 after that of 0.9.2435.0, and the statics around the retirement manager no longer sit at the old
+# distances from it (the manager's is 0xD2E8 before the players pair, 0xED70 in 0.9.2435.0), so the guesses from the
+# builds before held neither the manager nor the game's own object, and the search found both. The object layout is
+# the same but for the club finance record, which keeps corporate facilities 4 bytes further on (see the end).
 name = "FM27 0.9.2524.0 (Game Pass)"
 edition = 27
 storefront = "gamePass"
@@ -19,11 +19,10 @@ current_date = 0x539DD10
 retirement_manager = 0x53EDBA0
 
 # The static pointer to the game's one GAME_UI object, whose count of saves loaded tells a load from a save (1 loaded
-# on the save). Two statics point at it: this one, the one the search finds first, 0x41E0 before the retirement
-# manager's (the second static of 0.9.2409.0 and 0.9.2435.0 sat about as far before it, 0x4198 and 0x41A8), and one
-# at 0x53FBA40, 0xBB8 after the players pair. Neither sits 0x3C80 before the players pair, as the one those builds'
-# profiles name did.
-game_ui = 0x53E99C0
+# on the save): 0xBB8 after the players pair, as on Steam build 26620374, so each build's profile guesses the other's.
+# Another static, at 0x53E99C0 (0x41E0 before the retirement manager's), points at it too, and the search finds that
+# one first. Neither sits 0x3C80 before the players pair, as the one the builds before name did.
+game_ui = 0x53FBA40
 
 # The static pointers to the tactics the human managers keep for their teams (TACTICS_MANAGER, 0xD0 after the
 # retirement manager's, as in 0.9.2435.0) and to the training manager (TRAINING_MANAGER), which keeps the history of
@@ -47,3 +46,10 @@ clubs = 0x53FB040
 [national_teams]
 men = 0x53FAF30
 women = 0x53FAF48
+
+# The club finance record (layout.toml, [club_finance]) keeps corporate facilities at 0x8AD, 4 bytes further on than
+# the builds before: 30 of 30 clubs of the save read there what 0.9.2435.0 read at 0x8A9 (Beşiktaş 20, Fenerbahçe 12,
+# Trabzonspor 16), and 0x8A9 held 0 for each. The balance, the budgets and the ticket price are where they were. Read
+# at 0x8A9, no club's finances look real and the editor reads none.
+[club_finance]
+corporate = 0x8AD
