@@ -215,6 +215,34 @@ function intakeFaults(found) {
   return { newestFirst, players, wrong };
 }
 
+/**
+ * Another club's youth intakes as `youth_intakes` gives them: the first club with an intake of those no human manages,
+ * the ones with the most players of 16 or younger first. The intakes are the players the game made, so before a
+ * career's first youth intake a club whose players come from the database has none (Barcelona, in a new career), and
+ * the first club with one can be some way down the list; null when none has, with the skip said.
+ */
+async function otherClubWithIntake(app, report) {
+  const human = await humanClubs(app);
+  const young = (await app.must("search_players", { query: "", limit: 1000, filter: { maxAge: 16, women: false } })).rows;
+  const byClub = new Map();
+  for (const p of young.filter((p) => p.clubUid != null && !human.includes(p.clubUid))) {
+    byClub.set(p.clubUid, (byClub.get(p.clubUid) ?? 0) + 1);
+  }
+  const clubs = [...byClub.entries()].sort((a, b) => b[1] - a[1]);
+  if (clubs.length === 0) {
+    report.skip("another club's youth intakes", "no club has players of 16 or younger");
+    return null;
+  }
+  for (const [uid] of clubs) {
+    const found = await app.must("youth_intakes", { club: uid });
+    if (found.intakes.length > 0) {
+      return found;
+    }
+  }
+  report.skip("another club's youth intakes", `none of the ${clubs.length} clubs with the most players of 16 or younger has an intake yet`);
+  return null;
+}
+
 async function youthIntakes(app, report) {
   const mine = await app.must("youth_intakes", { club: null });
   const own = intakeFaults(mine);
@@ -226,33 +254,24 @@ async function youthIntakes(app, report) {
   );
   report.check("the game's mark of the players it made is known", mine.marked === true);
 
-  // Another club: the one with the most players of 16 or younger, which no human manages.
-  const human = await humanClubs(app);
-  const young = (await app.must("search_players", { query: "", limit: 1000, filter: { maxAge: 16, women: false } })).rows;
-  const byClub = new Map();
-  for (const p of young.filter((p) => p.clubUid != null && !human.includes(p.clubUid))) {
-    byClub.set(p.clubUid, (byClub.get(p.clubUid) ?? 0) + 1);
+  // Another club: one with an intake, where there is one.
+  const other = await otherClubWithIntake(app, report);
+  if (other !== null) {
+    const theirs = intakeFaults(other);
+    report.check(
+      "another club's youth intakes read alike",
+      other.intakes.length > 0 && theirs.newestFirst && theirs.wrong.length === 0,
+      `${other.club}: ${other.intakes.map((i) => i.players.length).join(" + ")} players`,
+    );
+    const cities = await app.must("birth_cities");
+    const known = new Set(cities.map((c) => c.address));
+    const missing = theirs.players.filter((p) => p.city !== null && !known.has(p.city.address));
+    report.check(
+      "the cities a city of birth can be set to hold the intake's",
+      cities.length > 0 && missing.length === 0 && theirs.players.some((p) => p.city !== null),
+      `${cities.length} cities, ${missing.length} missing`,
+    );
   }
-  const [otherUid] = [...byClub.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
-  if (otherUid === undefined) {
-    report.skip("another club's youth intakes", "no club has players of 16 or younger");
-    return;
-  }
-  const other = await app.must("youth_intakes", { club: otherUid });
-  const theirs = intakeFaults(other);
-  report.check(
-    "another club's youth intakes read alike",
-    other.intakes.length > 0 && theirs.newestFirst && theirs.wrong.length === 0,
-    `${other.club}: ${other.intakes.map((i) => i.players.length).join(" + ")} players`,
-  );
-  const cities = await app.must("birth_cities");
-  const known = new Set(cities.map((c) => c.address));
-  const missing = theirs.players.filter((p) => p.city !== null && !known.has(p.city.address));
-  report.check(
-    "the cities a city of birth can be set to hold the intake's",
-    cities.length > 0 && missing.length === 0 && theirs.players.some((p) => p.city !== null),
-    `${cities.length} cities, ${missing.length} missing`,
-  );
 
   // The section: the club's newest intake (or that it has none), then the other club's, picked from the club search.
   const rows = `[...document.querySelectorAll(".scout-youth-grid tbody tr:not(.scout-youth-editor-row)")]`;
@@ -263,6 +282,9 @@ async function youthIntakes(app, report) {
   } else {
     const shown = await app.js(`${rows}.length`);
     report.check("the section lists the club's newest intake", shown === mine.intakes[0].players.length, `${shown} rows`);
+  }
+  if (other === null) {
+    return;
   }
   await app.click(
     `[...document.querySelectorAll(".scout-youth-tools button")].find((b) => b.textContent === "Look at another club")`,
