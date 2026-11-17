@@ -167,7 +167,8 @@ read-only until `profiles/fm27/layout.toml` is fixed.
 3. Add the file to `BUILDS` in `crates/fmlibre-core/src/profile.rs`; a unit test fails until it is there.
    A club's finances show no league prize money on the new build, and cannot change it, until someone has checked
    that `fmlibre-probe prizes` lists the amounts the game's Rules pages show, and added `prize_money = true` to the
-   profile.
+   profile. The same goes for a club's sponsorship deals: `fmlibre-probe sponsorships <club UID>` has to list the
+   deals the game's Sponsorship screen shows, with its amounts and dates, before `sponsorships = true` goes in.
 4. Build the app (`npm run release`), and run the smoke tests on both storefronts (see
    [`tools/smoke`](../tools/smoke/README.md)).
 
@@ -403,6 +404,7 @@ fmlibre-probe concerns --all                         # every reason to be unhapp
 fmlibre-probe captain 680 43425040 --restore         # make a player captain (--vice: vice-captain) and back
 fmlibre-probe prizes                                 # the prize money competitions pay, by final position and per match
 fmlibre-probe prizes 130286 --win 1234567 --restore  # change what a Süper Lig win pays and back: this writes too
+fmlibre-probe sponsorships 2188                      # a club's sponsorship deals: kind, term, amounts (reads only)
 fmlibre-probe scan                                   # find arrays of game objects in game_plugin.dll
 fmlibre-probe refs 0x1a5a5396990 --span 0x3c8        # every pointer into an object (holders, lists, squads too)
 fmlibre-probe dump game_plugin.dll+0x1000 --len 0x100

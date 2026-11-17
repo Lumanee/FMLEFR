@@ -33,6 +33,9 @@ How to install and use it: [docs/INSTALL.md](docs/INSTALL.md).
   the next season up with its own amounts. So far on the versions of the game it was checked on:
   Steam builds 26340721 and 26577676 on Windows, Steam builds 26340721 and 26385295 on Apple
   silicon Macs, and Game Pass 0.9.2409.0 and 0.9.2435.0; the others say why there is nothing yet.
+- See a club's sponsorship deals in its finances, read only: each deal by the name the game gives its
+  kind, what it pays per season and in all, its term, and what a relegation changes. Shown on Steam
+  build 26340721 on Windows and 26385295 on Apple silicon Macs; the others say why there is nothing yet.
 - See each nation's men's and women's national team in the Clubs tab (its **National teams**
   switch), the players the game lists for its senior team and its reputation, which can be edited.
   So far on Windows (Game Pass 0.9.2435.0 and Steam build 26577676) and on Steam for macOS, build

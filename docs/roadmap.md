@@ -388,7 +388,8 @@ changes many at once, and undo.
     gives it again on connecting, on a reload and within seconds of the game loading the save, while it is open;
     undone, or renamed back, it is forgotten. An (i) beside the name, and beside every freeze, says the app has to stay
     open for it.
-  - [ ] Sponsors (#114), ticket prices and prize money. What a competition pays by final position and per match is
+  - [ ] Sponsors (#114), ticket prices and prize money. A club's sponsorship deals are shown, read only, in its
+    finances (see the [sponsorship notes](recon/fm27-sponsorships.md)); changing them is not done. What a competition pays by final position and per match is
     in the settings of its stages (`sicomps::LEAGUE_SETTINGS`, #123), which the probe's `prizes` reads and changes, to
     find out whether the game pays from them: see the [prize money notes](recon/fm27-prize-money.md).
   - [x] Jadedness: how worn out a player is by playing, which rest takes away (an `i16` at player `+0x25A`,
