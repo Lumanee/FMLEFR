@@ -32,6 +32,10 @@ training_manager = 0x5741740
 # (per win, per draw and the first place); the game pays from these amounts (Serie BKT).
 prize_money = true
 
+# A club's sponsorship deals (layout-macos.toml, [sponsorship]; #114) were read on this build and matched to a Serie BKT
+# club's Sponsorship screen (amounts at the save's rate, dates and lengths).
+sponsorships = true
+
 # game_plugin as mapped in memory: its LC_UUID identifies the build and the architecture.
 [plugin]
 uuid = "2A2D0ED6-324E-3D0D-A27D-10AEDBD0E270"

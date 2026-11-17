@@ -17,8 +17,8 @@ use fmlibre_core::{
     GraphicsIndex, Kind, Loan, MANAGER, MoveTerms, NameKind, PERSONALITY, POSITIONS, PersonNames, Picture,
     PlayerFilter, PlayerIndex, PlayerOrder, PlayerSort, PrizeAmount, PrizeMoney, PrizeStage, ProfileNotes, Purpose,
     STAFF_ATTRIBUTE_GROUPS, SUPPORTER_MIX, SUPPORTER_TRAITS, Scale, ScanOptions, ScoutOrder, ScoutRequest, Session,
-    SessionError, StaffIndex, Target, Tie, TieTarget, date_line, diagnostics_report, find_game, job_name, nations,
-    profile_text, retirement_line, saves_loaded_line, scan_object_arrays, sort_players,
+    SessionError, SponsorshipReadError, StaffIndex, Target, Tie, TieTarget, date_line, diagnostics_report, find_game,
+    job_name, nations, profile_text, retirement_line, saves_loaded_line, scan_object_arrays, sort_players,
 };
 #[cfg(target_os = "macos")]
 use fmlibre_mem::MachImage;
@@ -308,6 +308,12 @@ enum Command {
         /// With --restore, how many seconds to wait before putting it back, to look at the game meanwhile.
         #[arg(long, default_value_t = 0)]
         hold: u64,
+    },
+    /// Show a club's sponsorship deals as the editor reads them from the game (#114). Only reads, on any build whose
+    /// layout places them.
+    Sponsorships {
+        /// The club's UID.
+        club: u32,
     },
     /// Show the name of the stadium a club plays at and the names it can take in place; with NAME, rename it in the
     /// running game. Without a club, how many stadiums' names the editor can change, by the size of their blocks.
@@ -1345,6 +1351,7 @@ fn run(cli: Cli) -> Result<()> {
                 names.into_iter().filter_map(|(kind, name)| name.map(|name| (kind, name))).collect();
             rename(&connect(process, ArraySource::ProfileFirst)?, uid, staff, &wanted, restore)
         }
+        Command::Sponsorships { club } => sponsorships(&connect(process, ArraySource::ProfileFirst)?, club),
         Command::Prizes { text, settings, place, win, draw, loss, all, restore, hold } => {
             let mut amounts: Vec<(PrizeAmount, u32)> = place
                 .unwrap_or_default()
@@ -3569,6 +3576,7 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         training_manager: session.profile.as_ref().and_then(|profile| profile.training_manager),
         // Checked against the game's screens, not looked for: kept from the built-in profile.
         prize_money: session.profile.as_ref().is_some_and(|profile| profile.prize_money),
+        sponsorships: session.profile.as_ref().is_some_and(|profile| profile.sponsorships),
         national_teams: session.profile.as_ref().and_then(|profile| profile.national_teams),
     };
 
@@ -5322,6 +5330,45 @@ fn print_prize_money(prize: &PrizeMoney, addresses: &[u64]) {
 }
 
 /// An amount with commas between thousands: 10,222,480.
+/// Prints the deals of a club as the app lists them, in pounds, with the game's date and whether the app shows them on
+/// this build.
+fn sponsorships(session: &Session, club: u32) -> Result<()> {
+    let clubs = ClubIndex::new(session.clubs()?);
+    let club = clubs.get(club).with_context(|| format!("no club with UID {club}"))?;
+    let deals = match session.sponsorships(club) {
+        Ok(deals) => deals,
+        Err(SponsorshipReadError::Memory(err)) => return Err(err.into()),
+        Err(SponsorshipReadError::Unavailable(why)) => bail!("{why}"),
+    };
+    let checked = session.profile.as_ref().is_some_and(|profile| profile.sponsorships);
+    println!(
+        "{} ({}): {} deal(s); game date {}; the app shows them on this build: {}",
+        club.name,
+        club.uid,
+        deals.len(),
+        session.game_date().map_or_else(|| "unknown".to_owned(), |date| date.to_number().to_string()),
+        if checked { "yes" } else { "no" }
+    );
+    let date = |date: Option<FmDate>| date.map_or_else(|| "-".to_owned(), |date| date.to_number().to_string());
+    for deal in &deals {
+        println!(
+            "  kind {:>2} {:<24} {} to {}  {}y  per season {:>11}  total {:>12}  {}{:>3}%  reputation {:>5}{}",
+            deal.kind,
+            deal.name.unwrap_or("(no name)"),
+            date(deal.start),
+            date(deal.end),
+            deal.years.map_or_else(|| "-".to_owned(), |years| years.to_string()),
+            deal.per_season,
+            deal.total,
+            if deal.rises { "+" } else { "-" },
+            deal.percent,
+            deal.reputation,
+            if deal.ended == Some(true) { "  ended" } else { "" }
+        );
+    }
+    Ok(())
+}
+
 fn pounds(amount: u32) -> String {
     let digits = amount.to_string();
     let mut text = String::with_capacity(digits.len() + digits.len() / 3);
