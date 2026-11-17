@@ -1270,6 +1270,25 @@ export const ko: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `${league}의 모든 클럽, ${format(groups)}개 조` : `${league}의 모든 클럽`,
   },
+
+  sponsorships: {
+    title: "스폰서 계약",
+    reading: "구단의 스폰서 계약을 읽는 중…",
+    none: "이 구단에는 스폰서 계약이 없습니다.",
+    perSeason: "시즌당",
+    total: "총액",
+    term: "기간",
+    years: (count) => `${format(count)}년`,
+    unnamed: (kind) => `유형 ${format(kind)}`,
+    unnamedTitle: "이 계약 유형은 아직 게임 화면의 이름과 맞춰 보지 않았으며, 화면에 표시되지 않을 수도 있습니다.",
+    ended: "종료",
+    endedTitle: "게임 날짜 이전에 종료된 계약입니다. 게임의 스폰서 화면에는 더 이상 표시되지 않습니다.",
+    falls: (percent) => `강등 시 ${format(percent)}% 감소`,
+    rises: (percent) => `1부 리그 승격 시 ${format(percent)}% 증가`,
+    note: "읽기 전용입니다. 게임이 각 계약에 대해 보관하는 금액입니다. 게임의 스폰서 화면에는 종료되지 않은 계약이 표시됩니다.",
+    unavailableBuild: "이 게임 버전이 스폰서 계약을 어디에 보관하는지 아직 확인되지 않아, 엉뚱한 메모리를 읽지 않도록 표시하지 않습니다.",
+    unavailableUnreadable: "편집기는 이 게임 버전에서 예상되는 위치에서 스폰서 계약을 찾았지만, 찾은 내용이 게임의 데이터로 읽히지 않아 표시하지 않습니다.",
+  },
   app: {
     stage: "베타",
     settingsLabel: "설정",

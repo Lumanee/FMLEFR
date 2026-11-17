@@ -1311,6 +1311,25 @@ export const it: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `Per tutte le società di ${league}, in ${format(groups)} gironi` : `Per tutte le società di ${league}`,
   },
+
+  sponsorships: {
+    title: "Sponsorizzazioni",
+    reading: "Lettura delle sponsorizzazioni della società…",
+    none: "La società non ha sponsorizzazioni.",
+    perSeason: "Per stagione",
+    total: "Valore totale",
+    term: "Durata",
+    years: (count) => (count === 1 ? "1 anno" : `${format(count)} anni`),
+    unnamed: (kind) => `Tipo ${format(kind)}`,
+    unnamedTitle: "Nessuno ha ancora associato questo tipo di accordo a un nome nella schermata del gioco, e la schermata potrebbe non mostrarlo.",
+    ended: "Terminato",
+    endedTitle: "L'accordo è terminato prima della data del gioco. La schermata Sponsorizzazioni del gioco non lo mostra più.",
+    falls: (percent) => `Cala del ${format(percent)}% in caso di retrocessione`,
+    rises: (percent) => `Aumenta del ${format(percent)}% in caso di promozione in massima divisione`,
+    note: "Sola lettura. Sono gli importi che il gioco conserva per ogni accordo. La sua schermata Sponsorizzazioni mostra gli accordi non ancora terminati.",
+    unavailableBuild: "Nessuno ha ancora verificato dove questa versione del gioco tenga le sponsorizzazioni, quindi l'editor non le mostra per non leggere la memoria sbagliata.",
+    unavailableUnreadable: "L'editor ha cercato le sponsorizzazioni dove se le aspetta in questa versione del gioco, ma ciò che ha trovato non sembra quello del gioco, quindi non le mostra.",
+  },
   app: {
     stage: "beta",
     settingsLabel: "Impostazioni",

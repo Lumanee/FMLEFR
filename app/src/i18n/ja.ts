@@ -1244,6 +1244,25 @@ export const ja: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `${league}のすべてのクラブ（${format(groups)}グループ）` : `${league}のすべてのクラブ`,
   },
+
+  sponsorships: {
+    title: "スポンサー契約",
+    reading: "クラブのスポンサー契約を読み込み中…",
+    none: "このクラブにはスポンサー契約がありません。",
+    perSeason: "1シーズンあたり",
+    total: "総額",
+    term: "期間",
+    years: (count) => `${format(count)}年`,
+    unnamed: (kind) => `タイプ${format(kind)}`,
+    unnamedTitle: "この種類の契約は、ゲーム画面上の名前とまだ照合されていません。画面に表示されない場合もあります。",
+    ended: "終了",
+    endedTitle: "この契約はゲーム内の日付より前に終了しました。ゲームのスポンサー画面にはもう表示されません。",
+    falls: (percent) => `降格すると${format(percent)}%減額`,
+    rises: (percent) => `トップディビジョンに昇格すると${format(percent)}%増額`,
+    note: "読み取り専用です。ゲームが各契約に保存している金額です。ゲームのスポンサー画面には終了していない契約が表示されます。",
+    unavailableBuild: "このバージョンのゲームがスポンサー契約をどこに保存しているかはまだ確認されていないため、誤ったメモリを読まないよう表示しません。",
+    unavailableUnreadable: "このバージョンのゲームで想定される場所からスポンサー契約を探しましたが、見つかったものがゲームのデータとして読めないため、表示しません。",
+  },
   app: {
     stage: "ベータ",
     settingsLabel: "設定",

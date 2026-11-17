@@ -1215,6 +1215,25 @@ export const id: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `Untuk setiap klub di ${league}, di ${format(groups)} grup` : `Untuk setiap klub di ${league}`,
   },
+
+  sponsorships: {
+    title: "Kesepakatan sponsor",
+    reading: "Membaca kesepakatan sponsor klub…",
+    none: "Klub tidak memiliki kesepakatan sponsor.",
+    perSeason: "Per musim",
+    total: "Nilai total",
+    term: "Durasi",
+    years: (count) => `${format(count)} tahun`,
+    unnamed: (kind) => `Tipe ${format(kind)}`,
+    unnamedTitle: "Belum ada yang mencocokkan jenis kesepakatan ini dengan nama di layar game, dan layar itu mungkin tidak menampilkannya.",
+    ended: "Berakhir",
+    endedTitle: "Kesepakatan berakhir sebelum tanggal di game. Layar Sponsor game tidak lagi menampilkannya.",
+    falls: (percent) => `Turun ${format(percent)}% jika klub terdegradasi`,
+    rises: (percent) => `Naik ${format(percent)}% jika klub promosi ke divisi teratas`,
+    note: "Hanya baca. Ini adalah jumlah yang disimpan game untuk setiap kesepakatan. Layar Sponsor game menampilkan kesepakatan yang belum berakhir.",
+    unavailableBuild: "Belum ada yang memeriksa di mana versi game ini menyimpan kesepakatan sponsor, jadi editor tidak menampilkannya daripada membaca memori yang salah.",
+    unavailableUnreadable: "Editor mencari kesepakatan sponsor di tempat yang diduganya pada versi game ini, tetapi yang ditemukan tidak terbaca seperti data game, jadi tidak ditampilkan.",
+  },
   app: {
     stage: "beta",
     settingsLabel: "Pengaturan",

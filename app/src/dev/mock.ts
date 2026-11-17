@@ -31,6 +31,8 @@ import type {
   CompetitionPrizes,
   League,
   LeaguePrizes,
+  ClubSponsorships,
+  Sponsorship,
   LeaguePrizesSet,
   PrizeInput,
   ClubPage,
@@ -3296,6 +3298,44 @@ function mockLeague(club: ClubSummary): CompetitionPrizes | null {
   return league;
 }
 
+/** `club_sponsorships`: made-up deals, as the game's Sponsorship screen names them; the first club's list is empty. */
+function mockSponsorships(uid: number): ClubSponsorships {
+  if (clubs[0]?.uid === uid) {
+    return { unavailable: null, deals: [] };
+  }
+  const deal = (
+    kind: number,
+    name: string | null,
+    start: [number, number, number],
+    end: [number, number, number],
+    perSeason: number,
+    years: number,
+    percent = 0,
+  ): Sponsorship => ({
+    kind,
+    name,
+    start: { year: start[0], month: start[1], day: start[2] },
+    end: { year: end[0], month: end[1], day: end[2] },
+    years,
+    total: perSeason * years,
+    perSeason,
+    percent,
+    rises: kind === 22,
+    reputation: 6000,
+    ended: end[0] <= 2026,
+  });
+  return {
+    unavailable: null,
+    deals: [
+      deal(22, "Kit Manufacturer", [2021, 7, 1], [2027, 6, 30], 143_171, 6, 15),
+      deal(17, null, [2025, 7, 2], [2028, 6, 30], 0, 3),
+      deal(1, "Main Kit", [2026, 6, 1], [2027, 6, 30], 257_709, 1),
+      deal(11, "Back of Shirt", [2026, 7, 1], [2027, 6, 30], 42_951, 1, 35),
+      deal(12, "Shorts", [2025, 7, 1], [2026, 6, 30], 73_017, 1),
+    ],
+  };
+}
+
 /** `league_prizes`: what the league of the club `uid` pays. */
 function mockLeaguePrizes(uid: number): LeaguePrizes {
   const club = clubs.find((c) => c.uid === uid);
@@ -3801,6 +3841,8 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return nationalProfile(Number(args?.uid), args?.kind === undefined || args?.kind === null ? null : Number(args.kind)) as T;
     case "club_leagues":
       return mockLeagues((args?.filter ?? {}) as ClubFilter) as T;
+    case "club_sponsorships":
+      return mockSponsorships(Number(args?.club)) as T;
     case "league_prizes":
       return mockLeaguePrizes(Number(args?.club)) as T;
     case "set_league_prizes":

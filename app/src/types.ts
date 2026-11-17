@@ -311,6 +311,33 @@ export interface League {
 /** Why a club's finances show no prize money on this version of the game (`league_prizes`). */
 export type PrizeUnavailable = "build" | "unreadable";
 
+/** One sponsorship deal a club holds (`club_sponsorships`), amounts in pounds. */
+export interface Sponsorship {
+  /** The game's number for the kind of deal. */
+  kind: number;
+  /** As the game's Sponsorship screen names the kind, in English; none where no name is known. */
+  name: string | null;
+  start: FmDate | null;
+  end: FmDate | null;
+  /** Whole years the deal runs. */
+  years: number | null;
+  total: number;
+  perSeason: number;
+  /** The percentage the amount falls by on relegation (or, where `rises`, rises by on promotion): 0 for none. */
+  percent: number;
+  rises: boolean;
+  reputation: number;
+  /** Whether it ended before the game's date; none where the date is not known. */
+  ended: boolean | null;
+}
+
+/** A club's sponsorship deals, or why this version of the game shows none (`club_sponsorships`). */
+export interface ClubSponsorships {
+  /** "build": nobody has checked the deals on this build yet; "unreadable": it was checked, but what the editor found does not read as the game's. */
+  unavailable: PrizeUnavailable | null;
+  deals: Sponsorship[];
+}
+
 /** What the league of a club pays, or why this version of the game shows none (`league_prizes`). */
 export interface LeaguePrizes {
   unavailable: PrizeUnavailable | null;

@@ -5,6 +5,7 @@ import { converts, inCurrency } from "./currency";
 import { describeError, formatMoney, formatNumber } from "./format";
 import { InfoTip } from "./InfoTip";
 import { LeaguePrizesGroup } from "./LeaguePrizes";
+import { SponsorshipsGroup } from "./Sponsorships";
 import {
   appText,
   CLUB_FACILITY_LABELS,
@@ -187,6 +188,7 @@ function ClubBody({ details, version, panel }: { details: ClubDetails; version: 
       <div className="profile-stack">
         <Facilities facilities={details.facilities} />
         <FinancesGroup club={details.uid} finances={details.finances} />
+        <SponsorshipsGroup club={details.uid} version={version} />
         {details.leagueUid !== null && <LeaguePrizesGroup club={details.uid} version={version} />}
       </div>
       <div className="profile-stack">
