@@ -14,7 +14,7 @@ use crate::game::{GAME_EXE, GAME_PLUGIN, GameInfo};
 use crate::health::{Check, Health, Lock, STRUCTURE};
 use crate::locate::{DatePlace, Found, Place, find_game_ui, find_retirement_manager, game_date_from};
 use crate::players::{PlayerSummary, read_players};
-use crate::profile::{BuildProfile, Layout, PluginFingerprint, layout_for, profile_for};
+use crate::profile::{BuildProfile, Layout, PluginFingerprint, layout_of, profile_for};
 use crate::retirement::MANAGER_CLASS;
 use crate::rtti::{class_of, mangled};
 use crate::staff::{StaffDetails, StaffSummary, read_staff, read_staff_details};
@@ -209,11 +209,11 @@ impl Session {
         let fingerprint = PluginFingerprint::read(&process, &plugin)?;
         let profile = if profiles_ignored() { None } else { profile_for(fingerprint) };
         let edition = profile.as_ref().map(|p| p.edition).or(game.edition);
-        let mut layout = edition.and_then(layout_for).ok_or(SessionError::UnsupportedEdition(edition))?;
         // What the build lays out otherwise is a fact of the build, not a place to search for: kept with ScanOnly too.
-        if let Some(profile) = &profile {
-            profile.adjust(&mut layout);
-        }
+        let overrides = profile.as_ref().map(|profile| profile.layout.clone()).unwrap_or_default();
+        let layout = edition
+            .and_then(|edition| layout_of(edition, &overrides))
+            .ok_or(SessionError::UnsupportedEdition(edition))?;
         let hint = profile.as_ref().filter(|_| source == ArraySource::ProfileFirst).map(|p| &p.arrays);
         let arrays = calibrate(&process, &plugin, &layout, hint);
         if arrays.players.is_none() {

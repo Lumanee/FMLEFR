@@ -1006,11 +1006,12 @@ pub struct BuildProfile {
     /// they were not, which leaves the National teams tab off.
     #[serde(default)]
     pub national_teams: Option<NationalArrays>,
-    /// What the build's club finance record keeps elsewhere than the edition's layout says ([`ClubFinanceLayout`]):
-    /// since the update of 17 November 2026 (Game Pass 0.9.2524.0, Steam build 26620374) corporate facilities sit 4
-    /// bytes further on. None where the layout holds; see [`BuildProfile::adjust`].
+    /// What the build lays out otherwise than the edition's layout, field by field (see [`layout_of`]): since the update
+    /// of 17 November 2026 (Game Pass 0.9.2524.0, Steam build 26620374), corporate facilities in the club finance record
+    /// and, in a team's tactics, the list of tactics and the index of the one in use, each a few bytes further on.
+    /// Empty where the layout holds.
     #[serde(default)]
-    pub club_finance: Option<ClubFinanceOverride>,
+    pub layout: LayoutOverrides,
 }
 
 /// RVAs in the game plugin of the `(begin, end)` pointer pairs of the arrays of national teams' containers: one holds a
@@ -1022,23 +1023,16 @@ pub struct NationalArrays {
     pub women: u64,
 }
 
-/// Where a build's club finance record keeps a value elsewhere than the edition's layout places it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ClubFinanceOverride {
-    /// Corporate facilities, a u8 from 1 to 20 ([`ClubFinanceLayout::corporate`]).
-    pub corporate: u64,
-}
+/// What a build lays out otherwise than the edition's layout (`layout.toml`), as its profile's `[layout.<section>]`
+/// tables give it: offsets by the layout's section and field, each put in place of the layout's (see [`layout_of`]).
+/// A layout that changed with an update can only change for the builds since: the builds before keep it as it was.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+pub struct LayoutOverrides(pub BTreeMap<String, BTreeMap<String, u64>>);
 
-impl BuildProfile {
-    /// The edition's `layout` as this build lays its objects out: what the profile places otherwise put where it says.
-    /// The finance record is told from the smaller class of the clubs outside the leagues being played by its values
-    /// (`finances_look_real` in clubs.rs), corporate facilities among them: read where the build does not keep them,
-    /// no club's finances read as real, and the editor neither shows nor writes any.
-    pub fn adjust(&self, layout: &mut Layout) {
-        if let Some(ClubFinanceOverride { corporate }) = self.club_finance {
-            layout.club_finance.corporate = corporate;
-        }
+impl LayoutOverrides {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -1140,7 +1134,29 @@ const BUILDS: &[&str] = &[
 
 /// The built-in object layout for `edition`, if there is one.
 pub fn layout_for(edition: u32) -> Option<Layout> {
-    LAYOUTS.iter().map(|text| parse::<Layout>(text)).find(|layout| layout.edition == edition)
+    layout_of(edition, &LayoutOverrides::default())
+}
+
+/// The built-in object layout for `edition` as a build lays it out: with each field `overrides` names (its profile's
+/// [`BuildProfile::layout`]) at the offset given there. A section the layout does not have is left out, as a Windows
+/// build's profile is on macOS, whose layout is another; a field it does not have is refused when it is read.
+pub fn layout_of(edition: u32, overrides: &LayoutOverrides) -> Option<Layout> {
+    LAYOUTS.iter().find_map(|text| {
+        let mut layout: toml::Table = parse(text);
+        if layout.get("edition").and_then(toml::Value::as_integer) != Some(i64::from(edition)) {
+            return None;
+        }
+        for (section, fields) in &overrides.0 {
+            let Some(toml::Value::Table(section)) = layout.get_mut(section) else {
+                continue;
+            };
+            for (field, &offset) in fields {
+                let offset = i64::try_from(offset).expect("an offset within an object");
+                section.insert(field.clone(), toml::Value::Integer(offset));
+            }
+        }
+        Some(toml::Value::Table(layout).try_into().expect("built-in profiles are checked by the unit tests"))
+    })
 }
 
 /// The built-in build profile matching `fingerprint`, if there is one.
@@ -1218,10 +1234,11 @@ pub fn profile_text(profile: &BuildProfile, notes: &ProfileNotes) -> String {
             "\n# RVAs of the pairs of the arrays of national teams' containers.\n[national_teams]\nmen = {men:#X}\nwomen = {women:#X}\n"
         );
     }
-    if let Some(ClubFinanceOverride { corporate }) = profile.club_finance {
-        text += &format!(
-            "\n# Where the club finance record keeps what the layout places elsewhere.\n[club_finance]\ncorporate = {corporate:#X}\n"
-        );
+    for (section, fields) in &profile.layout.0 {
+        text += &format!("\n# What the build lays out otherwise than layout.toml.\n[layout.{section}]\n");
+        for (field, offset) in fields {
+            text += &format!("{field} = {offset:#X}\n");
+        }
     }
     text
 }
@@ -1663,28 +1680,54 @@ mod tests {
         );
     }
 
-    /// Since the update of 17 November 2026 the club finance record keeps corporate facilities 4 bytes further on: the
-    /// profiles of its builds say so, and a session over one of them reads it there; every other build keeps the
-    /// layout's place, and nothing else of the record moves.
+    /// Since the update of 17 November 2026 the club finance record keeps corporate facilities 4 bytes further on, and a
+    /// team's tactics their list and the index of the one in use 8 bytes further on: the profiles of its builds say
+    /// so, and the layout of a session over one of them has them there; every other build keeps the layout's places,
+    /// and nothing else moves.
     #[test]
-    fn builds_place_what_their_finance_record_keeps_elsewhere() {
+    fn builds_lay_out_what_their_profiles_say() {
         let layout = layout_for(27).expect("FM27 layout");
-        assert_eq!(layout.club_finance.corporate, 0x8A9);
+        let tactics = layout.tactics.as_ref().expect("the layout places the tactics");
         let moved: Vec<String> =
-            built_in_profiles().filter(|profile| profile.club_finance.is_some()).map(|profile| profile.name).collect();
+            built_in_profiles().filter(|profile| !profile.layout.is_empty()).map(|profile| profile.name).collect();
         assert_eq!(moved, ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374"]);
         for profile in built_in_profiles() {
-            let mut adjusted = layout.clone();
-            profile.adjust(&mut adjusted);
-            let corporate = if profile.club_finance.is_some() { 0x8AD } else { 0x8A9 };
-            assert_eq!(adjusted.club_finance.corporate, corporate, "{}", profile.name);
-            let f = (&adjusted.club_finance, &layout.club_finance);
+            let laid = layout_of(27, &profile.layout).expect("FM27 layout");
+            let moved = |section: &str, field: &str| profile.layout.0.get(section).and_then(|fields| fields.get(field));
+            let at = |section: &str, field: &str, otherwise: u64| moved(section, field).copied().unwrap_or(otherwise);
             assert_eq!(
-                (f.0.balance, f.0.transfer_budget, f.0.total_wage_budget, f.0.wage_budget, f.0.ticket_price),
-                (f.1.balance, f.1.transfer_budget, f.1.total_wage_budget, f.1.wage_budget, f.1.ticket_price),
+                laid.club_finance.corporate,
+                at("club_finance", "corporate", layout.club_finance.corporate),
                 "{}",
                 profile.name
             );
+            let laid_tactics = laid.tactics.as_ref().expect("the layout places the tactics");
+            assert_eq!(
+                (laid_tactics.tactics, laid_tactics.current, laid_tactics.instructions),
+                (
+                    at("tactics", "tactics", tactics.tactics),
+                    at("tactics", "current", tactics.current),
+                    tactics.instructions
+                ),
+                "{}",
+                profile.name
+            );
+            let (f, g) = (&laid.club_finance, &layout.club_finance);
+            assert_eq!(
+                (f.balance, f.transfer_budget, f.total_wage_budget, f.wage_budget, f.ticket_price),
+                (g.balance, g.transfer_budget, g.total_wage_budget, g.wage_budget, g.ticket_price),
+                "{}",
+                profile.name
+            );
+        }
+        // On Windows: the new builds' places, 4 and 8 bytes past the old ones.
+        #[cfg(windows)]
+        for profile in built_in_profiles().filter(|profile| !profile.layout.is_empty()) {
+            let laid = layout_of(27, &profile.layout).expect("FM27 layout");
+            let laid_tactics = laid.tactics.expect("the layout places the tactics");
+            assert_eq!(laid.club_finance.corporate, 0x8AD, "{}", profile.name);
+            assert_eq!((laid_tactics.tactics, laid_tactics.current), (0x1018, 0x1030), "{}", profile.name);
+            assert_eq!((layout.club_finance.corporate, tactics.tactics, tactics.current), (0x8A9, 0x1010, 0x1028));
         }
     }
 

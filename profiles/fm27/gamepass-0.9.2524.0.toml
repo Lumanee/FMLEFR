@@ -3,7 +3,7 @@
 # sits 0x430A8 after that of 0.9.2435.0, and the statics around the retirement manager no longer sit at the old
 # distances from it (the manager's is 0xD2E8 before the players pair, 0xED70 in 0.9.2435.0), so the guesses from the
 # builds before held neither the manager nor the game's own object, and the search found both. The object layout is
-# the same but for the club finance record, which keeps corporate facilities 4 bytes further on (see the end).
+# the same but for two objects, which keep something a few bytes further on (see the end).
 name = "FM27 0.9.2524.0 (Game Pass)"
 edition = 27
 storefront = "gamePass"
@@ -53,9 +53,15 @@ clubs = 0x53FB040
 men = 0x53FAF30
 women = 0x53FAF48
 
-# The club finance record (layout.toml, [club_finance]) keeps corporate facilities at 0x8AD, 4 bytes further on than
-# the builds before: 30 of 30 clubs of the save read there what 0.9.2435.0 read at 0x8A9 (Beşiktaş 20, Fenerbahçe 12,
-# Trabzonspor 16), and 0x8A9 held 0 for each. The balance, the budgets and the ticket price are where they were. Read
-# at 0x8A9, no club's finances look real and the editor reads none.
-[club_finance]
+# What this build lays out otherwise than layout.toml, as Steam build 26620374 does. The club finance record keeps
+# corporate facilities at 0x8AD, 4 bytes further on: 30 of 30 clubs of the save read there what 0.9.2435.0 read at
+# 0x8A9 (Beşiktaş 20, Fenerbahçe 12, Trabzonspor 16), and 0x8A9 held 0 for each; the balance, the budgets and the
+# ticket price are where they were. Read at 0x8A9, no club's finances look real, and the editor reads none.
+[layout.club_finance]
 corporate = 0x8AD
+
+# A team's tactics keep the list of tactics and the index of the one in use 8 bytes further on, as found on Steam
+# build 26620374, the same update (on Game Pass the game was not running when it was found).
+[layout.tactics]
+tactics = 0x1018
+current = 0x1030

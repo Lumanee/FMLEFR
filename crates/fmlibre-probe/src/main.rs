@@ -3579,9 +3579,9 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         // Checked against the game's screens, not looked for: kept from the built-in profile.
         prize_money: session.profile.as_ref().is_some_and(|profile| profile.prize_money),
         national_teams: session.profile.as_ref().and_then(|profile| profile.national_teams),
-        // Read off the finances (`fields club --stats` says whether their class is found), not looked for: kept from
-        // the built-in profile.
-        club_finance: session.profile.as_ref().and_then(|profile| profile.club_finance),
+        // What the build lays out otherwise (the finances: `fields club --stats` says whether their class is found; a
+        // team's tactics: `training-history` finds the one in use), not looked for: kept from the built-in profile.
+        layout: session.profile.as_ref().map(|profile| profile.layout.clone()).unwrap_or_default(),
     };
 
     let failed = health.failed();
