@@ -1307,13 +1307,15 @@ export const fr: Strings = {
     mensTeam: "Sélection masculine",
     reputationShort: "RÉP",
     reputationTitle: "Réputation de l'équipe première, de 0 à 10\u00a0000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count) => `Joueurs de l'équipe première (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "Joueurs de l'équipe première",
-    squadNote: "Les joueurs que le jeu liste pour l'équipe première, dans son ordre. Les convocations, les capitaines et le contrat du sélectionneur ne se modifient pas ici.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "Le jeu ne tient pas d'équipe première pour cette sélection : il n'y a ni effectif ni réputation à montrer.",
+    teamKinds: { 0: "Équipe première", 9: "Moins de 23 ans", 10: "Moins de 21 ans", 18: "Moins de 20 ans", 11: "Moins de 19 ans", 12: "Moins de 18 ans" },
+    teamType: (kind) => `Type ${kind}`,
+    teamsLabel: "Équipes de cette sélection",
+    teamReputation: (team) => `Réputation (${team})`,
+    teamReputationTitle: "Réputation de cette équipe, de 0 à 10\u00a0000",
+    squadHeading: (team, count) => `${team} : ${format(count)} ${count === 1 ? "joueur" : "joueurs"}`,
+    squadLabel: (team) => `Joueurs de la sélection : ${team}`,
+    squadNote: "Les joueurs que le jeu liste pour cette équipe, dans son ordre. Les convocations, les capitaines et le contrat du sélectionneur ne se modifient pas ici.",
+    noTeams: "Le jeu ne tient pas d'équipe pour cette sélection : il n'y a ni effectif ni réputation à montrer.",
     reading: "Lecture de l'effectif…",
     noPlayers: "Le jeu ne liste aucun joueur pour cette équipe.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

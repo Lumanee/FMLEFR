@@ -254,9 +254,33 @@ export interface NationalTeamSummary {
   players: number;
 }
 
-/** A national team as its profile shows it (see `national_squad`): its list row and its senior team's players. */
+/**
+ * One of the teams of a nation's men's or women's national team: its senior team or one of its youth teams (see
+ * `national_squad`).
+ */
+export interface NationalSide {
+  /** Where it is in the game's list of the nation's teams; 0 is the senior team. */
+  index: number;
+  /**
+   * The game's code for the kind of team, the same as a club team's: 0 the senior team, 10 the under-21s (see
+   * `nationalTeamLabel`). No two teams of a nation share one.
+   */
+  kind: number;
+  /** The oldest its players may be; null for a team without a limit. */
+  ageLimit: number | null;
+  /** 0–10000. */
+  reputation: number;
+  /** How many players it lists. */
+  players: number;
+}
+
+/**
+ * A national team as its profile shows it (see `national_squad`): its list row, its teams, and the one asked for with
+ * its players (`squad.kind`).
+ */
 export interface NationalProfile {
   team: NationalTeamSummary;
+  teams: NationalSide[];
   squad: ClubTeam;
 }
 

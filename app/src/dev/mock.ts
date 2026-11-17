@@ -17,6 +17,7 @@ import type {
   ClubTeam,
   EditEntity,
   NationalProfile,
+  NationalSide,
   NationalStatus,
   NationalTeamSummary,
   ScoutRequest,
@@ -1163,7 +1164,12 @@ function fieldTable(entity: EditEntity): EditField[] {
   const personality = PERSONALITY.map((key) => field(`personality.${key}`, "u8", 1, 20));
   const contract = [field("contract.wage", "i32", 0, 10_000_000), field("contract.expires", "date", 20000101, 21001231)];
   if (entity === "nationalTeam") {
-    return [{ ...field("reputation", "u16", 0, 10_000), mass: false }];
+    // As the real table: the senior team's, then each other kind of team's (kind 3 too, which the fixture has not).
+    const kinds = [3, 9, 33, 10, 18, 11, 12];
+    return ["reputation", ...kinds.map((kind) => `team.${kind}.reputation`)].map((key) => ({
+      ...field(key, "u16", 0, 10_000),
+      mass: false,
+    }));
   }
   if (entity === "club") {
     return [
@@ -1548,8 +1554,12 @@ function profileOf(entity: Entity, uid: number): PlayerDetails | StaffDetails | 
  */
 function currentValues(entity: EditEntity, uid: number): FieldValues {
   if (entity === "nationalTeam") {
-    const reputation = nationals.find((n) => n.uid === uid)?.reputation;
-    return reputation === null || reputation === undefined ? {} : { reputation };
+    const team = nationals.find((n) => n.uid === uid);
+    if (!team || team.reputation === null) {
+      return {};
+    }
+    const youth = Object.fromEntries(NATIONAL_YOUTH.map(({ kind }) => [`team.${kind}.reputation`, youthReputation(team, kind)]));
+    return { reputation: team.reputation, ...youth };
   }
   const d = profileOf(entity, uid);
   const person = d as PlayerDetails & StaffDetails;
@@ -1648,6 +1658,8 @@ function writeValue(entity: EditEntity, uid: number, key: string, value: number)
     const team = nationals.find((n) => n.uid === uid);
     if (team && key === "reputation") {
       team.reputation = value;
+    } else if (team && /^team\.\d+\.reputation$/.test(key)) {
+      youthReputations.set(`${team.uid}.${key.split(".")[1]}`, value);
     }
     return;
   }
@@ -3138,6 +3150,27 @@ const nationals: NationalTeamSummary[] = ALL_NATIONS.flatMap((name, i) => {
   ];
 });
 
+/**
+ * The youth teams of every fixture national team, in the game's order: kind, age limit (none for some, as in the game)
+ * and share of the senior team's reputation. Their reputations, once read or written, are kept by team UID and kind.
+ */
+const NATIONAL_YOUTH: readonly { kind: number; ageLimit: number | null; share: number }[] = [
+  { kind: 9, ageLimit: 23, share: 0.8 },
+  { kind: 33, ageLimit: null, share: 0.75 },
+  { kind: 10, ageLimit: 21, share: 0.7 },
+  { kind: 18, ageLimit: 20, share: 0.6 },
+  { kind: 11, ageLimit: 19, share: 0.5 },
+  { kind: 12, ageLimit: null, share: 0.4 },
+];
+const youthReputations = new Map<string, number>();
+
+/** The reputation of the youth team of kind `kind` of the national team `team`. */
+function youthReputation(team: NationalTeamSummary, kind: number): number {
+  const key = `${team.uid}.${kind}`;
+  const share = NATIONAL_YOUTH.find((youth) => youth.kind === kind)?.share ?? 0.5;
+  return youthReputations.get(key) ?? Math.round((team.reputation ?? 0) * share);
+}
+
 /** What the tab says of the fixture: it has national teams, unless the address of the page says it has not. */
 function mockNationalStatus(): NationalStatus {
   const asked = new URLSearchParams(window.location.search).get("nationals");
@@ -3147,13 +3180,22 @@ function mockNationalStatus(): NationalStatus {
   return { available: true, teams: nationals.length };
 }
 
-/** The senior team of a national team: the fixture's players of its nation, as the game lists a squad. */
-function nationalProfile(uid: number): NationalProfile {
+/**
+ * A national team with its teams, and the players of the one of kind `kind` (the senior team by default): the fixture's
+ * players of its nation, those under the age limit for a youth team, as the game lists a squad.
+ */
+function nationalProfile(uid: number, kind: number | null): NationalProfile {
   const team = nationals.find((n) => n.uid === uid);
   if (!team) {
     throw failure("app.notFound", `No national team with id ${uid}`, { entity: "nationalTeam", uid });
   }
-  const listed = players.filter((p) => p.nationUid === team.nationUid && (isWoman(p.uid) ?? false) === team.women);
+  const youth = NATIONAL_YOUTH.find((candidate) => candidate.kind === kind);
+  const ageLimit = youth?.ageLimit ?? null;
+  const ofNation = players.filter((p) => p.nationUid === team.nationUid && (isWoman(p.uid) ?? false) === team.women);
+  // A youth team lists the young players of the nation; one without an age limit lists none in the fixture.
+  const squadOf = (side: { ageLimit: number | null } | undefined) =>
+    side === undefined ? ofNation : side.ageLimit === null ? [] : ofNation.filter((p) => (p.age ?? 99) <= side.ageLimit!);
+  const listed = squadOf(youth);
   const squad: SquadPlayer[] = listed.map((row) => {
     const d = details(row);
     return {
@@ -3175,9 +3217,21 @@ function nationalProfile(uid: number): NationalProfile {
       positionsFrozen: false,
     };
   });
+  const teams: NationalSide[] = [
+    { index: 0, kind: 0, ageLimit: null, reputation: team.reputation ?? 0, players: ofNation.length },
+    ...NATIONAL_YOUTH.map((side, i) => ({
+      index: i + 1,
+      kind: side.kind,
+      ageLimit: side.ageLimit,
+      reputation: youthReputation(team, side.kind),
+      players: squadOf(side).length,
+    })),
+  ];
+  const shown = teams.find((side) => side.kind === (youth?.kind ?? 0))!;
   return {
-    team: { ...team, players: squad.length },
-    squad: { index: 0, kind: 0, ageLimit: null, captain: null, viceCaptain: null, players: squad },
+    team: { ...team, players: ofNation.length },
+    teams,
+    squad: { index: shown.index, kind: shown.kind, ageLimit, captain: null, viceCaptain: null, players: squad },
   };
 }
 
@@ -3744,7 +3798,7 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return { total: hits.length, rows: hits.slice(0, limit) } as T;
     }
     case "national_squad":
-      return nationalProfile(Number(args?.uid)) as T;
+      return nationalProfile(Number(args?.uid), args?.kind === undefined || args?.kind === null ? null : Number(args.kind)) as T;
     case "club_leagues":
       return mockLeagues((args?.filter ?? {}) as ClubFilter) as T;
     case "league_prizes":

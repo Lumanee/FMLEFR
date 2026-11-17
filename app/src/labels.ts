@@ -196,6 +196,14 @@ export const tieText = strings.ties;
 /** A contract's bonuses and clauses: the button under them in the profile and its dialog. */
 export const clauseText = strings.clauses;
 
+/**
+ * The name of one of a nation's teams by the game's code for its kind ("Under 21"), as the game's national team screens
+ * name it; a kind the editor has no name for is named by its code ("Type 33").
+ */
+export function nationalTeamLabel(kind: number): string {
+  return nationalText.teamKinds[kind] ?? nationalText.teamType(kind);
+}
+
 /** A club's squad: the tab of its profile with its teams' players, the actions on a team and the captains. */
 export const squadText = strings.squad;
 
@@ -276,6 +284,13 @@ export function fieldLabel(entity: EditEntity, key: string): string {
       // A final position's amount: `prize.place.3`; the amounts per match have labels of their own.
       const place = Number(key.split(".")[2]);
       return name === "place" && Number.isInteger(place) ? strings.leaguePrizes.placeField(place) : key;
+    }
+    case "team": {
+      // A national team's other teams: "team.10.reputation" is the reputation of its under-21s.
+      const kind = Number(name);
+      return entity === "nationalTeam" && Number.isInteger(kind) && key.endsWith(".reputation")
+        ? nationalText.teamReputation(nationalTeamLabel(kind))
+        : key;
     }
     default:
       return key;

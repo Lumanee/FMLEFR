@@ -24,7 +24,12 @@ use crate::text::read_fm_string;
 use crate::transfer::{MoveError, PointerList};
 
 /// The most national teams a container lists; the game keeps up to a dozen of the youth teams besides the senior one.
-const MOST_TEAMS: u64 = 64;
+pub(crate) const MOST_TEAMS: u64 = 64;
+
+/// The kinds of team a container holds besides its senior team (kind 0), in the order the game lists them: each can be
+/// read and its reputation edited (see `docs/recon/fm27-national-teams.md`). A team of another kind is listed but left
+/// alone.
+pub const OTHER_KINDS: [u8; 7] = [3, 9, 33, 10, 18, 11, 12];
 
 /// The most players a national team lists.
 const MOST_PLAYERS: u64 = 256;
@@ -239,36 +244,114 @@ impl Session {
         belongs.then_some(team)
     }
 
-    /// The senior team of the nation's team `national_team` with its players, read now: the players the game lists for it
-    /// (see `docs/recon/fm27-national-teams.md`), told apart by `players`, as the squad of a club's team is. Captains
-    /// are not read: where the game shows them is not known.
-    pub fn national_squad(&self, team: &NationalTeamSummary, players: &PlayerIndex) -> Result<ClubTeam, MoveError> {
+    /// The teams of the nation's team `team`, read now: the senior team and its youth teams, in the order the container
+    /// lists them. Teams that do not point back at the container, or whose kind another of its teams has too, are left
+    /// out: a team is told apart by its kind (see `team_of_kind`).
+    pub fn national_sides(&self, team: &NationalTeamSummary) -> Result<Vec<NationalSide>, MoveError> {
         let national = self.layout.national.as_ref().ok_or(MoveError::NotAClub { uid: team.uid })?;
-        let not_a_team = || MoveError::NotAClub { uid: team.uid };
-        let bytes = self.process.read_bytes(team.address, (national.container_nation + 8) as usize)?;
-        if u32::from_le_bytes(bytes[national.container_uid as usize..][..4].try_into().expect("4 bytes")) != team.uid {
-            return Err(not_a_team());
-        }
-        let object = self.national_senior_team(national, team.address, &bytes).ok_or_else(not_a_team)?;
+        self.check_container(national, team)?;
+        let Some(list) = PointerList::read_up_to(&self.process, team.address + national.container_teams, MOST_TEAMS)?
+        else {
+            return Ok(Vec::new());
+        };
         let t = &self.layout.team;
-        let head = self.process.read_bytes(object, t.end() as usize)?;
-        let elements = match PointerList::read_up_to(&self.process, object + t.players, MOST_PLAYERS)? {
+        let mut sides = Vec::new();
+        for (index, object) in list.elements(&self.process)?.into_iter().enumerate() {
+            if !is_user_pointer(object) {
+                continue;
+            }
+            let Ok(head) = self.process.read_bytes(object, t.end() as usize) else {
+                continue;
+            };
+            let club = u64::from_le_bytes(head[t.club as usize..][..8].try_into().expect("8 bytes"));
+            let reputation = u16::from_le_bytes([head[t.reputation as usize], head[t.reputation as usize + 1]]);
+            if club != team.address || reputation > 10_000 {
+                continue;
+            }
+            let age_limit = head[t.age_limit as usize];
+            let players = if head[t.players as usize..][..24].iter().all(|&byte| byte == 0) {
+                0
+            } else {
+                PointerList::read_up_to(&self.process, object + t.players, MOST_PLAYERS)?
+                    .map_or(0, |list| list.len() as usize)
+            };
+            sides.push(NationalSide {
+                index,
+                kind: head[t.kind as usize],
+                age_limit: (age_limit < NO_AGE_LIMIT).then_some(age_limit),
+                reputation,
+                players,
+                address: object,
+            });
+        }
+        // A senior team is the first one (a container may have none); a kind two teams share names neither.
+        sides.retain(|side| side.kind != SENIOR_KIND || side.index == 0);
+        let kinds: Vec<u8> = sides.iter().map(|side| side.kind).collect();
+        sides.retain(|side| kinds.iter().filter(|&&kind| kind == side.kind).count() == 1);
+        Ok(sides)
+    }
+
+    /// The team of kind `kind` of the nation's team `team` with its players, read now: the players the game lists for it
+    /// (see `docs/recon/fm27-national-teams.md`), told apart by `players`, as the squad of a club's team is. Kind 0 is
+    /// the senior team. Captains are not read: where the game shows them is not known.
+    pub fn national_squad(
+        &self,
+        team: &NationalTeamSummary,
+        kind: u8,
+        players: &PlayerIndex,
+    ) -> Result<ClubTeam, MoveError> {
+        let not_a_team = || MoveError::NotAClub { uid: team.uid };
+        let side = self.national_sides(team)?.into_iter().find(|side| side.kind == kind).ok_or_else(not_a_team)?;
+        let t = &self.layout.team;
+        let elements = match PointerList::read_up_to(&self.process, side.address + t.players, MOST_PLAYERS)? {
             Some(list) => list.elements(&self.process)?,
             None => Vec::new(),
         };
-        let age_limit = head[t.age_limit as usize];
         Ok(ClubTeam {
-            index: 0,
-            kind: head[t.kind as usize],
-            age_limit: (age_limit != 100).then_some(age_limit),
+            index: side.index,
+            kind: side.kind,
+            age_limit: side.age_limit,
             captain: None,
             vice_captain: None,
             players: elements
                 .into_iter()
-                .filter_map(|element| self.squad_member(None, object, element, players))
+                .filter_map(|element| self.squad_member(None, side.address, element, players))
                 .collect(),
         })
     }
+
+    /// Checks that the container of `team` still carries its UID.
+    fn check_container(&self, national: &NationalLayout, team: &NationalTeamSummary) -> Result<(), MoveError> {
+        if self.process.read_u32(team.address + national.container_uid)? != team.uid {
+            return Err(MoveError::NotAClub { uid: team.uid });
+        }
+        Ok(())
+    }
+}
+
+/// The kind of a nation's senior team, the first of its container's teams.
+pub const SENIOR_KIND: u8 = 0;
+
+/// The age limit of a team without one; the game also gives some 255.
+const NO_AGE_LIMIT: u8 = 100;
+
+/// One of the teams of a nation's men's or women's container: its senior team or one of its youth teams.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NationalSide {
+    /// Where it is in the container's list; 0 is the senior team.
+    pub index: usize,
+    /// The game's code for the kind of team: 0 for the senior team, 10 for the under-21s (see
+    /// `docs/recon/fm27-national-teams.md`). No two teams of a container share one.
+    pub kind: u8,
+    /// The oldest its players may be; `None` for a team without a limit.
+    pub age_limit: Option<u8>,
+    /// 0–10000.
+    pub reputation: u16,
+    /// How many players it lists.
+    pub players: usize,
+    #[serde(skip)]
+    pub address: u64,
 }
 
 #[cfg(test)]
@@ -303,14 +386,28 @@ mod tests {
     }
 
     #[test]
-    fn the_reputation_is_the_only_field_and_follows_the_layout() {
+    fn the_reputations_are_the_only_fields_and_follow_the_layout() {
         // Both layouts place national teams, the Mac's and the Windows one.
         let layout = crate::layout_for(27).expect("FM27 layout");
         assert!(layout.national.is_some());
         let fields = crate::fields(&layout, crate::Entity::NationalTeam);
-        assert_eq!(fields.len(), 1);
-        assert_eq!(fields[0].key, "reputation");
-        assert!(fields[0].takes(10_000) && !fields[0].takes(10_001));
+        let keys: Vec<&str> = fields.iter().map(|field| field.key.as_str()).collect();
+        assert_eq!(
+            keys,
+            [
+                "reputation",
+                "team.3.reputation",
+                "team.9.reputation",
+                "team.33.reputation",
+                "team.10.reputation",
+                "team.18.reputation",
+                "team.11.reputation",
+                "team.12.reputation"
+            ]
+        );
+        assert!(fields.iter().all(|field| field.takes(10_000) && !field.takes(10_001)));
+        // The senior team's kind is not among the others.
+        assert!(!OTHER_KINDS.contains(&SENIOR_KIND));
     }
 
     #[test]

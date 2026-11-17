@@ -1,8 +1,8 @@
 // Editing a player: fields written through the app's commands, read back by the probe, and undone from the change
 // log; his city of birth set to another city of his nation and back, and refused a nation in its place; the squad
 // numbers of two players of one team, where the undo that would give both one number is refused; a national team's
-// reputation, where the build has national teams; one amount of a league's prize money, where the build shows it; then
-// one attribute through his profile's Edit mode, undone from the Changes tab.
+// reputation and one of its youth teams', where the build has national teams; one amount of a league's prize money,
+// where the build shows it; then one attribute through his profile's Edit mode, undone from the Changes tab.
 import { SHOWN, VIS } from "../lib/app.mjs";
 import { clubPlayers, topClubs } from "../lib/witness.mjs";
 import { leagueWitnesses, openGroup, probeStages, stageKey } from "./prizes.mjs";
@@ -185,7 +185,8 @@ async function squadNumbers({ app, report, probe, club }) {
 
 /**
  * The reputation of the best known national team's senior team, where the build has national teams (#169): written
- * through the app's command, read back by the probe and in the list's row, and undone.
+ * through the app's command, read back by the probe and in the list's row, and undone; then that of one of its youth
+ * teams (#210), the under-21s where it has them, read back by the probe and in its profile, and undone.
  */
 async function nationalReputation({ app, report, probe }) {
   const status = await app.must("national_status");
@@ -217,6 +218,34 @@ async function nationalReputation({ app, report, probe }) {
     JSON.stringify({ entity: logged?.entity, name: logged?.name }));
   await app.must("undo_change", { id: applied.applied[0].id });
   report.check("the undo puts it back", read() === before && (await row())?.reputation === before, `${read()}`);
+
+  // One of its youth teams, by its kind (#210): the under-21s where it has them.
+  const { teams } = await app.must("national_squad", { uid: team.uid });
+  const youth = teams.find((side) => side.kind === 10) ?? teams.find((side) => side.kind !== 0);
+  if (!youth) {
+    report.skip("a national youth team's reputation", `${label} has no youth team`);
+    return;
+  }
+  const field = `team.${youth.kind}.reputation`;
+  const readYouth = () => probe.get("national-team", team.uid, [field])[field];
+  const shownYouth = async () =>
+    (await app.must("national_squad", { uid: team.uid, kind: youth.kind })).teams.find((side) => side.kind === youth.kind)
+      ?.reputation;
+  const was = (await app.must("read_values", { entity: "nationalTeam", uid: team.uid }))[field];
+  report.check(`the probe reads ${label}'s ${field} as the app does`, readYouth() === was && youth.reputation === was,
+    `${was}`);
+  const to = was < 10000 ? was + 1 : was - 1;
+  const done = await app.must("apply_edits", { entity: "nationalTeam", uid: team.uid, edits: [{ field, value: to }] });
+  report.check(`writes ${field}`, done.applied.length === 1 && done.failed.length === 0, JSON.stringify(done.failed));
+  if (done.applied.length !== 1) return;
+  report.check("the probe reads it, the profile shows it, and the senior team's stays",
+    readYouth() === to && (await shownYouth()) === to && read() === before, `${was} → ${to}`);
+  const youthLogged = (await app.must("change_log")).find((change) => change.id === done.applied[0].id);
+  report.check("the change log names the national team and the field",
+    youthLogged?.entity === "nationalTeam" && youthLogged?.name === team.name && youthLogged?.field === field,
+    JSON.stringify({ entity: youthLogged?.entity, name: youthLogged?.name, field: youthLogged?.field }));
+  await app.must("undo_change", { id: done.applied[0].id });
+  report.check("the undo puts the youth team's back", readYouth() === was && (await shownYouth()) === was, `${readYouth()}`);
 }
 
 /**

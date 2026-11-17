@@ -124,7 +124,7 @@ impl Check {
         let key = field.key.as_str();
         match field.entity {
             Entity::Staff => Check::Staff,
-            // The senior team's reputation sits where a club's does, which the clubs' check reads.
+            // A national team's reputations sit where a club's does, which the clubs' check reads.
             Entity::Club | Entity::NationalTeam => Check::Clubs,
             Entity::Player if key.starts_with("attribute.") => Check::Attributes,
             Entity::Player if key.starts_with("position.") => Check::Positions,
@@ -1312,6 +1312,7 @@ mod tests {
         // A national team's reputation sits where a club's does, where the layout places national teams.
         if layout.national.is_some() {
             assert_eq!(check(Entity::NationalTeam, "reputation"), Check::Clubs);
+            assert_eq!(check(Entity::NationalTeam, "team.10.reputation"), Check::Clubs);
         }
     }
 }

@@ -1195,13 +1195,15 @@ export const tr: Strings = {
     mensTeam: "Erkek milli takımı",
     reputationShort: "İTB",
     reputationTitle: "A takımın itibarı, 0 ile 10.000 arası",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count) => `A takım oyuncuları (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "A takım oyuncuları",
-    squadNote: "Oyunun A takım için listelediği oyuncular, oyunun sırasıyla. Çağrılar, kaptanlar ve teknik direktörün sözleşmesi burada düzenlenmez.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "Oyun bu takım için bir A takım tutmuyor, bu yüzden gösterilecek kadro veya itibar yok.",
+    teamKinds: { 0: "A takım", 9: "U23", 10: "U21", 18: "U20", 11: "U19", 12: "U18" },
+    teamType: (kind) => `Tür ${kind}`,
+    teamsLabel: "Bu milli takımın takımları",
+    teamReputation: (team) => `İtibar (${team})`,
+    teamReputationTitle: "Bu takımın itibarı, 0 ile 10.000 arası",
+    squadHeading: (team, count) => `${team}: ${format(count)} oyuncu`,
+    squadLabel: (team) => `Milli takım oyuncuları: ${team}`,
+    squadNote: "Oyunun bu takım için listelediği oyuncular, oyunun sırasıyla. Çağrılar, kaptanlar ve teknik direktörün sözleşmesi burada düzenlenmez.",
+    noTeams: "Oyun bu milli takım için hiçbir takım tutmuyor, bu yüzden gösterilecek kadro veya itibar yok.",
     reading: "Kadro okunuyor…",
     noPlayers: "Oyun bu takım için oyuncu listelemiyor.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

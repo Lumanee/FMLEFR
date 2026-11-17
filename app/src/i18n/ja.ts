@@ -1192,13 +1192,15 @@ export const ja: Strings = {
     mensTeam: "男子代表チーム",
     reputationShort: "評価",
     reputationTitle: "トップチームの評価（0〜10,000）",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count: number) => `トップチームの選手 (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "トップチームの選手",
-    squadNote: "ゲームがトップチームに載せている選手を、ゲームの順に表示します。招集、キャプテン、監督の契約はここでは編集しません。",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "ゲームにはこのチームのトップチームがないため、表示できる選手や評価はありません。",
+    teamKinds: { 0: "トップチーム", 9: "U-23", 10: "U-21", 18: "U-20", 11: "U-19", 12: "U-18" },
+    teamType: (kind: number) => `タイプ ${kind}`,
+    teamsLabel: "この国のチーム",
+    teamReputation: (team: string) => `評価（${team}）`,
+    teamReputationTitle: "このチームの評価（0〜10,000）",
+    squadHeading: (team: string, count: number) => `${team}：${format(count)}人`,
+    squadLabel: (team: string) => `代表チームの選手：${team}`,
+    squadNote: "ゲームがこのチームに載せている選手を、ゲームの順に表示します。招集、キャプテン、監督の契約はここでは編集しません。",
+    noTeams: "ゲームにはこの代表のチームがないため、表示できる選手や評価はありません。",
     reading: "選手を読み込み中…",
     noPlayers: "ゲームはこのチームに選手を載せていません。",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

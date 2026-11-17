@@ -124,9 +124,18 @@ enum Command {
         /// How many to print.
         #[arg(long, default_value_t = 25)]
         limit: usize,
-        /// Print the squad of the first match.
+        /// Print the squad of the first match: its senior team's, or with --kind that of its team of that kind.
         #[arg(long)]
         squad: bool,
+        /// The kind of team --squad prints (0 is the senior team, 10 the under-21s).
+        #[arg(long, default_value_t = 0)]
+        kind: u8,
+        /// Print the teams of each one shown: kind, age limit, reputation and players.
+        #[arg(long)]
+        teams: bool,
+        /// Count the kinds of team of every container, with the age limits they have.
+        #[arg(long)]
+        kinds: bool,
     },
     /// List clubs, highest reputation first, optionally only those matching TEXT.
     Clubs {
@@ -1285,9 +1294,14 @@ fn run(cli: Cli) -> Result<()> {
         Command::StaffRefs { ids, back, show } => {
             staff_refs(&connect(process, ArraySource::ProfileFirst)?, &ids, parse_hex(&back)?, show.as_deref())
         }
-        Command::NationalTeams { text, limit, squad } => {
+        Command::NationalTeams { text, limit, squad, kind, teams, kinds } => {
             let session = connect(process, ArraySource::ProfileFirst)?;
-            national_teams(&session, text.as_deref(), limit, squad)
+            national_teams(
+                &session,
+                text.as_deref(),
+                limit,
+                NationalReport { squad: squad.then_some(kind), teams, kinds },
+            )
         }
         Command::Clubs { text, limit, export, semicolon } => {
             let session = connect(process, ArraySource::ProfileFirst)?;
@@ -6409,7 +6423,20 @@ fn clubs(session: &Session, text: Option<&str>, limit: usize, export: Option<(&P
     Ok(())
 }
 
-fn national_teams(session: &Session, text: Option<&str>, limit: usize, squad: bool) -> Result<()> {
+/// How many teams of one kind the containers hold: in all, the women's, and how many have each age limit.
+type KindCount = (usize, usize, BTreeMap<Option<u8>, usize>);
+
+/// What `national-teams` prints besides the list.
+struct NationalReport {
+    /// The squad of the first match's team of this kind.
+    squad: Option<u8>,
+    /// The teams of each one shown.
+    teams: bool,
+    /// The kinds of team of every container, counted.
+    kinds: bool,
+}
+
+fn national_teams(session: &Session, text: Option<&str>, limit: usize, report: NationalReport) -> Result<()> {
     let started = Instant::now();
     let teams = session
         .national_teams()
@@ -6436,15 +6463,51 @@ fn national_teams(session: &Session, text: Option<&str>, limit: usize, squad: bo
             team.reputation.map_or_else(String::new, |r| r.to_string()),
             team.players
         );
+        if report.teams {
+            for side in session.national_sides(team)? {
+                println!(
+                    "{:>12}  #{:<2} kind {:>2}  age limit {:>4}  rep {:>5}  players {:>3}",
+                    "",
+                    side.index,
+                    side.kind,
+                    side.age_limit.map_or_else(|| "none".to_owned(), |age| age.to_string()),
+                    side.reputation,
+                    side.players
+                );
+            }
+        }
     }
-    if squad && let Some(team) = hits.first() {
+    if report.kinds {
+        // Kind -> (teams, women's teams, age limits with how many have each).
+        let mut kinds: BTreeMap<u8, KindCount> = BTreeMap::new();
+        for team in index.search("") {
+            for side in session.national_sides(team)? {
+                let entry = kinds.entry(side.kind).or_default();
+                entry.0 += 1;
+                entry.1 += usize::from(team.women);
+                *entry.2.entry(side.age_limit).or_default() += 1;
+            }
+        }
+        println!();
+        println!("Kinds of team in the containers:");
+        for (kind, (count, women, ages)) in kinds {
+            let ages: Vec<String> = ages
+                .into_iter()
+                .map(|(age, n)| format!("{}: {n}", age.map_or_else(|| "none".to_owned(), |age| format!("U{age}"))))
+                .collect();
+            println!("  kind {kind:>2}: {count:>3} teams ({women} women's); age limits {}", ages.join(", "));
+        }
+    }
+    if let Some(kind) = report.squad
+        && let Some(team) = hits.first()
+    {
         let players = PlayerIndex::new(session.players()?);
-        let team_squad = session.national_squad(team, &players)?;
+        let team_squad = session.national_squad(team, kind, &players)?;
         println!();
         println!(
-            "Senior team of {} (kind {}): {} players the game lists",
-            team.name,
+            "Team of kind {} of {}: {} players the game lists",
             team_squad.kind,
+            team.name,
             team_squad.players.len()
         );
         for member in &team_squad.players {

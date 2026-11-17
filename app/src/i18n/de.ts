@@ -1286,13 +1286,15 @@ export const de: Strings = {
     mensTeam: "Männer-Nationalteam",
     reputationShort: "ANS",
     reputationTitle: "Ansehen der ersten Mannschaft, von 0 bis 10.000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count) => `Spieler der ersten Mannschaft (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "Spieler der ersten Mannschaft",
-    squadNote: "Die Spieler, die das Spiel für die erste Mannschaft aufführt, in seiner Reihenfolge. Nominierungen, Kapitäne und der Vertrag des Trainers werden hier nicht bearbeitet.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "Das Spiel führt für dieses Team keine erste Mannschaft, daher gibt es keinen Kader und kein Ansehen zu zeigen.",
+    teamKinds: { 0: "Erste Mannschaft", 9: "U23", 10: "U21", 18: "U20", 11: "U19", 12: "U18" },
+    teamType: (kind) => `Typ ${kind}`,
+    teamsLabel: "Mannschaften dieser Nation",
+    teamReputation: (team) => `Ansehen (${team})`,
+    teamReputationTitle: "Ansehen dieser Mannschaft, von 0 bis 10.000",
+    squadHeading: (team, count) => `${team}: ${format(count)} Spieler`,
+    squadLabel: (team) => `Spieler der Nationalmannschaft: ${team}`,
+    squadNote: "Die Spieler, die das Spiel für diese Mannschaft aufführt, in seiner Reihenfolge. Nominierungen, Kapitäne und der Vertrag des Trainers werden hier nicht bearbeitet.",
+    noTeams: "Das Spiel führt für dieses Team keine Mannschaften, daher gibt es keinen Kader und kein Ansehen zu zeigen.",
     reading: "Kader wird gelesen …",
     noPlayers: "Das Spiel führt für dieses Team keine Spieler auf.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
