@@ -19,9 +19,9 @@ use fmlibre_core::{
     Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, PrizeAmount, PrizeChange,
     PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS,
     SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped,
-    SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan,
-    TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report, find_game, nations, sort_players,
-    sort_staff,
+    SquadMember, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex,
+    StaffOrder, StaffPlan, TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report, find_game,
+    nations, sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -4536,6 +4536,20 @@ fn set_captain(
     Ok(connection.log_captain(done))
 }
 
+/// Heals, inspires or refreshes every player the senior team of the national team `uid` lists, read now, as Heal all,
+/// Inspire all and Refresh all do for a club's team. The changes are logged as one batch, which `undo_batch` undoes.
+#[tauri::command]
+fn national_team_action(state: State<'_, AppState>, uid: u32, action: TeamAction) -> Result<MassReport, Failure> {
+    if !matches!(action, TeamAction::Heal | TeamAction::Inspire | TeamAction::Refresh) {
+        return Err(Failure::new("national.action", "A national team has Heal all, Inspire all and Refresh all only."));
+    }
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let team = national_teams_of(connection)?.get(uid).ok_or_else(|| not_found(Entity::NationalTeam, uid))?;
+    let members = connection.session.national_squad(team, SENIOR_KIND, &connection.players)?.players;
+    act_on_players(connection, &members, action)
+}
+
 /// Does `action` to every player of the team `team` of the club `club`, read now: those out
 /// on loan too. The changes are logged as one batch, which `undo_batch` undoes.
 #[tauri::command]
@@ -4551,6 +4565,78 @@ fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamA
         .find(|found| found.index == team)
         .ok_or(MoveError::NoTeam { index: team })?
         .players;
+    match action {
+        // Cohesion with the club at its best, as FM27 Editor saw FMRTE's Improve Team Cohesion set it, for those who
+        // have an entry for the club: one is added nowhere, and the app counts those without one. The game shows the
+        // team's cohesion on its Dynamics page once it moves on.
+        TeamAction::MaxCohesion => {
+            let (_, best) = COHESION_RANGE;
+            let batch = connection.fresh_id();
+            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+            for member in &members {
+                let Some(player) = connection.players.get(member.uid) else {
+                    continue;
+                };
+                let name = player.name.clone();
+                let planned = connection.session.plan_cohesion(player, &summary, best);
+                let set = match planned {
+                    Ok(Some(plan)) if plan.before == best => continue,
+                    Ok(Some(plan)) => connection.session.apply_cohesion(&plan),
+                    Ok(None) => continue,
+                    Err(err) => Err(err),
+                };
+                match set {
+                    Ok(done) => {
+                        connection.log_cohesion(done, Some(batch));
+                        report.applied += 1;
+                    }
+                    Err(err) => report.failed.push(MassFailure {
+                        uid: member.uid,
+                        name,
+                        field: "cohesion".to_owned(),
+                        error: err.into(),
+                    }),
+                }
+            }
+            Ok(report)
+        }
+        // The tactic the human manager plays with the team known at its best: each player's record and history of
+        // training (see `familiarity.rs`). One the game keeps no history for has his record written; the app counts them.
+        TeamAction::MaxTactics => {
+            if let Some(lock) = connection.session.tactics_lock().or_else(|| connection.session.structure_lock()) {
+                return Err(MoveError::Locked(lock).into());
+            }
+            let batch = connection.fresh_id();
+            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+            let plans = connection.session.plan_max_tactics(&summary, team, &connection.players)?.unwrap_or_default();
+            for plan in plans.iter().filter(|plan| plan.writes()) {
+                let name = connection.player_name(plan.player);
+                match connection.session.apply_tactics(plan) {
+                    Ok(done) => {
+                        connection.log_tactics(done, Some(batch));
+                        report.applied += 1;
+                    }
+                    Err(err) => report.failed.push(MassFailure {
+                        uid: plan.player,
+                        name,
+                        field: "tactics".to_owned(),
+                        error: err.into(),
+                    }),
+                }
+            }
+            Ok(report)
+        }
+        _ => act_on_players(connection, &members, action),
+    }
+}
+
+/// Does `action` to `members`, the players of one team, logged as one batch: the actions a club's team and a national
+/// team share. Max cohesion and Max tactics need the club, and are `team_action`'s own.
+fn act_on_players(
+    connection: &mut Connection,
+    members: &[SquadMember],
+    action: TeamAction,
+) -> Result<MassReport, Failure> {
     // Healing and lifting bans change the players' records: refused once, not once for every player.
     if matches!(action, TeamAction::Heal | TeamAction::LiftBans)
         && let Some(lock) = connection.session.structure_lock()
@@ -4608,69 +4694,14 @@ fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamA
             }
             return Ok(report);
         }
-        // Cohesion with the club at its best, as FM27 Editor saw FMRTE's Improve Team Cohesion set it, for those who
-        // have an entry for the club: one is added nowhere, and the app counts those without one. The game shows the
-        // team's cohesion on its Dynamics page once it moves on.
-        TeamAction::MaxCohesion => {
-            let (_, best) = COHESION_RANGE;
-            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
-            for member in &members {
-                let Some(player) = connection.players.get(member.uid) else {
-                    continue;
-                };
-                let name = player.name.clone();
-                let planned = connection.session.plan_cohesion(player, &summary, best);
-                let set = match planned {
-                    Ok(Some(plan)) if plan.before == best => continue,
-                    Ok(Some(plan)) => connection.session.apply_cohesion(&plan),
-                    Ok(None) => continue,
-                    Err(err) => Err(err),
-                };
-                match set {
-                    Ok(done) => {
-                        connection.log_cohesion(done, Some(batch));
-                        report.applied += 1;
-                    }
-                    Err(err) => report.failed.push(MassFailure {
-                        uid: member.uid,
-                        name,
-                        field: "cohesion".to_owned(),
-                        error: err.into(),
-                    }),
-                }
-            }
-            return Ok(report);
-        }
-        // The tactic the human manager plays with the team known at its best: each player's record and history of
-        // training (see `familiarity.rs`). One the game keeps no history for has his record written; the app counts them.
-        TeamAction::MaxTactics => {
-            if let Some(lock) = connection.session.tactics_lock().or_else(|| connection.session.structure_lock()) {
-                return Err(MoveError::Locked(lock).into());
-            }
-            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
-            let plans = connection.session.plan_max_tactics(&summary, team, &connection.players)?.unwrap_or_default();
-            for plan in plans.iter().filter(|plan| plan.writes()) {
-                let name = connection.player_name(plan.player);
-                match connection.session.apply_tactics(plan) {
-                    Ok(done) => {
-                        connection.log_tactics(done, Some(batch));
-                        report.applied += 1;
-                    }
-                    Err(err) => report.failed.push(MassFailure {
-                        uid: plan.player,
-                        name,
-                        field: "tactics".to_owned(),
-                        error: err.into(),
-                    }),
-                }
-            }
-            return Ok(report);
-        }
         // Morale at its best, and the reasons to be unhappy gone, as FMRTE's Inspire does.
         TeamAction::Inspire => &[("morale", 20), ("contract.unhappiness", 0)],
         // Rested as the game rests a player: full energy and sharpness, and jadedness at its least.
         TeamAction::Refresh => &[("condition", 10_000), ("match_sharpness", 10_000), ("jadedness", -500)],
         TeamAction::MaxAttributes => &[],
+        TeamAction::MaxCohesion | TeamAction::MaxTactics => {
+            return Err(Failure::new("team.action", "This action needs the club the team belongs to."));
+        }
     };
     let targets: Vec<(Target, String)> = members
         .iter()
@@ -4965,6 +4996,7 @@ pub fn run() {
             birth_cities,
             set_captain,
             team_action,
+            national_team_action,
             max_attributes,
             graphics_info,
             self_update::can_self_update,
