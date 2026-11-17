@@ -90,6 +90,12 @@ point at the containers; the arrays are the two pairs of pointers to them that s
 those builds 0xA8 and 0xC0 past the players' pair, which `fmlibre-probe column game_plugin.dll+<RVA> 0x0C` shows as 251
 UIDs each) and add them; the unit test `only_the_builds_read_place_the_national_teams` lists the builds that have them.
 
+Each container lists the senior team and the youth teams, laid out as a club's teams (`[team]`). A national team's
+profile reads them all (`Session::national_sides`) and edits each one's reputation: `reputation` is the senior team's,
+`team.<kind>.reputation` the one team of that kind in the container (`Place::NationalTeamOfKind`), for the kinds in
+`national::OTHER_KINDS`. A kind two teams of a container share is neither shown nor written. The app names the kinds by
+`national.teamKinds` in the languages' files, and a kind missing there as "Type N".
+
 ### After an update of the game
 
 Each build of the game moves its static data. A build profile in `profiles/` (identified by `game_plugin`'s headers)

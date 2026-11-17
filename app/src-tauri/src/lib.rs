@@ -14,12 +14,12 @@ use fmlibre_core::{
     ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, EditError, Entity, EntityArrays, ExportFormat,
     ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex,
     HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MoveError,
-    MovePlan, MoveTerms, NameChange, NameKind, Nation, NationalIndex, NationalTeamSummary, NationalUnavailable,
-    NewContract, NewStaffContract, Operation, Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter,
-    PlayerIndex, PlayerOrder, PlayerSummary, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS, ScoutError,
-    ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped, SquadReport, StadiumName,
-    StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, TacticsSet, Target, Tie,
-    TieTarget, diagnostics_report, find_game, nations, sort_players, sort_staff,
+    MovePlan, MoveTerms, NameChange, NameKind, Nation, NationalIndex, NationalSide, NationalTeamSummary,
+    NationalUnavailable, NewContract, NewStaffContract, Operation, Paid, People, PersonNames, Picture, Planned,
+    PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, ROLES, RelationSet, RetirementSet, Role,
+    SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError,
+    Skipped, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder,
+    StaffPlan, TacticsSet, Target, Tie, TieTarget, diagnostics_report, find_game, nations, sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -3059,26 +3059,33 @@ fn national_teams_of(connection: &Connection) -> Result<&NationalIndex, Failure>
     })
 }
 
-/// A national team as its profile shows it: its list row, and its senior team with the players.
+/// A national team as its profile shows it: its list row, its teams (the senior team and the youth teams), and the one
+/// asked for with its players.
 #[derive(Serialize)]
 struct NationalProfile {
     team: NationalTeamSummary,
+    teams: Vec<NationalSide>,
     squad: TeamView,
 }
 
-/// The national team `uid` with its senior team's players, read now: each one's list row. Captains, cohesion and
-/// tactics are not read.
+/// The national team `uid` with its teams, and the players of its team of kind `kind` (its senior team when none is
+/// asked for, or the first of its teams when it has no senior team), read now: each one's list row. Captains, cohesion
+/// and tactics are not read.
 #[tauri::command]
-fn national_squad(state: State<'_, AppState>, uid: u32) -> Result<NationalProfile, Failure> {
+fn national_squad(state: State<'_, AppState>, uid: u32, kind: Option<u8>) -> Result<NationalProfile, Failure> {
     let guard = state.0.lock()?;
     let connection = guard.as_ref().ok_or_else(not_connected)?;
     let team = national_teams_of(connection)?.get(uid).ok_or_else(|| not_found(Entity::NationalTeam, uid))?;
-    // A team the game gives no senior team (a few of the United Kingdom's) has no squad to read.
-    let squad = match team.reputation {
-        Some(_) => connection.session.national_squad(team, &connection.players)?,
+    let teams = connection.session.national_sides(team)?;
+    let shown = kind
+        .filter(|kind| teams.iter().any(|side| side.kind == *kind))
+        .or_else(|| teams.iter().find(|side| side.kind == SENIOR_KIND).or(teams.first()).map(|side| side.kind));
+    // A container the game gives no team at all has no squad to read.
+    let squad = match shown {
+        Some(kind) => connection.session.national_squad(team, kind, &connection.players)?,
         None => fmlibre_core::ClubTeam {
             index: 0,
-            kind: 0,
+            kind: SENIOR_KIND,
             age_limit: None,
             captain: None,
             vice_captain: None,
@@ -3117,7 +3124,7 @@ fn national_squad(state: State<'_, AppState>, uid: u32) -> Result<NationalProfil
             })
             .collect(),
     };
-    Ok(NationalProfile { team: team.clone(), squad })
+    Ok(NationalProfile { team: team.clone(), teams, squad })
 }
 
 /// The full profile of the player with `uid`. Only reads memory.

@@ -1256,13 +1256,15 @@ export const it: Strings = {
     mensTeam: "Nazionale maschile",
     reputationShort: "REP",
     reputationTitle: "Reputazione della prima squadra, da 0 a 10.000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count) => `Giocatori della prima squadra (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "Giocatori della prima squadra",
-    squadNote: "I giocatori che il gioco elenca per la prima squadra, nel suo ordine. Convocazioni, capitani e contratto del CT non si modificano qui.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "Il gioco non ha una prima squadra per questa nazionale: non c'è una rosa né una reputazione da mostrare.",
+    teamKinds: { 0: "Prima squadra", 9: "Under 23", 10: "Under 21", 18: "Under 20", 11: "Under 19", 12: "Under 18" },
+    teamType: (kind) => `Tipo ${kind}`,
+    teamsLabel: "Squadre di questa nazionale",
+    teamReputation: (team) => `Reputazione (${team})`,
+    teamReputationTitle: "Reputazione di questa squadra, da 0 a 10.000",
+    squadHeading: (team, count) => `${team}: ${format(count)} ${count === 1 ? "giocatore" : "giocatori"}`,
+    squadLabel: (team) => `Giocatori della nazionale: ${team}`,
+    squadNote: "I giocatori che il gioco elenca per questa squadra, nel suo ordine. Convocazioni, capitani e contratto del CT non si modificano qui.",
+    noTeams: "Il gioco non ha squadre per questa nazionale: non c'è una rosa né una reputazione da mostrare.",
     reading: "Lettura della rosa…",
     noPlayers: "Il gioco non elenca giocatori per questa squadra.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

@@ -1215,13 +1215,15 @@ export const ko: Strings = {
     mensTeam: "남자 국가대표팀",
     reputationShort: "명성",
     reputationTitle: "1군의 명성, 0~10,000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count) => `1군 선수 (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "1군 선수",
-    squadNote: "게임이 1군으로 올려 둔 선수를 게임의 순서대로 보여 줍니다. 소집, 주장, 감독 계약은 여기서 편집하지 않습니다.",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "게임에 이 팀의 1군이 없어서 보여 줄 선수단이나 명성이 없습니다.",
+    teamKinds: { 0: "1군", 9: "U-23", 10: "U-21", 18: "U-20", 11: "U-19", 12: "U-18" },
+    teamType: (kind) => `유형 ${kind}`,
+    teamsLabel: "이 나라의 팀",
+    teamReputation: (team) => `명성 (${team})`,
+    teamReputationTitle: "이 팀의 명성, 0~10,000",
+    squadHeading: (team, count) => `${team}: 선수 ${format(count)}명`,
+    squadLabel: (team) => `대표팀 선수: ${team}`,
+    squadNote: "게임이 이 팀에 올려 둔 선수를 게임의 순서대로 보여 줍니다. 소집, 주장, 감독 계약은 여기서 편집하지 않습니다.",
+    noTeams: "게임에 이 대표팀의 팀이 없어서 보여 줄 선수단이나 명성이 없습니다.",
     reading: "선수단을 읽는 중…",
     noPlayers: "게임이 이 팀에 올려 둔 선수가 없습니다.",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

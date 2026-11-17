@@ -1306,13 +1306,15 @@ export const zhCN: Strings = {
     mensTeam: "男子国家队",
     reputationShort: "声望",
     reputationTitle: "一线队的声望，0 至 10,000",
-    /** Over the squad; `count` is how many players the senior team lists. */
-    squadHeading: (count: number) => `一线队球员 (${format(count)})`,
-    /** The name of the squad table for assistive technology. */
-    squadLabel: "一线队球员",
-    squadNote: "游戏为一线队列出的球员，按游戏的顺序显示。征召、队长和主教练合同不在此处编辑。",
-    /** For the one national team the game gives no senior team. */
-    noSeniorTeam: "游戏中这支球队没有一线队，因此没有可显示的阵容或声望。",
+    teamKinds: { 0: "一线队", 9: "U23", 10: "U21", 18: "U20", 11: "U19", 12: "U18" },
+    teamType: (kind: number) => `类型 ${kind}`,
+    teamsLabel: "该国的球队",
+    teamReputation: (team: string) => `声望（${team}）`,
+    teamReputationTitle: "这支球队的声望，0 至 10,000",
+    squadHeading: (team: string, count: number) => `${team}：${format(count)} 名球员`,
+    squadLabel: (team: string) => `国家队球员：${team}`,
+    squadNote: "游戏为这支球队列出的球员，按游戏的顺序显示。征召、队长和主教练合同不在此处编辑。",
+    noTeams: "游戏中这支国家队没有任何球队，因此没有可显示的阵容或声望。",
     reading: "正在读取阵容…",
     noPlayers: "游戏没有为这支球队列出球员。",
     /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */

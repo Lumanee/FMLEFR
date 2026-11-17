@@ -1,8 +1,9 @@
 // The national teams, which the Clubs tab lists behind its switch (see `TeamsSwitch`): each nation's men's and women's
-// team with the reputation of its senior team, and, beside the list, the profile of the one picked: its reputation,
-// which can be edited, and the squad the game lists for the senior team. Calling players up, the captains and the
-// manager's contract are not here (see docs/recon/fm27-national-teams.md). Where this version of the game has no
-// national teams to read, it says why instead of the list.
+// team with the reputation of its senior team, and, beside the list, the profile of the one picked: its teams (the
+// senior team and its youth teams, "Under 21" and so on), the reputation of each, which can be edited, and the squad the
+// game lists for the team picked. Calling players up, the captains and the manager's contract are not here (see
+// docs/recon/fm27-national-teams.md). Where this version of the game has no national teams to read, it says why instead
+// of the list.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Ability } from "./Ability";
@@ -10,13 +11,13 @@ import { EditableValue } from "./EditControls";
 import { nationalProfile, nationalStatus } from "./editing";
 import { FilterBar } from "./FilterBar";
 import { describeError } from "./format";
-import { nationalText as text, playerListText, positionLabel, profileText } from "./labels";
+import { nationalTeamLabel, nationalText as text, playerListText, positionLabel, profileText } from "./labels";
 import { ListBrowser, type ListRequest } from "./ListBrowser";
 import { NationFlag, PICTURE_SIZE, WithPicture } from "./Picture";
 import { PlayerDialog } from "./PlayerProfile";
 import { ProfileFrame, ReputationMeter, type Loaded } from "./ProfileParts";
 import { restored, useSnapshot } from "./restore";
-import type { NationalProfile, NationalStatus, NationalTeamSummary, SquadPlayer } from "./types";
+import type { NationalProfile, NationalSide, NationalStatus, NationalTeamSummary, SquadPlayer } from "./types";
 import { useProfileEditing } from "./useProfileEditing";
 
 /** Which teams the list shows. */
@@ -131,12 +132,20 @@ interface NationalProfileViewProps {
   onClose: () => void;
 }
 
-/** The profile of one national team: its nation, its reputation, and the squad of its senior team. */
+/**
+ * The profile of one national team: its nation and the reputation of its senior team in the header, and under it its
+ * teams, the reputation of the one picked when it is not the senior team, and that team's squad.
+ */
 function NationalProfileView({ team, version, onClose }: NationalProfileViewProps) {
-  const loaded = useNationalProfile(team.uid, version);
+  // The kind of team picked, for this nation only: another nation opens on its senior team.
+  const [picked, setPicked] = useState<{ uid: number; kind: number } | null>(null);
+  const kind = picked?.uid === team.uid ? picked.kind : null;
+  const loaded = useNationalProfile(team.uid, kind, version);
   const editing = useProfileEditing("nationalTeam", team.uid);
   const info = loaded?.details?.team ?? team;
+  const teams = loaded?.details?.teams;
   const squad = loaded?.details?.squad;
+  const shown = teams?.find((side) => side.kind === squad?.kind);
 
   return (
     <ProfileFrame
@@ -159,12 +168,19 @@ function NationalProfileView({ team, version, onClose }: NationalProfileViewProp
       onClose={onClose}
       editing={editing}
     >
-      {loaded?.details && (
+      {loaded?.details && teams && (
         <div className="squad-tab">
-          {info.reputation === null && squad?.players.length === 0 ? (
-            <p className="empty">{text.noSeniorTeam}</p>
+          {teams.length === 0 || !shown ? (
+            <p className="empty">{text.noTeams}</p>
           ) : (
-            <NationalSquad players={squad?.players ?? []} version={version} />
+            <>
+              <NationalTeams
+                teams={teams}
+                shown={shown}
+                onPick={(picked) => setPicked({ uid: team.uid, kind: picked })}
+              />
+              <NationalSquad team={shown} players={squad?.players ?? []} version={version} />
+            </>
           )}
         </div>
       )}
@@ -172,32 +188,66 @@ function NationalProfileView({ team, version, onClose }: NationalProfileViewProp
   );
 }
 
-/** The national team `uid` as its profile shows it, read again whenever `version` changes. */
-function useNationalProfile(uid: number, version: number): Loaded<NationalProfile> | null {
+/** The national team `uid` as its profile shows it, with its team of kind `kind`, read again whenever `version` changes. */
+function useNationalProfile(uid: number, kind: number | null, version: number): Loaded<NationalProfile> | null {
   const [loaded, setLoaded] = useState<Loaded<NationalProfile> | null>(null);
   useEffect(() => {
     let cancelled = false;
-    nationalProfile(uid).then(
+    nationalProfile(uid, kind).then(
       (details) => !cancelled && setLoaded({ details }),
       (e) => !cancelled && setLoaded({ error: describeError(e) }),
     );
     return () => {
       cancelled = true;
     };
-  }, [uid, version]);
+  }, [uid, kind, version]);
   return loaded;
 }
 
+interface NationalTeamsProps {
+  teams: readonly NationalSide[];
+  shown: NationalSide;
+  onPick: (kind: number) => void;
+}
+
+/**
+ * The switch between the nation's teams, as a club's squad has it, and beside it the reputation of the team shown when
+ * it is not the senior team, whose reputation the header has: an input while the profile is edited.
+ */
+function NationalTeams({ teams, shown, onPick }: NationalTeamsProps) {
+  return (
+    <div className="squad-summary national-teams">
+      <div className="squad-teams" role="group" aria-label={text.teamsLabel}>
+        {teams.map((side) => (
+          <button key={side.kind} type="button" aria-pressed={side.kind === shown.kind} onClick={() => onPick(side.kind)}>
+            {nationalTeamLabel(side.kind)}
+          </button>
+        ))}
+      </div>
+      {shown.kind !== 0 && (
+        <div className="profile-abilities national-team-reputation">
+          <abbr title={text.teamReputationTitle}>{text.reputationShort}</abbr>
+          <EditableValue field={`team.${shown.kind}.reputation`}>
+            <ReputationMeter value={shown.reputation} />
+          </EditableValue>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface NationalSquadProps {
+  /** The team whose players these are. */
+  team: NationalSide;
   players: readonly SquadPlayer[];
   version: number;
 }
 
 /**
- * The players the game lists for the senior team, in the order it lists them. A name opens the player's profile over
- * the squad, as in a club's.
+ * The players the game lists for one of the nation's teams, in the order it lists them. A name opens the player's
+ * profile over the squad, as in a club's.
  */
-function NationalSquad({ players, version }: NationalSquadProps) {
+function NationalSquad({ team, players, version }: NationalSquadProps) {
   const [shown, setShown] = useState<SquadPlayer | null>(null);
   const opener = useRef<HTMLElement | null>(null);
   const columns = playerListText.columns;
@@ -212,11 +262,11 @@ function NationalSquad({ players, version }: NationalSquadProps) {
   return (
     <>
       <div className="squad-summary">
-        <p className="squad-count">{text.squadHeading(players.length)}</p>
+        <p className="squad-count">{text.squadHeading(nationalTeamLabel(team.kind), players.length)}</p>
         <p className="note squad-hint">{text.squadNote}</p>
       </div>
       <div className="squad-table-wrap">
-        <table className="grid squad-grid" aria-label={text.squadLabel}>
+        <table className="grid squad-grid" aria-label={text.squadLabel(nationalTeamLabel(team.kind))}>
           <thead>
             <tr>
               <th className="col-name">{columns.name}</th>

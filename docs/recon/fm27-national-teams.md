@@ -94,7 +94,7 @@ Across the save:
 - The men's senior reputations run from 1 to 9,750: Francia and Spagna 9,750, Inghilterra 9,600, Argentina 9,400,
   Brasile 9,200. The women's run up to 9,950.
 - The other kinds, with the age limits they had: 3 (none), 9 (23 or none), 10 (21 or none), 11 (19 or none), 12
-  (none), 18 (20 or none) and 33 (none). Their names in the game are not known yet.
+  (none), 18 (20 or none) and 33 (none). See [Youth teams](#youth-teams) for their names and a count on a later save.
 - The game plugin also keeps two arrays of national teams: 1,770 of the men's teams (`+0x576f0c8`) and 1,772 of the
   women's (`+0x576f170`). The array of every team (`+0x576f038`, 68,234) holds 3,542 national teams with the clubs'.
 
@@ -133,6 +133,39 @@ Italia's men's team lists 26 players now (23 when the notes above were written) 
 and Mancini, with a reputation of 8500; all 502 containers read. The men's team of The United Kingdom of Great Britain
 and Ireland (UID 145174) has no senior team of kind 0, so it lists with no reputation and an empty squad; the other three
 of its four have a senior team that lists no players, with a reputation of 1.
+
+## Youth teams
+
+On the Mac build and a save of 29 September 2026, with the probe (`national-teams --teams`, `--kinds`):
+
+| Kind | Teams | Age limits | Name in the game |
+| --- | --- | --- | --- |
+| 0 | 501 | none | Prima squadra |
+| 3 | 338 | none | none found |
+| 9 | 457 | 23 at 140, none at 317 | U23 |
+| 33 | 458 | 22 once, none at the rest | none found |
+| 10 | 458 | 21 at 383, none at the rest | U21 |
+| 18 | 458 | 20 at 346, none at the rest | U20 |
+| 11 | 458 | 19 at 395, none at the rest | U19 |
+| 12 | 458 | 18 once, none at the rest | U18 |
+
+An age limit of 255 means none, as 100 does. Italia's men's container holds kinds 0, 9 (23), 33 (22), 10 (21), 18
+(20), 11 (19) and 12 (18), in that order. Its women's container holds the same kinds, with players in the senior
+team (23), kind 9 (20), kind 18 (21) and kind 11 (15).
+
+With the game open on the same day, and nothing written:
+
+- Italia (Maschile) has the menus Prima squadra, Italia U21, Italia U20, Italia U19 and Italia U18: kinds 10, 18, 11 and
+  12. Its teams of kinds 9 and 33 list no players and have no menu.
+- Italia (Femminile) has the menus Prima squadra, Italia U23, Italia U20 and Italia U19. Italia U23 › Rosa lists
+  "Giocatori Squadra U23 (20)": the 20 players of its team of kind 9.
+- No container in the save has a player in a team of kind 3 or 33, and the game showed neither on these screens. The
+  editor names them "Type 3" and "Type 33".
+
+The editor lists every team of a container, beside its senior team in the profile, and edits the reputation of each as
+`team.<kind>.reputation`. `fmlibre-probe set national-team 776 team.10.reputation 5951 --restore` wrote Italia's U21
+reputation (5950), another probe read 5951, and it was put back; `fields national-team --stats` read the 502 with none
+implausible. On Windows the same team layout reads (see below), but the youth teams were not checked there.
 
 ## On Windows
 
@@ -176,5 +209,5 @@ September 2026), with a reputation of 8477.
   objects holds as a byte.
 - The two arrays' places on the Mac's Steam build 26577676 and on the Intel Macs (Windows Game Pass 0.9.2435.0 and
   Steam build 26577676 are read: see [On Windows](#on-windows)).
-- The names of the team kinds, and what the numbers from `+0x180` of a nation are.
+- The names of team kinds 3 and 33, and what the numbers from `+0x180` of a nation are.
 - What a national team's 0x50 bytes past a club team's end hold.
