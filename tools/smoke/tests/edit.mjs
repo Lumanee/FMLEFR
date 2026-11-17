@@ -1,10 +1,11 @@
 // Editing a player: fields written through the app's commands, read back by the probe, and undone from the change
 // log; his city of birth set to another city of his nation and back, and refused a nation in its place; the squad
 // numbers of two players of one team, where the undo that would give both one number is refused; a national team's
-// reputation, where the build has national teams; then one attribute through his profile's Edit mode, undone from the
-// Changes tab.
+// reputation, where the build has national teams; one amount of a league's prize money, where the build shows it; then
+// one attribute through his profile's Edit mode, undone from the Changes tab.
 import { SHOWN, VIS } from "../lib/app.mjs";
 import { clubPlayers, topClubs } from "../lib/witness.mjs";
+import { leagueWitnesses, probeStages, stageKey } from "./prizes.mjs";
 
 export const name = "edit";
 export const writes = true;
@@ -44,6 +45,7 @@ export async function run({ app, report, probe }) {
   await cityOfBirth({ app, report, probe, club });
   await squadNumbers({ app, report, probe, club });
   await nationalReputation({ app, report, probe });
+  await leaguePrizeMoney({ app, report, probe });
 
   // The same through his profile.
   await app.openTab("Players");
@@ -215,4 +217,72 @@ async function nationalReputation({ app, report, probe }) {
     JSON.stringify({ entity: logged?.entity, name: logged?.name }));
   await app.must("undo_change", { id: applied.applied[0].id });
   report.check("the undo puts it back", read() === before && (await row())?.reputation === before, `${read()}`);
+}
+
+/**
+ * What a league pays (#123), where the build shows it: one amount of its first stage (per win, or else for the first
+ * place) set through the app's command for every club in it, read back by the probe in each settings of the stage and
+ * in what the app keeps, logged as a change of the club with the league, and undone; then the same amount through the
+ * group's Change amounts and Save in the club's profile, and undone.
+ */
+async function leaguePrizeMoney({ app, report, probe }) {
+  const found = await leagueWitnesses(app);
+  if (found.unavailable || !found.paying) {
+    report.skip("a league's prize money", found.unavailable ? `this build shows none (${found.unavailable})`
+      : "no league of the best known clubs pays anything this season");
+    return;
+  }
+  const { club, league } = found.paying;
+  const stage = league.stages[0];
+  const [kind, was] = stage.win > 0 ? ["win", stage.win] : ["place", stage.byPosition[0]];
+  const field = kind === "win" ? "prize.win" : "prize.place.1";
+  const input = (pounds) => (kind === "win" ? { kind, pounds } : { kind, place: 1, pounds });
+  const as = (pounds) => stageKey(kind === "win" ? { ...stage, win: pounds } : { ...stage, byPosition: [pounds, ...stage.byPosition.slice(1)] });
+  // Whether the probe reads the stage paying `pounds` in each of its settings: none of them pays another of the amounts.
+  const reads = (pounds) => {
+    const seen = probeStages(probe, league.uid);
+    return [was, was + 1, was + 2].every((amount) => seen.includes(as(amount)) === (amount === pounds));
+  };
+  const kept = async () => (await app.must("league_prizes", { club: club.uid, again: false })).league?.stages[0];
+  report.note(`witness: ${league.name} (${league.uid}) through ${club.name}, ${field} ${was}`);
+  report.check(`the probe reads ${league.name}'s ${field} as the app does`, reads(was), `${was}`);
+
+  const to = was + 1;
+  const set = await app.must("set_league_prizes", { club: club.uid, stage: 0, amounts: [input(to)] });
+  report.check(`sets ${field} of ${league.name}`, set.changes.length === 1 && set.league?.stages[0] != null &&
+    stageKey(set.league.stages[0]) === as(to), JSON.stringify(set.changes.map((c) => c.field)));
+  if (set.changes.length !== 1) return;
+  report.check("the probe reads it in each settings of the stage, and the app keeps it", reads(to) &&
+    stageKey(await kept()) === as(to), `${was} → ${to}`);
+  const logged = (await app.must("change_log")).find((change) => change.id === set.changes[0].id);
+  report.check("the change log keeps it as a change of the club, with the league",
+    logged?.entity === "club" && logged?.uid === club.uid && logged?.field === field && logged?.prize?.leagueUid === league.uid &&
+      logged?.prize?.settings === stage.count,
+    JSON.stringify({ entity: logged?.entity, field: logged?.field, prize: logged?.prize }));
+  await app.must("undo_change", { id: set.changes[0].id });
+  report.check("the undo puts it back", reads(was) && stageKey(await kept()) === as(was), `${to} → ${was}`);
+
+  // The same through the group in the club's profile: Change amounts, the amount typed, Save.
+  const group = `${VIS}(".profile:not(.popup)")?.querySelector("section.league-prizes")`;
+  await app.openClub(club.name, club.uid);
+  await app.waitFor(`${group} && ${group}.getAttribute("aria-busy") === "false"`, `${club.name}'s league prize money`, 120000);
+  const change = `[...${group}.querySelectorAll(".prize-actions button")].find((b) => b.textContent === "Change amounts")`;
+  await app.waitFor(`${change} && !${change}.disabled`, "Change amounts");
+  await app.click(change, "Change amounts");
+  const label = kind === "win" ? "Per win" : "1.";
+  const box = `${group}.querySelectorAll(".league-stage")[0].querySelector('input.prize-input[aria-label="${label}"]')`;
+  await app.waitFor(box, `the ${label} input`);
+  await app.setInput(box, String(was + 2));
+  const save = `[...${group}.querySelectorAll(".prize-edit button")].find((b) => b.textContent === "Save amounts")`;
+  await app.waitFor(`${save} && !${save}.disabled`, "Save amounts");
+  await app.click(save, "Save amounts");
+  await app.waitFor(`!${group}.querySelector("input.prize-input")`, "the amounts saved", 30000);
+  const shown = await app.js(`${group}.querySelectorAll(".league-stage")[0].textContent`);
+  report.check("Save writes the amount typed, and the group shows it", reads(was + 2) &&
+    shown.replace(/\D/g, "").includes(String(was + 2)), `${was} → ${was + 2}`);
+  const saved = (await app.must("change_log")).find((change) => change.undoneAt == null && change.entity === "club" &&
+    change.uid === club.uid && change.field === field);
+  if (saved) await app.must("undo_change", { id: saved.id });
+  report.check("its undo puts it back", saved != null && reads(was), `${was + 2} → ${was}`);
+  await app.press("Escape");
 }
