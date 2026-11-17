@@ -7574,6 +7574,32 @@ kbd {
   flex: none;
 }
 
+/* A club's league prize money, under its finances: a stage's list by position in two columns once the panel is wide
+   enough, and the button that turns the amounts into inputs. */
+.league-stage + .league-stage {
+  margin-top: 12px;
+}
+
+.prize-places {
+  columns: 2 14rem;
+  column-gap: 24px;
+}
+
+.prize-places .stat {
+  break-inside: avoid;
+}
+
+.prize-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.prize-edit .move-note {
+  margin: 8px 0 0;
+}
+
 /* The Clubs tab's switch between the clubs and the national teams, over the list's search. */
 .teams-switch {
   margin-bottom: 10px;

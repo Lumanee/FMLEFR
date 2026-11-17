@@ -9,6 +9,7 @@ import { formatDate, formatIsoLocal, formatMoney, formatNumber } from "./format"
 import {
   changesText as text,
   editText,
+  leaguePrizesText,
   fieldLabel,
   jobLabel,
   profileText,
@@ -114,6 +115,11 @@ export function changeWords(change: LoggedChange, field: EditField | undefined):
   }
   if (change.personName) {
     return sides(change.personName.from ?? profileText.none, change.personName.to ?? profileText.none);
+  }
+  if (change.prize) {
+    // Logged in pounds, with the league it was set for, for every club in it.
+    const league = leaguePrizesText.changedIn(change.prize.league, change.prize.settings);
+    return { ...sides(formatMoney(change.old), formatMoney(change.new)), notes: [...notes, league] };
   }
   if (change.objects) {
     return sides(change.objects.from ?? unknownObject, change.objects.to ?? unknownObject);

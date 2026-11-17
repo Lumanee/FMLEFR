@@ -11,15 +11,17 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fmlibre_core::{
     ArraySource, Buyer, COHESION_RANGE, CaptainRole, CaptainSet, Change, ChangeRow, Clause, ClauseSet, ClubDetails,
-    ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, EditError, Entity, EntityArrays, ExportFormat,
-    ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex,
-    HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MoveError,
-    MovePlan, MoveTerms, NameChange, NameKind, Nation, NationalIndex, NationalSide, NationalTeamSummary,
-    NationalUnavailable, NewContract, NewStaffContract, Operation, Paid, People, PersonNames, Picture, Planned,
-    PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, ROLES, RelationSet, RetirementSet, Role,
-    SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError,
-    Skipped, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder,
-    StaffPlan, TacticsSet, Target, Tie, TieTarget, diagnostics_report, find_game, nations, sort_players, sort_staff,
+    ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes, EditError, Entity,
+    EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo,
+    GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted,
+    Listed, Loan, Lock, MoveError, MovePlan, MoveTerms, NameChange, NameKind, Nation, NationalIndex, NationalSide,
+    NationalTeamSummary, NationalUnavailable, NewContract, NewStaffContract, Operation, Paid, People, PersonNames,
+    Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, PrizeAmount, PrizeChange,
+    PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS,
+    SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped,
+    SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan,
+    TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report, find_game, nations, sort_players,
+    sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -71,6 +73,9 @@ struct Connection {
     clubs_seen: ClubsSeen,
     /// Whom the game's ids of people name among `players`, read when a profile first needs it (see `people`).
     people: OnceCell<People>,
+    /// Every league's settings and what they pay, read the first time a club's finances show its league's prize
+    /// money (see `league_prizes`), and kept up to date as the editor changes them.
+    prizes: Option<Vec<PrizeMoney>>,
 }
 
 /// How often the balances of frozen clubs, the attributes, energy and sharpness of frozen players, the attributes of
@@ -418,6 +423,8 @@ struct StoredChange {
     person_name: Option<PersonNameChange>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     objects: Option<ObjectNames>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prize: Option<PrizeNote>,
 }
 
 impl StoredChange {
@@ -445,6 +452,7 @@ impl StoredChange {
             stadium: logged.stadium.clone(),
             person_name: logged.person_name.clone(),
             objects: logged.objects.clone(),
+            prize: logged.prize.clone(),
         }
     }
 
@@ -469,6 +477,7 @@ impl StoredChange {
             stadium: self.stadium,
             person_name: self.person_name,
             objects: self.objects,
+            prize: self.prize,
             stored: Some(StoredKey { session: self.session, id: self.id }),
             undo: self.option.map(Undo::Recall),
         }
@@ -665,6 +674,7 @@ impl Connection {
             save,
             clubs_seen,
             people,
+            prizes: None,
         };
         connection.check_earlier();
         Ok(connection)
@@ -1204,6 +1214,7 @@ impl Connection {
             stadium: None,
             person_name: None,
             objects: None,
+            prize: None,
             stored: None,
             undo: None,
         }
@@ -1600,6 +1611,78 @@ impl Connection {
         self.staff.get(uid).map_or_else(|| uid.to_string(), |member| member.name.clone())
     }
 
+    /// What the league `uid` pays, as read last (see `league_prizes`); none when it was not read, or pays nothing.
+    fn league_prizes(&self, uid: u32) -> Option<CompetitionPrizes> {
+        competition_prizes(self.prizes.as_deref()?).into_iter().find(|league| league.competition.uid == uid)
+    }
+
+    /// Sets `amounts` in the stage `stage` of the league the club `club` plays in, in every settings of it alike, and
+    /// logs each amount changed as a change of the club, in one batch when there are more. Only on the builds whose
+    /// profile says the prize money was checked there, and while the game may be written to; each amount must still
+    /// be what was read. An amount that is what it was already is left out.
+    fn set_league_prizes(
+        &mut self,
+        club: u32,
+        stage: usize,
+        amounts: &[(PrizeAmount, u32)],
+    ) -> Result<Vec<LoggedChange>, Failure> {
+        if !self.session.profile.as_ref().is_some_and(|profile| profile.prize_money) {
+            return Err(Failure::new("prize.unavailable", PrizeUnavailable::Build.to_string()));
+        }
+        if let Some(lock) = self.session.structure_lock() {
+            return Err(MoveError::Locked(lock).into());
+        }
+        let league_uid = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?.league_uid;
+        let league = league_uid.and_then(|uid| self.league_prizes(uid)).ok_or_else(|| {
+            Failure::new("prize.noLeague", "What the club's league pays has not been read: read it again.")
+        })?;
+        let settings = league
+            .stages
+            .get(stage)
+            .ok_or_else(|| {
+                Failure::new("prize.noStage", format!("The league has no stage {stage}.")).with("stage", stage)
+            })?
+            .settings
+            .clone();
+        let note = PrizeNote {
+            league: league.competition.name.clone(),
+            league_uid: league.competition.uid,
+            settings: settings.len(),
+        };
+        let batch = (amounts.len() > 1).then(|| self.fresh_id());
+        let mut logged = Vec::new();
+        for &(amount, to) in amounts {
+            // As the amounts before left them: they may have changed the same settings.
+            let targets: Vec<PrizeMoney> =
+                self.prizes.iter().flatten().filter(|prize| settings.contains(&prize.settings)).cloned().collect();
+            let plan = self.session.plan_prize_change(&targets.iter().collect::<Vec<_>>(), &[(amount, to)])?;
+            let Some(from) = plan.edits.first().map(|edit| edit.from) else {
+                continue;
+            };
+            if plan.edits.iter().all(|edit| edit.from == edit.to) {
+                continue;
+            }
+            let done = self.session.apply_prize_change(&plan)?;
+            if let Some(found) = &mut self.prizes {
+                done.note(found, false);
+            }
+            let change = Change {
+                entity: Entity::Club,
+                uid: club,
+                field: amount.key(),
+                old: i64::from(from),
+                new: i64::from(to),
+            };
+            let entry = self.entry(change, self.club_name(club), batch);
+            logged.push(self.push_log(LoggedChange {
+                prize: Some(note.clone()),
+                undo: Some(Undo::Prize(done)),
+                ..entry
+            }));
+        }
+        Ok(logged)
+    }
+
     fn club_name(&self, uid: u32) -> String {
         self.clubs.get(uid).map_or_else(|| uid.to_string(), |club| club.name.clone())
     }
@@ -1752,6 +1835,12 @@ impl Connection {
                 });
             }
             Some(Undo::Captain(captaincy)) => self.session.undo_captain(&captaincy)?,
+            Some(Undo::Prize(done)) => {
+                self.session.undo_prize_change(&done)?;
+                if let Some(found) = &mut self.prizes {
+                    done.note(found, true);
+                }
+            }
             None => {
                 let (target, _) = self.target(entry.change.entity, entry.change.uid)?;
                 // A squad number a team-mate has been given since is refused, naming him.
@@ -2017,6 +2106,10 @@ struct LoggedChange {
     /// which outlive the addresses.
     #[serde(skip_serializing_if = "Option::is_none")]
     objects: Option<ObjectNames>,
+    /// For an amount of prize money the club's league pays, logged as a change of the club's field `prize.place.N`,
+    /// `prize.win`, `prize.draw` or `prize.loss` in pounds: the league, and how many settings of it were changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prize: Option<PrizeNote>,
     /// For an earlier change: what the history file calls it.
     #[serde(skip)]
     stored: Option<StoredKey>,
@@ -2033,6 +2126,16 @@ struct LoggedChange {
 struct RecallNote {
     /// The option to buy it took away, pounds.
     option_fee: i64,
+}
+
+/// The league whose prize money a change set, for every club in it: its name and UID, and how many settings of its
+/// stage were changed alike (one per group of a group stage).
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PrizeNote {
+    league: String,
+    league_uid: u32,
+    settings: usize,
 }
 
 /// A stadium's name before and after a rename.
@@ -2080,6 +2183,8 @@ enum Undo {
     Clause(ClauseSet),
     Captain(CaptainSet),
     Staff(LoggedStaff),
+    /// Prize money a league pays: the amounts it wrote, which the undo writes back.
+    Prize(PrizeChange),
 }
 
 /// A member of staff's move, new job or signing as the log keeps it: the writes to undo, and what his list row said
@@ -2578,7 +2683,7 @@ macro_rules! coded_failures {
     )*};
 }
 
-coded_failures!(EditError, MoveError, ScoutError, SessionError, fmlibre_mem::Error);
+coded_failures!(EditError, MoveError, PrizeError, ScoutError, SessionError, fmlibre_mem::Error);
 
 impl<T> From<std::sync::PoisonError<T>> for Failure {
     fn from(err: std::sync::PoisonError<T>) -> Self {
@@ -2828,6 +2933,92 @@ fn club_leagues(state: State<'_, AppState>, filter: Option<ClubFilter>) -> Resul
     let connection = guard.as_ref().ok_or_else(not_connected)?;
     let filter = ClubFilter { league_uid: None, ..filter.unwrap_or_default() };
     Ok(fmlibre_core::leagues(connection.clubs.search("").into_iter().filter(|club| filter.matches(club))))
+}
+
+/// What the league the club `club` plays in pays this season, by position and per match, in each stage that pays
+/// something; or why this version of the game shows none. The first time, and with `again`, read from the game: off
+/// the window's thread, as it reads all of the game's memory once, which takes a few seconds, and longer the first
+/// time on macOS. After that, as read then, with the changes the editor made since. Only reads.
+#[tauri::command]
+async fn league_prizes(app: tauri::AppHandle, club: u32, again: bool) -> Result<LeaguePrizes, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<LeaguePrizes, Failure> {
+        let state = app.state::<AppState>();
+        let mut guard = state.0.lock()?;
+        let connection = guard.as_mut().ok_or_else(not_connected)?;
+        let league_uid = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?.league_uid;
+        let Some(league_uid) = league_uid else {
+            return Ok(LeaguePrizes { unavailable: None, league: None });
+        };
+        if again || connection.prizes.is_none() {
+            connection.prizes = match connection.session.checked_prize_money() {
+                Ok(found) => Some(found),
+                Err(PrizeReadError::Unavailable(reason)) => {
+                    return Ok(LeaguePrizes { unavailable: Some(reason), league: None });
+                }
+                Err(PrizeReadError::Memory(err)) => return Err(err.into()),
+            };
+        }
+        Ok(LeaguePrizes { unavailable: None, league: connection.league_prizes(league_uid) })
+    })
+    .await?
+}
+
+/// What a club's league pays, or why the app shows none on this version of the game.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LeaguePrizes {
+    /// "build": nobody has checked the prize money on this build yet; "unreadable": it was checked, but what the
+    /// editor found does not read as the game's.
+    unavailable: Option<PrizeUnavailable>,
+    /// None where the club plays in no league, or its league pays nothing.
+    league: Option<CompetitionPrizes>,
+}
+
+/// An amount of prize money to set, in pounds: for a final position (1 for the first place), or per win, draw or loss.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum PrizeInput {
+    Place { place: usize, pounds: u32 },
+    Win { pounds: u32 },
+    Draw { pounds: u32 },
+    Loss { pounds: u32 },
+}
+
+impl PrizeInput {
+    fn amount(self) -> (PrizeAmount, u32) {
+        match self {
+            PrizeInput::Place { place, pounds } => (PrizeAmount::Place(place), pounds),
+            PrizeInput::Win { pounds } => (PrizeAmount::Win, pounds),
+            PrizeInput::Draw { pounds } => (PrizeAmount::Draw, pounds),
+            PrizeInput::Loss { pounds } => (PrizeAmount::Loss, pounds),
+        }
+    }
+}
+
+/// Sets `amounts` in the stage `stage` (as `league_prizes` lists them) of the league the club `club` plays in, for
+/// every club in it, and logs each amount changed, in one batch when there are more; Undo in Changes puts it back. The
+/// game pays from these amounts and keeps them in its saves, until it sets the next season's stages up from its own.
+#[tauri::command]
+fn set_league_prizes(
+    state: State<'_, AppState>,
+    club: u32,
+    stage: usize,
+    amounts: Vec<PrizeInput>,
+) -> Result<LeaguePrizesSet, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let amounts: Vec<(PrizeAmount, u32)> = amounts.into_iter().map(PrizeInput::amount).collect();
+    let changes = connection.set_league_prizes(club, stage, &amounts)?;
+    let league = connection.clubs.get(club).and_then(|c| c.league_uid).and_then(|uid| connection.league_prizes(uid));
+    Ok(LeaguePrizesSet { changes, league })
+}
+
+/// The changes `set_league_prizes` logged, and what the league pays now.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LeaguePrizesSet {
+    changes: Vec<LoggedChange>,
+    league: Option<CompetitionPrizes>,
 }
 
 /// Writes the players `query` and `filter` select, in `order`, to a new file in the exports folder as `format`: what
@@ -4695,6 +4886,8 @@ pub fn run() {
             search_staff,
             search_clubs,
             club_leagues,
+            league_prizes,
+            set_league_prizes,
             national_status,
             search_national_teams,
             national_squad,
@@ -4911,6 +5104,7 @@ mod tests {
             stadium: None,
             person_name: None,
             objects: None,
+            prize: None,
             stored: None,
             undo: None,
         }

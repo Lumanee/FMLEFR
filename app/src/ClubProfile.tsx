@@ -4,6 +4,7 @@ import { freezeMoney, frozenClubs, renameStadium, stadiumName } from "./editing"
 import { converts, inCurrency } from "./currency";
 import { describeError, formatMoney, formatNumber } from "./format";
 import { InfoTip } from "./InfoTip";
+import { LeaguePrizesGroup } from "./LeaguePrizes";
 import {
   appText,
   CLUB_FACILITY_LABELS,
@@ -106,7 +107,7 @@ export function ClubProfile({ club, version, tab, onTab, onClose }: ClubProfileP
         ) : shown === "stadium" ? (
           <StadiumTab club={club.uid} stadium={details.stadium} panel={panel} />
         ) : (
-          <ClubBody details={details} panel={panel} />
+          <ClubBody details={details} version={version} panel={panel} />
         ))}
     </ProfileFrame>
   );
@@ -176,13 +177,17 @@ function ClubTabs({ tab, base, locked, onSelect }: ClubTabsProps) {
   );
 }
 
-/** Two columns: what the club has on the left, the people around it on the right. */
-function ClubBody({ details, panel }: { details: ClubDetails; panel: PanelIds }) {
+/**
+ * Two columns: what the club has on the left, its money and what its league pays among it, the people around it on
+ * the right.
+ */
+function ClubBody({ details, version, panel }: { details: ClubDetails; version: number; panel: PanelIds }) {
   return (
     <div className="profile-split" role="tabpanel" id={panel.id} aria-labelledby={panel.labelledBy}>
       <div className="profile-stack">
         <Facilities facilities={details.facilities} />
         <FinancesGroup club={details.uid} finances={details.finances} />
+        {details.leagueUid !== null && <LeaguePrizesGroup club={details.uid} version={version} />}
       </div>
       <div className="profile-stack">
         <Supporters traits={details.supporterTraits} mix={details.supporterMix} />

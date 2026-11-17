@@ -3567,6 +3567,8 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         // Not looked for: kept from the built-in profile.
         tactics_manager: session.profile.as_ref().and_then(|profile| profile.tactics_manager),
         training_manager: session.profile.as_ref().and_then(|profile| profile.training_manager),
+        // Checked against the game's screens, not looked for: kept from the built-in profile.
+        prize_money: session.profile.as_ref().is_some_and(|profile| profile.prize_money),
         national_teams: session.profile.as_ref().and_then(|profile| profile.national_teams),
     };
 

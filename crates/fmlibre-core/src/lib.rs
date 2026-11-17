@@ -94,7 +94,8 @@ pub use national::{NationalIndex, NationalSide, NationalTeamSummary, NationalUna
 pub use object_pool::ObjectPool;
 pub use players::{Nation, PLAYABLE_RATING, PlayerIndex, PlayerSummary, is_woman, nations, read_players};
 pub use prize_money::{
-    Competition, MOST_PRIZE, PrizeAmount, PrizeChange, PrizeEdit, PrizeError, PrizeMoney, PrizeStage,
+    Competition, CompetitionPrizes, MOST_PRIZE, PrizeAmount, PrizeChange, PrizeEdit, PrizeError, PrizeMoney,
+    PrizeReadError, PrizeStage, PrizeUnavailable, StagePrizes, competition_prizes,
 };
 pub use profile::{
     ArrayRvas, BuildProfile, ContractLayout, GameLayout, Layout, PlayerLayout, PluginFingerprint, ProfileNotes,

@@ -19,6 +19,10 @@ retirement_manager = 0x5675060
 # before the players pair, as on Steam build 26340721. Another static, at 0x5670EC8, points at it too.
 game_ui = 0x5680140
 
+# The prize money competitions pay (layout.toml, [prize_money]; #123) was read on this build on a save of August 2027:
+# the Champions League, Libertadores, Sudamericana and AFC Champions League Elite amounts are those read on Steam.
+prize_money = true
+
 # game_plugin.dll as mapped in memory; these two values identify the build.
 [plugin]
 size_of_image = 0x175DA000

@@ -22,6 +22,10 @@ tactics_manager = 0x56A8310
 # managers' players: read on the same save, with the history of Benevento's 55 players.
 training_manager = 0x56A5740
 
+# The prize money competitions pay (layout-macos.toml, [prize_money]; #123) was read on this build on a save of
+# August 2026 and matched to the game's screens: the Premier League's places 1 to 19 and the Vertu Trophy per match.
+prize_money = true
+
 # game_plugin as mapped in memory: its LC_UUID identifies the build and the architecture.
 [plugin]
 uuid = "F4540355-2186-39CB-9119-C706A6A35346"

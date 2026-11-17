@@ -998,6 +998,10 @@ pub struct BuildProfile {
     /// RVA in the game plugin of the static pointer to the training manager (`TRAINING_MANAGER`), which keeps the
     /// history of training of the human managers' players.
     pub training_manager: Option<u64>,
+    /// Whether the prize money competitions pay ([`PrizeMoneyLayout`]) was read on this build and found to be what the
+    /// game shows. The app shows and changes it only on such builds; the probe reads it on any.
+    #[serde(default)]
+    pub prize_money: bool,
     /// Where the build keeps its arrays of national teams' containers, for the builds they were read on; none where
     /// they were not, which leaves the National teams tab off.
     #[serde(default)]
@@ -1168,6 +1172,9 @@ pub fn profile_text(profile: &BuildProfile, notes: &ProfileNotes) -> String {
     }
     if let Some(rva) = profile.training_manager {
         text += &format!("\ntraining_manager = {rva:#X}\n");
+    }
+    if profile.prize_money {
+        text += "\nprize_money = true\n";
     }
     text += "\n# game_plugin as mapped in memory; these values identify the build.\n[plugin]\n";
     match profile.plugin {
@@ -1562,6 +1569,25 @@ mod tests {
             assert!(profiles[i + 1..].iter().all(|other| other.plugin != profile.plugin), "{} twice", profile.name);
             assert_eq!(profile.edition, 27, "{}", profile.name);
         }
+    }
+
+    /// The app shows the prize money only on the builds it was read and checked on (#123): no others until someone has.
+    #[test]
+    fn prize_money_is_shown_only_on_the_builds_it_was_checked_on() {
+        let mut checked: Vec<String> =
+            built_in_profiles().filter(|profile| profile.prize_money).map(|profile| profile.name).collect();
+        checked.sort();
+        assert_eq!(
+            checked,
+            [
+                "FM27 0.9.2409.0 (Game Pass)",
+                "FM27 0.9.2435.0 (Game Pass)",
+                "FM27 Steam build 26340721 (27.0.0)",
+                "FM27 Steam build 26340721 (27.0.0, macOS, Apple silicon)",
+                "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
+                "FM27 Steam build 26577676",
+            ]
+        );
     }
 
     #[test]

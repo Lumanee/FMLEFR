@@ -165,6 +165,9 @@ read-only until `profiles/fm27/layout.toml` is fixed.
    plausible date, and whether the guessed and the searched places of the retirement manager and of the game object
    agree.
 3. Add the file to `BUILDS` in `crates/fmlibre-core/src/profile.rs`; a unit test fails until it is there.
+   A club's finances show no league prize money on the new build, and cannot change it, until someone has checked
+   that `fmlibre-probe prizes` lists the amounts the game's Rules pages show, and added `prize_money = true` to the
+   profile.
 4. Build the app (`npm run release`), and run the smoke tests on both storefronts (see
    [`tools/smoke`](../tools/smoke/README.md)).
 

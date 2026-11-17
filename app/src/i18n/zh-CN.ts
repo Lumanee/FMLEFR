@@ -651,6 +651,9 @@ export const zhCN: Strings = {
     "stadium.seating": "座位容量",
     "stadium.used": "已使用容量",
     "stadium.expansion": "扩建容量",
+    "prize.win": "联赛每场胜利奖金",
+    "prize.draw": "联赛每场平局奖金",
+    "prize.loss": "联赛每场失利奖金",
   },
 
   profile: {
@@ -1324,6 +1327,41 @@ export const zhCN: Strings = {
   },
 
   /** The app around the lists: the sidebar, the status line and the connect panel. */
+  leaguePrizes: {
+    title: "联赛奖金",
+    league: (league) => `${league} 本赛季的奖金`,
+    reading: "正在从游戏读取联赛奖金…第一次可能需要半分钟或更久。",
+    readAgain: "重新读取",
+    readAgainTitle: "重新从游戏读取金额：之后开始的阶段也可能有奖金",
+    paysNothing: "该俱乐部的联赛本赛季既不按最终名次也不按场次发放奖金。",
+    stageStarted: "进行中的阶段",
+    stageFuture: "尚未开始的阶段",
+    alike: (count) => `${format(count)} 个小组或阶段的金额相同`,
+    byPosition: "按最终名次",
+    place: (place) => `第 ${format(place)} 名`,
+    perMatch: "每场比赛",
+    win: "每场胜利",
+    draw: "每场平局",
+    loss: "每场失利",
+    noList: "没有按最终名次的奖金。",
+    noPerMatch: "没有每场比赛的奖金。",
+    note: "淘汰赛轮次的奖金（例如决赛的胜者和败者）以及赛事参赛费尚未读取。",
+    unavailableBuild: "还没有人确认此版本的游戏把奖金保存在哪里，因此编辑器不显示任何内容，以免读取错误的内存。",
+    unavailableUnreadable: "编辑器在此版本游戏中预期的位置查找了奖金，但找到的内容无法按游戏的数据读取，因此不显示任何内容。",
+    edit: "修改金额",
+    editTitle: "修改联赛这一阶段向其中每家俱乐部发放的金额",
+    save: "保存金额",
+    saving: "正在保存…",
+    cancel: "取消",
+    everyClub: (league) =>
+      `这会修改 ${league} 向其中每家俱乐部发放的金额，而不只是这家俱乐部。游戏会把它保存在存档中，但仅限本赛季：下个赛季会重新使用游戏自己的金额。改动记录中的“撤销”可恢复原来的金额。`,
+    infoLabel: "奖金的修改能保持多久",
+    invalid: (most) => `请输入 0 到 ${most} 之间的整数金额。`,
+    allNothing: "不发放任何奖金的阶段将不再列出：请至少保留一个大于零的金额。",
+    placeField: (place) => `联赛第 ${format(place)} 名奖金`,
+    changedIn: (league, groups) =>
+      groups > 1 ? `${league} 的每家俱乐部，共 ${format(groups)} 个小组` : `${league} 的每家俱乐部`,
+  },
   app: {
     /** The small line under the name in the sidebar. */
     stage: "测试版",

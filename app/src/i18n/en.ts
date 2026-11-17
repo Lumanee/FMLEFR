@@ -548,6 +548,10 @@ export const en = {
     "stadium.seating": "Seated capacity",
     "stadium.used": "Capacity in use",
     "stadium.expansion": "Expansion capacity",
+    // Prize money a club's league pays, which the change log keeps as a change of the club (see `leaguePrizes`).
+    "prize.win": "League prize money per win",
+    "prize.draw": "League prize money per draw",
+    "prize.loss": "League prize money per loss",
   },
 
   profile: {
@@ -1275,6 +1279,61 @@ export const en = {
     unavailableTitle: "National teams are not available on this version of the game",
     unavailableBuild: "Nobody has found yet where this version of the game keeps its national teams, so the editor shows none rather than read the wrong memory.",
     unavailableUnreadable: "The editor looked where it expects the national teams on this version of the game, but what it found does not read as the game's, so it shows none.",
+  },
+
+  /**
+   * The Prize money tab: the competitions whose stages pay prize money, what each pays by final position and per match.
+   * It only reads; the amounts are kept in pounds and shown in the chosen currency.
+   */
+  leaguePrizes: {
+    /** The heading of the group in a club's Overview, under its finances. */
+    title: "League prize money",
+    /** Under the heading: the league and its nation. */
+    league: (league: string) => `What ${league} pays this season`,
+    /** While the amounts are read: the editor reads all of the game's memory once. */
+    reading: "Reading the league's prize money from the game… The first time this can take half a minute or more.",
+    readAgain: "Read again",
+    readAgainTitle: "Read the amounts from the game again: a stage that has started since may pay too",
+    /** When the club's league pays nothing the editor reads. */
+    paysNothing: "The club's league pays no prize money by final position or per match this season.",
+    /** The heading of one stage of the league. */
+    stageStarted: "Stage being played",
+    stageFuture: "Stage not started yet",
+    /** Under a stage's heading, when several of its groups (or stages) pay the same. */
+    alike: (count: number) => `The same amounts in ${format(count)} groups or stages`,
+    byPosition: "By final position",
+    /** A row of the list by position. */
+    place: (place: number) => `${format(place)}.`,
+    perMatch: "Per match",
+    win: "Per win",
+    draw: "Per draw",
+    loss: "Per loss",
+    noList: "Nothing by final position.",
+    noPerMatch: "Nothing per match.",
+    /** Under the amounts. */
+    note: "What knockout rounds pay, such as a final's winner and loser, and a competition's participation fee are not read yet.",
+    /** Where the app cannot show prize money: why. */
+    unavailableBuild: "Nobody has checked yet where this version of the game keeps the prize money, so the editor shows none rather than read the wrong memory.",
+    unavailableUnreadable: "The editor looked for the prize money where it expects it on this version of the game, but what it found does not read as the game's, so it shows none.",
+    /** The button that turns a stage's amounts into inputs. */
+    edit: "Change amounts",
+    editTitle: "Change what this stage of the league pays, for every club in it",
+    save: "Save amounts",
+    saving: "Saving…",
+    cancel: "Cancel",
+    /** Under the inputs, and in the (i) beside the button. */
+    everyClub: (league: string) =>
+      `This changes what ${league} pays every club in it, not this club alone. The game keeps it in the save, but only for this season: it sets the next season up with its own amounts again. Undo in Changes puts the old amounts back.`,
+    infoLabel: "How a change of the prize money lasts",
+    /** Under an input that does not hold an amount the editor writes. */
+    invalid: (most: string) => `Enter a whole amount from 0 to ${most}.`,
+    /** Under the inputs, when every amount of the stage would be nothing. */
+    allNothing: "A stage that pays nothing at all is not listed any more: leave at least one amount above nothing.",
+    /** What the Changes view calls a change of the amount for a final position. */
+    placeField: (place: number) => `League prize money for place ${format(place)}`,
+    /** In the Changes view, under a change of the prize money: the league, and how many of its groups it changed. */
+    changedIn: (league: string, groups: number) =>
+      groups > 1 ? `For every club in ${league}, in ${format(groups)} groups` : `For every club in ${league}`,
   },
 
   /** The app around the lists: the sidebar, the status line and the connect panel. */
