@@ -5,7 +5,7 @@
 // one attribute through his profile's Edit mode, undone from the Changes tab.
 import { SHOWN, VIS } from "../lib/app.mjs";
 import { clubPlayers, topClubs } from "../lib/witness.mjs";
-import { leagueWitnesses, probeStages, stageKey } from "./prizes.mjs";
+import { leagueWitnesses, openGroup, probeStages, stageKey } from "./prizes.mjs";
 
 export const name = "edit";
 export const writes = true;
@@ -264,8 +264,7 @@ async function leaguePrizeMoney({ app, report, probe }) {
 
   // The same through the group in the club's profile: Change amounts, the amount typed, Save.
   const group = `${VIS}(".profile:not(.popup)")?.querySelector("section.league-prizes")`;
-  await app.openClub(club.name, club.uid);
-  await app.waitFor(`${group} && ${group}.getAttribute("aria-busy") === "false"`, `${club.name}'s league prize money`, 120000);
+  await openGroup(app, club);
   const change = `[...${group}.querySelectorAll(".prize-actions button")].find((b) => b.textContent === "Change amounts")`;
   await app.waitFor(`${change} && !${change}.disabled`, "Change amounts");
   await app.click(change, "Change amounts");

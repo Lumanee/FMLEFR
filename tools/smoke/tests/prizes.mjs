@@ -4,7 +4,7 @@
 // name, every place and the amounts per match, its Change amounts button turning them into inputs (Cancel, nothing is
 // saved: the change itself is in the `edit` test), and Read again; a club whose league pays nothing saying so. Writes
 // nothing. On a build whose profile does not turn the prize money on, the group's note saying why.
-import { VIS } from "../lib/app.mjs";
+import { SHOWN, VIS } from "../lib/app.mjs";
 import { humanClubs, topClubs } from "../lib/witness.mjs";
 
 export const name = "prizes";
@@ -56,9 +56,14 @@ export async function leagueWitnesses(app, count = 120) {
   return { paying, nothing };
 }
 
-/** Opens `club`'s profile and waits for its league prize money group to be read. */
-async function openGroup(app, club) {
+/**
+ * Opens `club`'s profile on its Overview, where a club's profile may open on the tab another test left it on, and
+ * waits for its league prize money group to be read.
+ */
+export async function openGroup(app, club) {
   await app.openClub(club.name, club.uid);
+  const tab = `[...document.querySelectorAll(".profile-tabs [role=tab]")].filter(${SHOWN}).find((t) => t.textContent.trim() === "Overview")`;
+  await app.click(tab, "the Overview tab");
   await app.waitFor(`${GROUP} && ${GROUP}.getAttribute("aria-busy") === "false"`, `${club.name}'s league prize money`, 120000);
 }
 
