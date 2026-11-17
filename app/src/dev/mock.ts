@@ -2806,7 +2806,20 @@ function undoCaptain(entry: LoggedChange): void {
 
 /** `team_action`: the action on every player of the fixture team, logged as one batch like a mass edit. */
 function teamAction(clubUid: number, index: number, action: TeamAction): MassReport {
-  const team = fixtureTeam(clubUid, index);
+  return actOnPlayers(fixtureTeam(clubUid, index).players, action);
+}
+
+/** `national_team_action`: Heal all, Inspire all or Refresh all for the players the senior team lists. */
+function nationalTeamAction(uid: number, action: TeamAction): MassReport {
+  if (action !== "heal" && action !== "inspire" && action !== "refresh") {
+    throw failure("national.action", "A national team has Heal all, Inspire all and Refresh all only.");
+  }
+  return actOnPlayers(nationalProfile(uid, 0).squad.players, action);
+}
+
+/** The action on every one of `players`, logged as one batch like a mass edit. */
+function actOnPlayers(players: readonly SquadPlayer[], action: TeamAction): MassReport {
+  const team = { players };
   const batch = nextMassId++;
   const report: MassReport = { batch, applied: 0, failed: [] };
   if (action === "heal") {
@@ -4116,6 +4129,8 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return setCaptain(Number(args?.club), Number(args?.team), args?.role as CaptainRole, Number(args?.uid)) as T;
     case "team_action":
       return teamAction(Number(args?.club), Number(args?.team), args?.action as TeamAction) as T;
+    case "national_team_action":
+      return nationalTeamAction(Number(args?.uid), args?.action as TeamAction) as T;
     case "swap_players":
       return swapPlayers(Number(args?.uid), Number(args?.other)) as T;
     default:

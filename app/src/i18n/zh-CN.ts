@@ -1317,6 +1317,7 @@ export const zhCN: Strings = {
     squadHeading: (team: string, count: number) => `${team}：${format(count)} 名球员`,
     squadLabel: (team: string) => `国家队球员：${team}`,
     squadNote: "游戏为这支球队列出的球员，按游戏的顺序显示。征召、队长和主教练合同不在此处编辑。",
+    actionsHint: "这些操作作用于一线队列出的所有球员。也可以在“改动记录”中撤销。",
     noTeams: "游戏中这支国家队没有任何球队，因此没有可显示的阵容或声望。",
     reading: "正在读取阵容…",
     noPlayers: "游戏没有为这支球队列出球员。",

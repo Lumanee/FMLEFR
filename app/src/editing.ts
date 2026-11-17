@@ -30,6 +30,7 @@ import type {
   Nation,
   NationalProfile,
   NationalStatus,
+  NationalTeamAction,
   PersonNames,
   RoomMaker,
   StadiumName,
@@ -436,6 +437,10 @@ export const setCaptain = (club: number, team: number, role: CaptainRole, uid: n
  */
 export const teamAction = (club: number, team: number, action: TeamAction) =>
   call<MassReport>("team_action", { club, team, action });
+
+/** Heal all, Inspire all or Refresh all for the players the senior team of the national team `uid` lists. */
+export const nationalTeamAction = (uid: number, action: NationalTeamAction) =>
+  call<MassReport>("national_team_action", { uid, action });
 
 /** The human manager's club, its money, its squad line by line and the players to let go; fast. */
 export const scoutingOverview = () => call<ScoutingOverview>("scouting_overview");

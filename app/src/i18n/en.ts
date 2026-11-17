@@ -1271,6 +1271,8 @@ export const en = {
     /** The name of the squad table for assistive technology; `team` is the name of the team picked. */
     squadLabel: (team: string) => `Players of the national team: ${team}`,
     squadNote: "The players the game lists for this team, in its order. Calling players up, captains and the manager's contract are not edited here.",
+    /** Beside Heal all, Inspire all and Refresh all, which the senior team has: whom they cover, and where undoing is. */
+    actionsHint: "The actions cover every player the senior team lists. Undo is in the Changes view as well.",
     /** For a nation the game keeps no team for. */
     noTeams: "The game keeps no teams for this one, so there is no squad or reputation to show.",
     reading: "Reading the squad…",

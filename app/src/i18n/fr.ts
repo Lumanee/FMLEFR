@@ -1315,6 +1315,7 @@ export const fr: Strings = {
     squadHeading: (team, count) => `${team} : ${format(count)} ${count === 1 ? "joueur" : "joueurs"}`,
     squadLabel: (team) => `Joueurs de la sélection : ${team}`,
     squadNote: "Les joueurs que le jeu liste pour cette équipe, dans son ordre. Les convocations, les capitaines et le contrat du sélectionneur ne se modifient pas ici.",
+    actionsHint: "Les actions portent sur tous les joueurs que liste l'équipe première. L'annulation est aussi dans la vue Modifications.",
     noTeams: "Le jeu ne tient pas d'équipe pour cette sélection : il n'y a ni effectif ni réputation à montrer.",
     reading: "Lecture de l'effectif…",
     noPlayers: "Le jeu ne liste aucun joueur pour cette équipe.",

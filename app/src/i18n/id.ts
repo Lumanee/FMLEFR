@@ -1171,6 +1171,7 @@ export const id: Strings = {
     squadHeading: (team: string, count: number) => `${team}: ${format(count)} pemain`,
     squadLabel: (team: string) => `Pemain tim nasional: ${team}`,
     squadNote: "Pemain yang dicantumkan game untuk tim ini, menurut urutannya. Pemanggilan pemain, kapten, dan kontrak pelatih tidak diedit di sini.",
+    actionsHint: "Aksi berlaku untuk semua pemain yang dicantumkan tim utama. Urungkan juga ada di tampilan Perubahan.",
     noTeams: "Game tidak menyimpan tim apa pun untuk tim nasional ini, jadi tidak ada skuad atau reputasi yang bisa ditampilkan.",
     reading: "Membaca skuad…",
     noPlayers: "Game tidak mencantumkan pemain untuk tim ini.",

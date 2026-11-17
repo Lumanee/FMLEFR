@@ -1226,6 +1226,7 @@ export const ko: Strings = {
     squadHeading: (team, count) => `${team}: 선수 ${format(count)}명`,
     squadLabel: (team) => `대표팀 선수: ${team}`,
     squadNote: "게임이 이 팀에 올려 둔 선수를 게임의 순서대로 보여 줍니다. 소집, 주장, 감독 계약은 여기서 편집하지 않습니다.",
+    actionsHint: "작업은 1군에 올라 있는 모든 선수에게 적용됩니다. 변경 내역 화면에서도 되돌릴 수 있습니다.",
     noTeams: "게임에 이 대표팀의 팀이 없어서 보여 줄 선수단이나 명성이 없습니다.",
     reading: "선수단을 읽는 중…",
     noPlayers: "게임이 이 팀에 올려 둔 선수가 없습니다.",

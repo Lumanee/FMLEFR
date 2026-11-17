@@ -1200,6 +1200,7 @@ export const ja: Strings = {
     squadHeading: (team: string, count: number) => `${team}：${format(count)}人`,
     squadLabel: (team: string) => `代表チームの選手：${team}`,
     squadNote: "ゲームがこのチームに載せている選手を、ゲームの順に表示します。招集、キャプテン、監督の契約はここでは編集しません。",
+    actionsHint: "操作はトップチームに載っている全選手が対象です。元に戻す操作は変更履歴でも行えます。",
     noTeams: "ゲームにはこの代表のチームがないため、表示できる選手や評価はありません。",
     reading: "選手を読み込み中…",
     noPlayers: "ゲームはこのチームに選手を載せていません。",
