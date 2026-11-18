@@ -1,10 +1,12 @@
 // Editing a player: fields written through the app's commands, read back by the probe, and undone from the change
 // log; his city of birth set to another city of his nation and back, and refused a nation in its place; the squad
 // numbers of two players of one team, where the undo that would give both one number is refused; a national team's
-// reputation and one of its youth teams', where the build has national teams; one amount of a league's prize money,
-// where the build shows it; then one attribute through his profile's Edit mode, undone from the Changes tab.
+// reputation and one of its youth teams', and Heal all, Inspire all and Refresh all on its senior team's players, where
+// the build has national teams; one amount of a league's prize money, where the build shows it; then one attribute
+// through his profile's Edit mode, undone from the Changes tab.
 import { SHOWN, VIS } from "../lib/app.mjs";
 import { clubPlayers, topClubs } from "../lib/witness.mjs";
+import { PROFILE as NATIONAL_PROFILE, ROWS as NATIONAL_ROWS, showTeams } from "./nationals.mjs";
 import { leagueWitnesses, openGroup, probeStages, stageKey } from "./prizes.mjs";
 
 export const name = "edit";
@@ -45,6 +47,7 @@ export async function run({ app, report, probe }) {
   await cityOfBirth({ app, report, probe, club });
   await squadNumbers({ app, report, probe, club });
   await nationalReputation({ app, report, probe });
+  await nationalActions({ app, report, probe });
   await leaguePrizeMoney({ app, report, probe });
 
   // The same through his profile.
@@ -246,6 +249,124 @@ async function nationalReputation({ app, report, probe }) {
     JSON.stringify({ entity: youthLogged?.entity, name: youthLogged?.name, field: youthLogged?.field }));
   await app.must("undo_change", { id: done.applied[0].id });
   report.check("the undo puts the youth team's back", readYouth() === was && (await shownYouth()) === was, `${readYouth()}`);
+}
+
+/** The values Refresh all and Inspire all set on each player of a squad, by field (see `act_on_players`). */
+const NATIONAL_ACTIONS = {
+  refresh: { condition: 10000, match_sharpness: 10000, jadedness: -500 },
+  inspire: { morale: 20, "contract.unhappiness": 0 },
+};
+
+/**
+ * Heal all, Inspire all and Refresh all for the players the senior team of the best known men's national team lists
+ * (#217), where the build has national teams: Refresh all and Inspire all through the app's command, as many changes
+ * written as the squad has values not set yet, every player then holding what they set (the first three read by the
+ * probe too), one batch in the change log, and its undo putting every value back; Heal all healing those injured (or
+ * writing nothing where none is), and undone; Lift bans refused; then Refresh all in the team's profile, the line under
+ * the buttons, and the Undo on it.
+ */
+async function nationalActions({ app, report, probe }) {
+  const status = await app.must("national_status");
+  if (!status.available) {
+    report.skip("a national team's squad actions", `this build has no national teams to read (${status.reason})`);
+    return;
+  }
+  const men = (await app.must("search_national_teams", { query: "", limit: 1000, women: false })).rows;
+  const team = men.find((t) => t.players > 0 && t.code);
+  if (!team) {
+    report.skip("a national team's squad actions", "no men's team lists players");
+    return;
+  }
+  const squad = (await app.must("national_squad", { uid: team.uid })).squad.players;
+  report.note(`witness: ${team.name}'s senior team, ${squad.length} players`);
+  const values = () => Promise.all(squad.map((p) => app.must("read_values", { entity: "player", uid: p.uid })));
+  const sample = squad.slice(0, 3);
+  // The values of `fields` a player holds that the action has to set: those the editor reads, and not set already.
+  const due = (read, sets) =>
+    read.reduce((n, v) => n + Object.keys(sets).filter((f) => typeof v[f] === "number" && v[f] !== sets[f]).length, 0);
+  const holds = (read, before, sets) =>
+    read.every((v, i) => Object.keys(sets).every((f) => typeof before[i][f] !== "number" || v[f] === sets[f]));
+
+  for (const [action, sets] of Object.entries(NATIONAL_ACTIONS)) {
+    const fields = Object.keys(sets);
+    const probed = () => sample.map((p) => probe.get("player", p.uid, fields));
+    const before = await values();
+    const probedBefore = probed();
+    const expected = due(before, sets);
+    const done = await app.must("national_team_action", { uid: team.uid, action });
+    report.check(`${action} writes a change for each value of the squad not set yet`,
+      done.applied === expected && done.failed.length === 0,
+      `${done.applied} of ${expected}; ${JSON.stringify(done.failed.slice(0, 3))}`);
+    const probedAfter = probed();
+    report.check(`every player holds what ${action} sets, as the probe reads the first three`,
+      holds(await values(), before, sets) && holds(probedAfter, probedBefore, sets), JSON.stringify(probedAfter[0]));
+    const logged = (await app.must("change_log")).filter((change) => change.batch === done.batch);
+    report.check("the change log keeps them as one batch", logged.length === done.applied, `${logged.length}`);
+    if (done.applied === 0) continue;
+    const undone = await app.must("undo_batch", { batch: done.batch });
+    report.check(`the undo of ${action}'s batch`, undone.undone === done.applied && undone.failed.length === 0,
+      JSON.stringify(undone.failed.slice(0, 3)));
+    const back = await values();
+    report.check("puts every value back, as the probe reads them",
+      back.every((v, i) => fields.every((f) => v[f] === before[i][f])) &&
+        JSON.stringify(probed()) === JSON.stringify(probedBefore),
+      JSON.stringify(probed()[0]));
+  }
+
+  // Heal all: those injured healed, and back again; nothing written where nobody is.
+  const injured = squad.filter((p) => p.injuries > 0);
+  const injuries = () => Promise.all(injured.map((p) => app.must("player_details", { uid: p.uid })));
+  const wereInjured = await injuries();
+  const healed = await app.must("national_team_action", { uid: team.uid, action: "heal" });
+  if (injured.length === 0) {
+    report.check("Heal all writes nothing where nobody is injured", healed.applied === 0 && healed.failed.length === 0,
+      JSON.stringify(healed));
+  } else {
+    report.check(`Heal all heals the ${injured.length} injured`, healed.applied === injured.length &&
+      (await injuries()).every((d) => d.injuries.length === 0), injured.map((p) => p.name).join(", "));
+    const undone = await app.must("undo_batch", { batch: healed.batch });
+    report.check("its undo puts their injuries back", undone.undone === healed.applied &&
+      JSON.stringify((await injuries()).map((d) => d.injuries)) === JSON.stringify(wereInjured.map((d) => d.injuries)));
+  }
+  const refused = await app.invoke("national_team_action", { uid: team.uid, action: "liftBans" });
+  report.check("Lift bans is a club's only, and refused", !refused.ok && refused.error?.code === "national.action",
+    JSON.stringify(refused.error ?? refused.value));
+
+  // Refresh all in the team's profile, and the Undo on the line under the buttons.
+  const before = await values();
+  const expected = due(before, NATIONAL_ACTIONS.refresh);
+  if (expected === 0) {
+    report.skip("Refresh all in the profile", `${team.name}'s players are all refreshed already`);
+    return;
+  }
+  await showTeams(app, "nationals");
+  await app.waitFor(`${NATIONAL_ROWS}.length > 0`, "the national teams' rows");
+  await app.setInput(`${VIS}(".search input")`, team.code);
+  const row = `${NATIONAL_ROWS}.find((tr) => tr.querySelector(".col-uid")?.textContent.trim() === ${JSON.stringify(String(team.uid))})`;
+  await app.waitFor(row, `the row of ${team.name}`);
+  await app.click(row, `the row of ${team.name}`);
+  await app.waitFor(`${NATIONAL_PROFILE} && ${NATIONAL_PROFILE}.getAttribute("aria-busy") === "false"`, "the team's profile", 30000);
+  const refresh = `[...${NATIONAL_PROFILE}.querySelectorAll(".squad-buttons button")].find((b) => b.textContent === "Refresh all")`;
+  await app.waitFor(`${refresh} && !${refresh}.disabled && !${refresh}.hasAttribute("aria-disabled")`, "Refresh all");
+  await app.click(refresh, "Refresh all");
+  const result = `${NATIONAL_PROFILE}.querySelector(".squad-result")`;
+  const undo = `${result}?.querySelector("button")`;
+  await app.waitFor(`${result}?.textContent.includes("written") && ${undo} && !${undo}.hasAttribute("aria-disabled")`,
+    "the line under the buttons", 30000);
+  const said = await app.js(`${result}.querySelector("p")?.textContent`);
+  report.check("Refresh all in the profile refreshes the squad, and the line under the buttons counts the changes",
+    holds(await values(), before, NATIONAL_ACTIONS.refresh) &&
+      said === `${expected === 1 ? "1 change" : `${expected.toLocaleString("en")} changes`} written`, said);
+  await app.shot("national-actions-refreshed");
+  await app.click(undo, "Undo");
+  await app.waitFor(`${result}?.textContent.includes("Undid")`, "the undo", 30000);
+  const back = await values();
+  report.check("Undo on that line puts every value back",
+    back.every((v, i) => Object.keys(NATIONAL_ACTIONS.refresh).every((f) => v[f] === before[i][f])),
+    await app.js(`${result}.querySelector("p")?.textContent`));
+  await app.setInput(`${VIS}(".search input")`, "");
+  await app.press("Escape");
+  await showTeams(app, "clubs");
 }
 
 /**
