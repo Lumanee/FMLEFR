@@ -338,6 +338,14 @@ changes many at once, and undo.
     the game on Steam: seven staff of a club no human runs and of the human manager's released, a day played, the game
     saved and loaded again, and they stayed without a club (see the [staff notes](recon/fm27-staff.md#releasing-staff)).
     Game Pass and macOS not checked yet.
+  - [x] Move all of a club's staff to another club at once (#170): Move all staff, beside Release all in the club's Staff
+    tab, asks for the club in a dialog that lists who moves and who stays, and why. Each one moves as a move of one
+    does, in his own job and on his contract, the senior team's manager first; a manager or a director of football only
+    into an empty place at the new club. The human manager, the board and player-coaches stay. One batch, which one
+    undo takes back; the probe's `staff-move-all` does the same. Checked in the game on the Mac (Steam): 63 of Real
+    Madrid's 72 staff moved to Barcelona, two days played, the game saved and loaded again: they stayed, and the game
+    let none of Barcelona's own go (see the [staff notes](recon/fm27-staff.md#moving-a-whole-staff)). Windows not
+    checked yet.
   - [x] Sign a free agent: the Transfer dialog, without fee or swap, signs him for a club's senior team
     under a contract the editor makes. The game keeps its contracts in a pool of 200-byte slots, a static of the game
     plugin (one of 279 pools in its data, each chaining its free slots): the editor takes the first free slot as the

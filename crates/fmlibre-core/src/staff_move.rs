@@ -232,6 +232,17 @@ impl Session {
         }
     }
 
+    /// Puts the senior team's manager of `club` first among `members`, the ids of its staff, where he is one of them: a
+    /// move of the whole staff takes him first, so that an empty place for a manager at the new club becomes his, not a
+    /// youth or reserve team's manager's. The rest keep their order, as do all of them where his place cannot be read.
+    pub fn manager_first(&self, club: &ClubSummary, members: &mut [u32]) {
+        if let Ok(Some(manager)) = self.club_manager(club)
+            && let Some(at) = members.iter().position(|&uid| uid == manager)
+        {
+            members[..=at].rotate_right(1);
+        }
+    }
+
     /// The id of the member of staff whose object is at `object`, wherever his person block is (the human manager's
     /// is further on); 0 where it cannot be read.
     fn staff_uid(&self, object: u64) -> u32 {

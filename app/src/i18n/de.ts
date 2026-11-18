@@ -1210,6 +1210,44 @@ export const de: Strings = {
     release: "Alle auflösen",
     releasing: "Verträge werden aufgelöst…",
     cancel: "Abbrechen",
+
+    moveAll: "Alle Mitarbeiter transferieren",
+    moveAllTitle:
+      "Transferiert auf einmal alle Mitarbeiter des Vereins zu einem anderen Verein, außer Ihnen und dem Vorstand; " +
+      "vorher fragt ein Fenster nach",
+    moveNone: "Kein Mitarbeiter dieses Vereins kann transferiert werden",
+    moved: (count, club) =>
+      count === 1
+        ? `1 Mitarbeiter zum Verein ${club} transferiert`
+        : `${format(count)} Mitarbeiter zum Verein ${club} transferiert`,
+    undoMoveTitle: "Holt die transferierten Mitarbeiter mit ihren Verträgen zu diesem Verein zurück",
+    moveTitle: "Alle Mitarbeiter transferieren",
+    moveSearch: "Verein suchen, zu dem die Mitarbeiter wechseln",
+    movePick: "Wählen Sie den Verein, zu dem die Mitarbeiter wechseln.",
+    movePlanning: "Es wird geprüft, wer wechseln kann…",
+    movePlan: (count, club) =>
+      count === 1
+        ? `1 Mitarbeiter wechselt zum Verein ${club}`
+        : `${format(count)} Mitarbeiter wechseln zum Verein ${club}`,
+    moveNobody: (club) => `Kein Mitarbeiter dieses Vereins kann zum Verein ${club} wechseln.`,
+    moveStays: {
+      managerTaken: (club) => `Der Verein ${club} hat schon einen Trainer`,
+      directorTaken: (club) => `Der Verein ${club} hat schon einen Sportdirektor`,
+      yourClub: (club) => `Sie leiten den Verein ${club}`,
+      other: "Nicht transferierbar",
+    },
+    moveDoes: [
+      "Jeder wechselt zum neuen Verein dorthin, wo sein Job ist: in dessen medizinische Abteilung, Trainerstab oder " +
+        "Scoutingabteilung",
+      "Gleiche Aufgabe, gleiches Gehalt und gleiches Vertragsende; jeder Vertrag beginnt mit dem Spieldatum",
+      "Ein Trainer oder Sportdirektor kommt nur dazu, wo der Platz im neuen Verein frei ist; ein hier frei gewordener " +
+        "Platz bleibt leer, damit der Verein ihn besetzt",
+      "Es bleiben: Sie, der Vorstand und alle, die der Editor nicht transferieren kann",
+      "Steht unter Änderungen, wo ein einziges Rückgängig alle zu diesem Verein zurückholt",
+    ],
+    moveHint: "Im Spiel ändert sich nichts, bis Sie auf Alle transferieren klicken.",
+    move: "Alle transferieren",
+    moving: "Mitarbeiter werden transferiert…",
   },
 
   clubList: {

@@ -2025,6 +2025,62 @@ function releaseClubStaff(clubUid: number): MassReport {
   return report;
 }
 
+/**
+ * `plan_club_staff_move`: the fixture club's staff as moving all of them to the club `toUid` would leave them, the
+ * manager first, each with why they stay: as for a release, a place at `toUid` taken, or taken by one of them before.
+ */
+function planClubStaffMove(clubUid: number, toUid: number): ClubStaffRow[] {
+  const from = clubs.find((c) => c.uid === clubUid);
+  const to = clubs.find((c) => c.uid === toUid);
+  if (!from || !to) {
+    throw notFound("club", from ? toUid : clubUid);
+  }
+  if (clubUid === toUid) {
+    throw failure("move.sameClub", "the player is at this club already");
+  }
+  if (from.women !== to.women) {
+    throw failure("move.menAndWomen", "one club is a men's club and the other a women's club");
+  }
+  const members = staff
+    .filter((s) => s.clubUid === clubUid)
+    .sort((a, b) => Number(b.job === MANAGER) - Number(a.job === MANAGER));
+  // Who takes the new club's place for a manager or a director of football, by job.
+  const taken = new Map<number, StaffSummary>();
+  return members.map((member) => {
+    try {
+      planStaffRelease(member.uid);
+      planStaffMove(member.uid, toUid);
+      const job = member.job ?? 0;
+      const first = taken.get(job);
+      if (first) {
+        const [code, what] =
+          job === MANAGER ? ["staff.managerTaken", "a manager"] : ["staff.directorTaken", "a director of football"];
+        const message = `the club has ${what} already (the member of staff with id ${first.uid})`;
+        throw failure(code, message, { uid: first.uid, name: first.name });
+      }
+      if (job === MANAGER || job === DIRECTOR_OF_FOOTBALL) {
+        taken.set(job, member);
+      }
+      return { ...member, stays: null };
+    } catch (e) {
+      // The checks fail the way the real commands do, with a failure.
+      return { ...member, stays: e as Failure };
+    }
+  });
+}
+
+/** `move_club_staff`: every fixture member of staff of the club that the plan moves, moved as one batch. */
+function moveClubStaff(clubUid: number, toUid: number): MassReport {
+  const batch = nextMassId++;
+  const report: MassReport = { batch, applied: 0, failed: [] };
+  for (const row of planClubStaffMove(clubUid, toUid).filter((row) => row.stays === null)) {
+    moveStaff(row.uid, toUid);
+    changes[changes.length - 1].batch = batch;
+    report.applied++;
+  }
+  return report;
+}
+
 function undoChange(id: number): LoggedChange {
   const entry = changes.find((c) => c.id === id);
   if (!entry) {
@@ -4034,6 +4090,10 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return clubStaffRows(Number(args?.club)) as T;
     case "release_club_staff":
       return releaseClubStaff(Number(args?.club)) as T;
+    case "plan_club_staff_move":
+      return planClubStaffMove(Number(args?.club), Number(args?.to)) as T;
+    case "move_club_staff":
+      return moveClubStaff(Number(args?.club), Number(args?.to)) as T;
     case "plan_club_swap":
       return planSwap(Number(args?.uid), Number(args?.other)) as T;
     case "plan_release":
