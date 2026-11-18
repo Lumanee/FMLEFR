@@ -1130,6 +1130,8 @@ const BUILDS: &[&str] = &[
     include_str!("../../../profiles/fm27/steam-26385295-macos-arm64.toml"),
     include_str!("../../../profiles/fm27/steam-26577676-macos-x86_64.toml"),
     include_str!("../../../profiles/fm27/steam-26577676-macos-arm64.toml"),
+    include_str!("../../../profiles/fm27/steam-26620374-macos-x86_64.toml"),
+    include_str!("../../../profiles/fm27/steam-26620374-macos-arm64.toml"),
 ];
 
 /// The built-in object layout for `edition`, if there is one.
@@ -1609,12 +1611,35 @@ mod tests {
             );
         }
 
+        // The update of 17 November 2026 (Steam build 26620374, 27.1.0.2505117): new UUIDs, and every place moved on
+        // with __DATA (0x34000 in the arm64 half, 0x50000 in the Intel one), the date and the retirement manager's
+        // static 0x10 more, the arrays 0x178 and 0x180 more.
+        let uuid = [0x86, 0x9F, 0x5F, 0x90, 0xFD, 0x89, 0x36, 0x06, 0x8A, 0xE4, 0x2B, 0x4A, 0x7F, 0x02, 0xF3, 0x24];
+        let arm = profile_for(PluginFingerprint::MachO { uuid }).expect("the arm64 half of Steam build 26620374");
+        assert_eq!((arm.arrays.players, arm.arrays.staff, arm.arrays.clubs), (0x57A_2FC8, 0x57A_3010, 0x57A_3180));
+        assert_eq!(arm.current_date, Some(0x578_1DC8));
+        assert_eq!(arm.retirement_manager, Some(0x577_82B8));
+        assert_eq!(arm.game_ui, Some(0x577_4B60));
+        assert_eq!((arm.tactics_manager, arm.training_manager), (Some(0x577_8320), Some(0x577_5758)));
+        assert_eq!(arm.tactics_manager, arm.retirement_manager.map(|rva| rva + 0x68));
+        let national = arm.national_teams.expect("the national teams' arrays");
+        assert_eq!((national.men, national.women), (arm.arrays.players + 0xA8, arm.arrays.players + 0xC0));
+        let uuid = [0x86, 0x46, 0x25, 0xAF, 0x9A, 0xA9, 0x32, 0x54, 0x8E, 0xC5, 0x47, 0xE9, 0xD4, 0x86, 0x13, 0x2A];
+        let intel = profile_for(PluginFingerprint::MachO { uuid }).expect("the Intel half of Steam build 26620374");
+        assert_eq!(
+            (intel.arrays.players, intel.arrays.staff, intel.arrays.clubs),
+            (0x5D5_3368, 0x5D5_33B0, 0x5D5_3520)
+        );
+        assert_eq!(intel.current_date, Some(0x5D3_3710));
+        assert_eq!(intel.retirement_manager, intel.current_date.map(|rva| rva - 0x9810));
+        assert_eq!(intel.game_ui, Some(intel.arrays.players + 0x1AE8));
+
         // On Windows the Launch Preview's date sits with the arrays.
         let fingerprint = PluginFingerprint::Pe { size_of_image: 0x19E6_9000, link_timestamp: 0x6ADF_B11C };
         assert_eq!(profile_for(fingerprint).and_then(|profile| profile.current_date), None);
 
-        // The builds of November 2026 on Windows and 27.0.1 on the Mac place the game's own object; on the others the
-        // editor looks for it as far from the players pair as there, or else for a pointer to it.
+        // The builds of November 2026 on Windows and those since 27.0.1 on the Mac place the game's own object; on the
+        // others the editor looks for it as far from the players pair as there, or else for a pointer to it.
         let placed: Vec<String> =
             built_in_profiles().filter(|profile| profile.game_ui.is_some()).map(|profile| profile.name).collect();
         assert_eq!(
@@ -1631,6 +1656,8 @@ mod tests {
                 "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
                 "FM27 Steam build 26577676 (macOS, Intel)",
                 "FM27 Steam build 26577676 (macOS, Apple silicon)",
+                "FM27 Steam build 26620374 (macOS, Intel)",
+                "FM27 Steam build 26620374 (macOS, Apple silicon)",
             ]
         );
     }
@@ -1676,6 +1703,7 @@ mod tests {
                 "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
                 "FM27 Steam build 26577676",
                 "FM27 Steam build 26620374",
+                "FM27 Steam build 26620374 (macOS, Apple silicon)",
             ]
         );
     }
@@ -1690,11 +1718,17 @@ mod tests {
         let tactics = layout.tactics.as_ref().expect("the layout places the tactics");
         // A profile's offsets are its layout's: Windows builds' are layout.toml's, the Mac halves' layout-macos.toml's.
         let windows = |profile: &BuildProfile| matches!(profile.plugin, PluginFingerprint::Pe { .. });
-        let moved: Vec<String> = built_in_profiles()
-            .filter(|profile| !profile.layout.is_empty() && windows(profile))
-            .map(|profile| profile.name)
-            .collect();
-        assert_eq!(moved, ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374"]);
+        let moved = |on_windows: bool| -> Vec<String> {
+            built_in_profiles()
+                .filter(|profile| !profile.layout.is_empty() && windows(profile) == on_windows)
+                .map(|profile| profile.name)
+                .collect()
+        };
+        assert_eq!(moved(true), ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374"]);
+        assert_eq!(
+            moved(false),
+            ["FM27 Steam build 26620374 (macOS, Intel)", "FM27 Steam build 26620374 (macOS, Apple silicon)"]
+        );
         for profile in built_in_profiles() {
             let laid = layout_of(27, &profile.layout).expect("FM27 layout");
             let moved = |section: &str, field: &str| profile.layout.0.get(section).and_then(|fields| fields.get(field));
@@ -1732,6 +1766,15 @@ mod tests {
             assert_eq!(laid.club_finance.corporate, 0x8AD, "{}", profile.name);
             assert_eq!((laid_tactics.tactics, laid_tactics.current), (0x1018, 0x1030), "{}", profile.name);
             assert_eq!((layout.club_finance.corporate, tactics.tactics, tactics.current), (0x8A9, 0x1010, 0x1028));
+        }
+        // On macOS: the Mac halves of the same update, as many bytes past the Mac layout's places.
+        #[cfg(target_os = "macos")]
+        for profile in built_in_profiles().filter(|profile| !profile.layout.is_empty() && !windows(profile)) {
+            let laid = layout_of(27, &profile.layout).expect("FM27 layout");
+            let laid_tactics = laid.tactics.expect("the layout places the tactics");
+            assert_eq!(laid.club_finance.corporate, 0x8AD, "{}", profile.name);
+            assert_eq!((laid_tactics.tactics, laid_tactics.current), (0x1008, 0x1020), "{}", profile.name);
+            assert_eq!((layout.club_finance.corporate, tactics.tactics, tactics.current), (0x8A9, 0x1000, 0x1018));
         }
     }
 
