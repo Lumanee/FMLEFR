@@ -2898,7 +2898,7 @@ export const ko: Strings = {
       "0.5.3": [
         {
           title: "FM27의 11월 17일 업데이트.",
-          text: "Windows에서 Game Pass 0.9.2524.0과 Steam 빌드 26620374를 지원합니다. 업데이트로 위치가 바뀐 구단 재정과 팀이 쓰는 전술을 다시 읽습니다.",
+          text: "Windows와 macOS에서 Game Pass 0.9.2524.0과 Steam 빌드 26620374를 지원합니다. 업데이트로 위치가 바뀐 구단 재정과 팀이 쓰는 전술을 다시 읽습니다.",
         },
         {
           title: "국가대표.",

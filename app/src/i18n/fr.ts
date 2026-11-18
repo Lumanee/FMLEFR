@@ -3076,7 +3076,7 @@ export const fr: Strings = {
       "0.5.3": [
         {
           title: "La mise à jour de FM27 du 17 novembre.",
-          text: "Sous Windows, Game Pass 0.9.2524.0 et le build Steam 26620374 sont des versions connues, et les finances des clubs et la tactique de votre équipe sont de nouveau lues là où la mise à jour les a déplacées.",
+          text: "Sous Windows et macOS, Game Pass 0.9.2524.0 et le build Steam 26620374 sont des versions connues, et les finances des clubs et la tactique de votre équipe sont de nouveau lues là où la mise à jour les a déplacées.",
         },
         {
           title: "Sélections.",

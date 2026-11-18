@@ -3241,7 +3241,7 @@ export const zhCN: Strings = {
       "0.5.3": [
         {
           title: "FM27 11 月 17 日的更新：",
-          text: "在 Windows 上，已支持 Game Pass 0.9.2524.0 和 Steam 构建 26620374；更新后位置改变的俱乐部财务和你的球队使用的战术会重新读取。",
+          text: "在 Windows 和 macOS 上，已支持 Game Pass 0.9.2524.0 和 Steam 构建 26620374；更新后位置改变的俱乐部财务和你的球队使用的战术会重新读取。",
         },
         {
           title: "国家队：",

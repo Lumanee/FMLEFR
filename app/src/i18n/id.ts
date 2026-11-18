@@ -2815,7 +2815,7 @@ export const id: Strings = {
       "0.5.3": [
         {
           title: "Pembaruan FM27 tanggal 17 November.",
-          text: "Di Windows, Game Pass 0.9.2524.0 dan build Steam 26620374 sudah dikenali, dan keuangan klub serta taktik yang dimainkan timmu kembali terbaca di tempat yang dipindahkan pembaruan itu.",
+          text: "Di Windows dan macOS, Game Pass 0.9.2524.0 dan build Steam 26620374 sudah dikenali, dan keuangan klub serta taktik yang dimainkan timmu kembali terbaca di tempat yang dipindahkan pembaruan itu.",
         },
         {
           title: "Tim nasional.",

@@ -3049,7 +3049,7 @@ export const de: Strings = {
       "0.5.3": [
         {
           title: "FM27-Update vom 17. November.",
-          text: "Unter Windows sind Game Pass 0.9.2524.0 und Steam-Build 26620374 bekannte Versionen, und die Finanzen der Vereine und die Taktik Ihrer Mannschaft werden wieder dort gelesen, wohin das Update sie verschoben hat.",
+          text: "Unter Windows und macOS sind Game Pass 0.9.2524.0 und Steam-Build 26620374 bekannte Versionen, und die Finanzen der Vereine und die Taktik Ihrer Mannschaft werden wieder dort gelesen, wohin das Update sie verschoben hat.",
         },
         {
           title: "Nationalteams.",

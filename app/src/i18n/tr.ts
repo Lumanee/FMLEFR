@@ -2892,7 +2892,7 @@ export const tr: Strings = {
       "0.5.3": [
         {
           title: "FM27'nin 17 Kasım güncellemesi.",
-          text: "Windows'ta Game Pass 0.9.2524.0 ve Steam 26620374 sürümleri tanınıyor; güncellemenin yerini değiştirdiği kulüp finansları ve takımınızın oynadığı taktik yeniden okunuyor.",
+          text: "Windows'ta ve macOS'ta Game Pass 0.9.2524.0 ve Steam 26620374 sürümleri tanınıyor; güncellemenin yerini değiştirdiği kulüp finansları ve takımınızın oynadığı taktik yeniden okunuyor.",
         },
         {
           title: "Milli takımlar.",

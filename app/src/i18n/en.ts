@@ -3335,7 +3335,7 @@ export const en = {
       "0.5.3": [
         {
           title: "FM27's update of 17 November.",
-          text: "On Windows, Game Pass 0.9.2524.0 and Steam build 26620374 are known builds, and the clubs' finances and the tactic your team plays are read again where the update moved them.",
+          text: "On Windows and macOS, Game Pass 0.9.2524.0 and Steam build 26620374 are known builds, and the clubs' finances and the tactic your team plays are read again where the update moved them.",
         },
         {
           title: "National teams.",
