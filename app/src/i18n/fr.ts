@@ -1229,6 +1229,39 @@ export const fr: Strings = {
     release: "Tout libérer",
     releasing: "Libération…",
     cancel: "Annuler",
+
+    moveAll: "Transférer tout le staff",
+    moveAllTitle:
+      "Transférer d'un coup tout le staff du club vers un autre club, sauf vous et les dirigeants. Une fenêtre demande " +
+      "d'abord",
+    moveNone: "Personne dans le staff de ce club ne peut être transféré",
+    moved: (count, club) => `${counted(count, "membre du staff transféré", "membres du staff transférés")} vers ${club}`,
+    undoMoveTitle: "Faire revenir à ce club le staff transféré, avec ses contrats",
+    moveTitle: "Transférer tout le staff",
+    moveSearch: "Rechercher le club où transférer le staff",
+    movePick: "Choisissez le club où le staff est transféré.",
+    movePlanning: "Recherche de ceux qui peuvent être transférés…",
+    movePlan: (count, club) =>
+      `${counted(count, "membre du staff est transféré", "membres du staff sont transférés")} vers ${club}`,
+    moveNobody: (club) => `Personne dans le staff de ce club ne peut être transféré vers ${club}.`,
+    moveStays: {
+      managerTaken: (club) => `${club} a déjà un entraîneur`,
+      directorTaken: (club) => `${club} a déjà un directeur sportif`,
+      yourClub: (club) => `Vous dirigez ${club}`,
+      other: "Ne peut être transféré",
+    },
+    moveDoes: [
+      "Chacun rejoint le nouveau club là où se trouve sa fonction\u00a0: son staff médical, ses préparateurs ou ses " +
+        "recruteurs",
+      "Même salaire et même fin de contrat\u00a0; chaque contrat est daté de la date du jeu",
+      "Un entraîneur ou un directeur sportif ne rejoint le club que si la place y est libre\u00a0; une place laissée ici " +
+        "reste vacante, que le club pourvoira",
+      "Restent au club\u00a0: vous, les dirigeants et ceux que l'éditeur ne peut pas transférer",
+      "Apparaît dans Modifications, où une seule annulation les fait tous revenir dans ce club",
+    ],
+    moveHint: "Rien ne change dans le jeu tant que vous n'appuyez pas sur Tout transférer.",
+    move: "Tout transférer",
+    moving: "Transfert…",
   },
 
   clubList: {

@@ -364,6 +364,20 @@ export const clubStaff = (club: number) => call<ClubStaffRow[]>("club_staff", { 
  */
 export const releaseClubStaff = (club: number) => call<MassReport>("release_club_staff", { club });
 
+/**
+ * The staff of the club `club` as moving all of them to the club `to` would leave them, each with why they would stay
+ * (none for one who moves): you, the board, a director of football or a manager whose place at `to` is taken, ...
+ * Nothing is written; refused as a whole for the same club, or a men's and a women's club.
+ */
+export const planClubStaffMove = (club: number, to: number) =>
+  call<ClubStaffRow[]>("plan_club_staff_move", { club, to });
+
+/**
+ * Moves every member of staff of the club that can be moved to the club `to`, each in their own job and on their
+ * contract, logged as one batch, undone with `undoBatch`; `applied` counts them, `failed` the moves the game refused.
+ */
+export const moveClubStaff = (club: number, to: number) => call<MassReport>("move_club_staff", { club, to });
+
 /** The jobs `changeStaffJob` gives, and a move or signing of staff can, by contract code. */
 export const staffJobs = () => call<number[]>("staff_jobs");
 

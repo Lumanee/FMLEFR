@@ -1,7 +1,8 @@
 # Checks every pull request, and every push to main, on Windows and macOS: the interface builds, the Rust code is
 # formatted, clippy has no warnings and the tests pass. These are the checks CONTRIBUTING.md asks for, so a
 # contributor sees them pass or fail on the pull request itself. They need no game and no secrets, so they run on
-# pull requests from forks too. Building the installers is release.yml's job.
+# pull requests from forks too. Building the installers is release.yml's job; it drafts a release only once these
+# checks have passed for the tagged commit, and finds them by this file's name.
 name: CI
 
 on:

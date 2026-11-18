@@ -1166,6 +1166,49 @@ export const en = {
     release: "Release all",
     releasing: "Releasing…",
     cancel: "Cancel",
+
+    // Moving the whole staff to another club: a button beside Release all staff, and a dialog that asks for the club
+    moveAll: "Move all staff",
+    moveAllTitle:
+      "Move every member of the club's staff to another club at once, but you and the board; a dialog asks first",
+    /** Hover text of Move all staff while none of the club's staff can be moved. */
+    moveNone: "None of this club's staff can be moved",
+    /** What Move all did, under the button; `count` is how many moved, `club` the club they joined. */
+    moved: (count: number, club: string) =>
+      count === 1 ? `1 member of staff moved to ${club}` : `${format(count)} members of staff moved to ${club}`,
+    undoMoveTitle: "Bring the moved staff back to this club, on their contracts",
+    moveTitle: "Move all staff",
+    /** The name of the search box for the club the staff move to, for assistive technology. */
+    moveSearch: "Search for the club the staff move to",
+    /** The line under the club in the dialog: before a club is picked, while the move is worked out, and then. */
+    movePick: "Choose the club the staff move to.",
+    movePlanning: "Working out who can move…",
+    movePlan: (count: number, club: string) =>
+      count === 1 ? `1 member of staff moves to ${club}` : `${format(count)} members of staff move to ${club}`,
+    moveNobody: (club: string) => `None of this club's staff can move to ${club}.`,
+    /**
+     * Why one stays when the rest move, short, beyond the reasons a release has (see `stays`); `club` is the club they
+     * move to. The hover text has the game's answer in full.
+     */
+    moveStays: {
+      managerTaken: (club: string) => `${club} has a manager`,
+      directorTaken: (club: string) => `${club} has a director of football`,
+      yourClub: (club: string) => `You manage ${club}`,
+      other: "Cannot be moved",
+    },
+    /** What the move does to each one, one line each. */
+    moveDoes: [
+      "Each one joins the new club where the job is: its medical, coaching or scouting department",
+      "Same job, wage and contract end; each contract is dated from the game's date",
+      "A manager or a director of football joins only where the new club's place is empty; a place left here stays " +
+        "empty, for the club to fill",
+      "You, the board and those the editor cannot move stay",
+      "Listed under Changes, where one undo brings them all back to this club",
+    ],
+    /** In the dialog's foot: nothing changes in the game until Move all. */
+    moveHint: "Nothing changes in the game until you press Move all.",
+    move: "Move all",
+    moving: "Moving…",
   },
 
   /** The club list, with the sidebar entry and the status-line count that go with it. */

@@ -1183,6 +1183,43 @@ export const it: Strings = {
     release: "Svincola tutti",
     releasing: "Svincolo…",
     cancel: "Annulla",
+
+    moveAll: "Trasferisci tutto lo staff",
+    moveAllTitle:
+      "Trasferisce in una volta tutto lo staff della società in un'altra società, tranne te e la dirigenza; prima lo " +
+      "chiede una finestra",
+    moveNone: "Nessuno dello staff di questa società può essere trasferito",
+    moved: (count, club) =>
+      count === 1
+        ? `1 membro dello staff trasferito alla società ${club}`
+        : `${format(count)} membri dello staff trasferiti alla società ${club}`,
+    undoMoveTitle: "Riporta a questa società lo staff trasferito, con i suoi contratti",
+    moveTitle: "Trasferisci tutto lo staff",
+    moveSearch: "Cerca la società in cui trasferire lo staff",
+    movePick: "Scegli la società in cui viene trasferito lo staff.",
+    movePlanning: "Verifica di chi può essere trasferito…",
+    movePlan: (count, club) =>
+      count === 1
+        ? `1 membro dello staff passa alla società ${club}`
+        : `${format(count)} membri dello staff passano alla società ${club}`,
+    moveNobody: (club) => `Nessuno dello staff di questa società può passare alla società ${club}.`,
+    moveStays: {
+      managerTaken: (club) => `La società ${club} ha già un allenatore`,
+      directorTaken: (club) => `La società ${club} ha già un direttore sportivo`,
+      yourClub: (club) => `Guidi la società ${club}`,
+      other: "Non trasferibile",
+    },
+    moveDoes: [
+      "Ognuno entra nella nuova società dove c'è il suo ruolo: nello staff medico, tecnico o degli osservatori",
+      "Stesso stipendio e stessa scadenza; ogni contratto è datato dalla data del gioco",
+      "Un allenatore o un direttore sportivo entra solo dove il posto nella nuova società è libero; un posto lasciato " +
+        "qui resta vuoto, che la società riempirà",
+      "Restano tu, la dirigenza e chi l'editor non può trasferire",
+      "Compare in Modifiche, dove un solo annullamento li riporta tutti in questa società",
+    ],
+    moveHint: "Nel gioco non cambia nulla finché non premi Trasferisci tutti.",
+    move: "Trasferisci tutti",
+    moving: "Trasferimento…",
   },
 
   clubList: {

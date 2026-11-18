@@ -1117,6 +1117,36 @@ export const tr: Strings = {
     release: "Hepsini serbest bırak",
     releasing: "Serbest bırakılıyor…",
     cancel: "İptal",
+
+    moveAll: "Tüm personeli taşı",
+    moveAllTitle:
+      "Siz ve yönetim dışında kulübün bütün personelini bir kerede başka bir kulübe taşı; önce bir pencere sorar",
+    moveNone: "Bu kulübün personelinden taşınabilecek kimse yok",
+    moved: (count, club) => `${format(count)} personel ${club} kulübüne taşındı`,
+    undoMoveTitle: "Taşınan personeli sözleşmeleriyle bu kulübe geri getir",
+    moveTitle: "Tüm personeli taşı",
+    moveSearch: "Personelin taşınacağı kulübü ara",
+    movePick: "Personelin taşınacağı kulübü seçin.",
+    movePlanning: "Kimlerin taşınabileceğine bakılıyor…",
+    movePlan: (count, club) => `${format(count)} personel ${club} kulübüne taşınır`,
+    moveNobody: (club) => `Bu kulübün personelinden ${club} kulübüne taşınabilecek kimse yok.`,
+    moveStays: {
+      managerTaken: (club) => `${club} kulübünün teknik direktörü var`,
+      directorTaken: (club) => `${club} kulübünün futbol direktörü var`,
+      yourClub: (club) => `${club} kulübünü siz yönetiyorsunuz`,
+      other: "Taşınamaz",
+    },
+    moveDoes: [
+      "Her biri yeni kulübe görevinin olduğu yerde katılır: sağlık, antrenörlük ya da gözlem bölümüne",
+      "Görevi, maaşı ve sözleşme bitişi aynı kalır; her sözleşme oyundaki tarihle başlar",
+      "Teknik direktör ya da futbol direktörü yalnızca yeni kulüpteki yeri boşsa katılır; burada boşalan yer, kulüp " +
+        "doldursun diye boş kalır",
+      "Siz, yönetim ve editörün taşıyamadıkları kalır",
+      "Değişiklikler bölümünde listelenir; tek geri alma hepsini bu kulübe geri getirir",
+    ],
+    moveHint: "Hepsini taşı düğmesine basana kadar oyunda hiçbir şey değişmez.",
+    move: "Hepsini taşı",
+    moving: "Taşınıyor…",
   },
 
   clubList: {
