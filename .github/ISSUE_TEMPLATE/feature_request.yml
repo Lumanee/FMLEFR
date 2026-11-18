@@ -14,3 +14,8 @@ body:
     attributes:
       label: Why it helps
       description: What you are trying to do in your save.
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: The screen in FM that shows it, if you have one. Drag the image here.
