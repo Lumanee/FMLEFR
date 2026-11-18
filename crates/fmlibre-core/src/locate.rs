@@ -317,8 +317,15 @@ mod tests {
         let near = |guesses: &[u64], rva: u64| guesses.iter().any(|guess| guess.abs_diff(rva) <= NEAR_GUESS);
         // Each build whose date is a variable of its own has it near one of the places the other builds guess for it,
         // where another of its storefront has such a variable. On macOS that is a guess from a build of the same
-        // half: the Intel and the Apple silicon half each keep the date at a distance of their own.
+        // half: the Intel and the Apple silicon half each keep the date at a distance of their own. The update of 17
+        // November 2026 moved it about 0x1490 nearer the players pair, out of reach of every guess from the builds
+        // before (0x14A0 on Game Pass 0.9.2524.0, 0x1480 on Steam build 26620374): there the search found it, the one
+        // date that fits best on a save of 18 January 2028, and the only one but the field beside the arrays on a save
+        // of 14 October 2026. Their profiles guess the next builds' dates.
         let kind = |profile: &BuildProfile| std::mem::discriminant(&profile.plugin);
+        let beyond_the_guesses = |profile: &BuildProfile| {
+            profile.package_version.as_deref() == Some("0.9.2524.0") || profile.name == "FM27 Steam build 26620374"
+        };
         for profile in profiles.iter().filter(|profile| profile.current_date.is_some()) {
             let date = profile.current_date.expect("a date");
             let siblings = profiles.iter().any(|other| {
@@ -328,7 +335,8 @@ mod tests {
                     && other.current_date.is_some()
             });
             if siblings {
-                assert!(near(&guesses_for(profile), date), "{}: {date:#x}", profile.name);
+                let guessed = near(&guesses_for(profile), date);
+                assert_eq!(guessed, !beyond_the_guesses(profile), "{}: {date:#x}", profile.name);
             }
         }
         // The value the game keeps for the day before, on Game Pass, is far from every guess.

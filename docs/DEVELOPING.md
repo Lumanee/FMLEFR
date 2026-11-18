@@ -84,11 +84,12 @@ of their `(begin, end)` pairs); how a container reads is the layout's `[national
 `[national_teams]`, or whose arrays do not read as the game's (a container must point at a nation that points back at
 it, with the kind it is in; nearly all of them must), shows a note saying why in place of the list, and reads nothing
 else. The profiles that name them:
-Game Pass 0.9.2435.0 and Steam build 26577676 on Windows, and Steam build 26385295 on macOS, Apple silicon. For another
-build, find the two arrays as the recon note says (`fmlibre-probe instances db::NATION` leads to the nations, which
-point at the containers; the arrays are the two pairs of pointers to them that sit next to the clubs' array: on each of
-those builds 0xA8 and 0xC0 past the players' pair, which `fmlibre-probe column game_plugin.dll+<RVA> 0x0C` shows as 251
-UIDs each) and add them; the unit test `only_the_builds_read_place_the_national_teams` lists the builds that have them.
+Game Pass 0.9.2435.0 and 0.9.2524.0 and Steam builds 26577676 and 26620374 on Windows, and Steam builds 26385295 and
+26620374 on macOS, Apple silicon. For another build, find the two arrays as the recon note says (`fmlibre-probe instances
+db::NATION` leads to the nations, which point at the containers; the arrays are the two pairs of pointers to them that
+sit next to the clubs' array: on each of those builds 0xA8 and 0xC0 past the players' pair, which
+`fmlibre-probe column game_plugin.dll+<RVA> 0x0C` shows as 251 UIDs each) and add them; the unit test
+`only_the_builds_read_place_the_national_teams` lists the builds that have them.
 
 Each container lists the senior team and the youth teams, laid out as a club's teams (`[team]`). A national team's
 profile reads them all (`Session::national_sides`) and edits each one's reputation: `reputation` is the senior team's,
@@ -155,6 +156,21 @@ Each check was tried against a layout broken on purpose (a field group moved by 
 such layout failed its check. A layout that changed is not found again automatically: its checks keep what they cover
 read-only until `profiles/fm27/layout.toml` is fixed.
 
+Some of what the layout places has no check of its own, and a change there only leaves something unread. The update
+of 17 November 2026 made two such changes:
+- The club finance record moved corporate facilities from 0x8A9 to 0x8AD. The full record is told from the smaller one
+  of the clubs outside the leagues being played by values that look real (`finances_look_real` in `clubs.rs`), so no
+  club's finances were read.
+- A team's tactics moved the list of tactics from 0x1010 to 0x1018 and the index of the one in use from 0x1028 to
+  0x1030, so no tactic was found in use, and the players' familiarity with it was not read (nor Max tactics offered).
+
+The Mac halves of Steam build 26620374 made the same two changes on the Mac layout's places: corporate facilities from
+0x8A9 to 0x8AD, and the tactics from 0x1000 and 0x1018 to 0x1008 and 0x1020.
+
+As the builds before keep the old places, the layout keeps them, and the profiles of the builds since say where theirs
+are, in `[layout.<section>]` tables: a session reads its build's layout with those fields in place of the layout's
+(`layout_of`). The smoke tests `clubs` (finances) and `tactics` notice either change.
+
 #### On the day of an update
 
 1. Load a save in the updated game. If the probe finds values that read as two dates a day apart (the value the
@@ -163,7 +179,16 @@ read-only until `profiles/fm27/layout.toml` is fixed.
 2. `fmlibre-probe profile --out profiles/fm27/<storefront>-<version>.toml` looks for everything as for a build
    without a profile, runs the checks with what it found, and writes the profile. It lists the values that read as a
    plausible date, and whether the guessed and the searched places of the retirement manager and of the game object
-   agree.
+   agree. It does not look for the tactics and training managers, the national teams' arrays or what the build lays
+   out otherwise (it keeps those of the built-in profile, where there is one; for a new build, find them as their
+   notes in the other profiles say), but it says whether the class of the full finance record is found: where the
+   game keeps finances for the clubs of the leagues being played and it is not, the record moved. Compare a club's
+   record (the pointer at +0x150 of the object `fmlibre-probe club UID` names, dumped with `fmlibre-probe dump`) with
+   what the build before read for the same club (an export of the clubs, `fmlibre-probe clubs --export`), and put
+   what moved under the profile's `[layout.club_finance]`; `fmlibre-probe fields club --stats` then finds the class.
+   Likewise, where `fmlibre-probe training-history <the human manager's club>` finds no tactic in use, follow the
+   tactics manager's map to the team's tactics as `[tactics]` in layout.toml describes it, and put what moved under
+   `[layout.tactics]`.
 3. Add the file to `BUILDS` in `crates/fmlibre-core/src/profile.rs`; a unit test fails until it is there.
    A club's finances show no league prize money on the new build, and cannot change it, until someone has checked
    that `fmlibre-probe prizes` lists the amounts the game's Rules pages show, and added `prize_money = true` to the
