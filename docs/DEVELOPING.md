@@ -329,16 +329,17 @@ with the same quoting, separator and byte order mark as the lists.
    time it starts after it was updated to that version; a language without the version shows
    it in English, and a version with no notes shows nothing.
 2. **Tag it and push the tag:** `git tag v0.1.0` and `git push origin v0.1.0`.
-3. **The `Release` workflow** (`.github/workflows/release.yml`) runs the checks and builds,
-   on GitHub's Windows and macOS machines:
+3. **The `Release` workflow** (`.github/workflows/release.yml`) builds, on GitHub's Windows
+   and macOS machines:
    - `FMLibreEditor-Setup.exe`, a per-user NSIS installer in English, Turkish, Spanish, German,
      French, Italian, Japanese, Korean and Russian;
    - `FMLibreEditor-portable.zip`;
    - `FMLibreEditor-macOS.zip`, the universal app with the bridge and its launcher;
    - `FMLibreEditor-macOS.app.tar.gz`, the same app, which installed macOS apps update from.
 
-   It opens a **draft** release with these files, `latest.json` and
-   `docs/release-notes.md` as its text.
+   Once CI has passed for the tagged commit (the checks are CI's, and are not run again), it
+   opens a **draft** release with these files, `latest.json` and `docs/release-notes.md` as its
+   text. The version bump's pull request builds none of them; the tag does.
 4. **Write what is new in the draft and publish it.** From then on, installed Windows copies
    and macOS apps of a version with the updater (any after 0.4.1) offer **Update** in their
    notice.
