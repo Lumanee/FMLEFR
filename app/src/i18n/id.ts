@@ -2812,6 +2812,24 @@ export const id: Strings = {
     link: "Yang baru",
     command: "Yang baru di versi ini",
     versions: {
+      "0.5.3": [
+        {
+          title: "Pembaruan FM27 tanggal 17 November.",
+          text: "Di Windows, Game Pass 0.9.2524.0 dan build Steam 26620374 sudah dikenali, dan keuangan klub serta taktik yang dimainkan timmu kembali terbaca di tempat yang dipindahkan pembaruan itu.",
+        },
+        {
+          title: "Tim nasional.",
+          text: "Sakelar di atas daftar klub menampilkan tim nasional putra dan putri setiap negara: skuad sebuah tim, tim mudanya (U-21, U-20, dan lainnya) beserta skuadnya, dan reputasi masing-masing, yang bisa kamu ubah.",
+        },
+        {
+          title: "Hadiah uang liga.",
+          text: "Ringkasan sebuah klub menampilkan berapa yang dibayar liganya musim ini, menurut posisi akhir dan per pertandingan, dan jumlahnya bisa diubah untuk semua klub di liga itu sampai musim berakhir.",
+        },
+        {
+          title: "Perbaikan.",
+          text: "Save yang pemain mudanya lahir setelah 2020 tidak lagi gagal dalam pemeriksaan yang dilakukan editor sebelum menulis.",
+        },
+      ],
       "0.5.2": [
         {
           title: "Klubku.",
