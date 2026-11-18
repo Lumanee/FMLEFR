@@ -189,6 +189,15 @@ that one of them takes to him alone: those after him for it stay, as the batch w
 **Refused as a whole**: the club itself (`move.sameClub`), and a men's club's staff for a women's club or the other way
 round (`move.menAndWomen`); the dialog's search offers neither.
 
+**In the game** (Mac, Steam 26620374, a save of 14 July 2027 whose human manager runs Arsenal; with the probe, not
+undone): Real Madrid's staff moved to Barcelona, 63 of its 72. José Mourinho and Álvaro, the under-19s' manager, stayed
+(`staff.managerTaken`: Barcelona has Hans-Dieter Flick), and so did the board (`staff.job`); Barcelona's 58 staff became
+121, its department lists grown several times. Real Madrid's All Staff screen showed the change at once: those who
+stayed, and the staff of R. Madrid B and R. Madrid C, which the game keeps as clubs of their own, so a move of Real
+Madrid's staff leaves theirs where they are. Two days played, a save under another name and its load: the user found
+nothing wrong, the 63 were still at Barcelona in the same jobs, the game had let none of Barcelona's staff go, and both
+clubs kept their managers.
+
 ## In the game
 
 The game shows doctors only in a club's Staff screen: their profiles do not open and the search does not find them,
