@@ -3549,6 +3549,15 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
 
     println!("Checks with what was found:");
     print_checks(&health);
+    // Not one of the checks: a finance record laid out otherwise leaves only the finances unread, which is easy to miss.
+    match session.finance_class() {
+        Some(_) => println!("Club finances: the class of the full finance record is found."),
+        None => println!(
+            "Club finances: no class of the full finance record is found, so no club's finances are read; where the \
+             game keeps finances for the clubs of the leagues being played, the record has moved (see `fields club \
+             --stats` and DEVELOPING.md)."
+        ),
+    }
 
     let edition = session.layout.edition;
     let game = &session.game;
@@ -3578,6 +3587,9 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         prize_money: session.profile.as_ref().is_some_and(|profile| profile.prize_money),
         sponsorships: session.profile.as_ref().is_some_and(|profile| profile.sponsorships),
         national_teams: session.profile.as_ref().and_then(|profile| profile.national_teams),
+        // What the build lays out otherwise (the finances: `fields club --stats` says whether their class is found; a
+        // team's tactics: `training-history` finds the one in use), not looked for: kept from the built-in profile.
+        layout: session.profile.as_ref().map(|profile| profile.layout.clone()).unwrap_or_default(),
     };
 
     let failed = health.failed();
@@ -3617,11 +3629,16 @@ fn profile(session: &Session, out: Option<&Path>) -> Result<()> {
         ];
     }
     if let (Some(place), Some(game)) = (game_ui, &session.layout.game) {
-        let before = players.pair_rva.wrapping_sub(place.rva);
+        // Since the update of 17 November 2026 it sits after the players pair.
+        let from_players = if place.rva <= players.pair_rva {
+            format!("{:#X} before the players pair", players.pair_rva - place.rva)
+        } else {
+            format!("{:#X} after the players pair", place.rva - players.pair_rva)
+        };
         notes.game_ui = vec![
             format!("The static pointer to the game's own object ({}), whose count of saves loaded", game.class),
             format!(
-                "tells a load from a save: {before:#X} before the players pair{}.",
+                "tells a load from a save: {from_players}{}.",
                 session.loads().map_or_else(String::new, |loads| format!("; {loads} loaded when it was found"))
             ),
         ];

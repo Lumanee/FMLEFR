@@ -3065,6 +3065,24 @@ export const de: Strings = {
     link: "Neuigkeiten",
     command: "Neu in dieser Version",
     versions: {
+      "0.5.3": [
+        {
+          title: "FM27-Update vom 17. November.",
+          text: "Unter Windows und macOS sind Game Pass 0.9.2524.0 und Steam-Build 26620374 bekannte Versionen, und die Finanzen der Vereine und die Taktik Ihrer Mannschaft werden wieder dort gelesen, wohin das Update sie verschoben hat.",
+        },
+        {
+          title: "Nationalteams.",
+          text: "Der Schalter über der Vereinsliste zeigt die Männer- und Frauen-Nationalteams aller Nationen: den Kader einer Mannschaft, ihre Jugendmannschaften (U21, U20 und die anderen) mit deren Kadern und das Ansehen jeder Mannschaft, das Sie bearbeiten können.",
+        },
+        {
+          title: "Preisgeld der Liga.",
+          text: "Die Übersicht eines Vereins zeigt, was seine Liga in dieser Saison nach Abschlussplatz und pro Spiel zahlt, und die Beträge lassen sich bis zum Saisonende für jeden Verein der Liga ändern.",
+        },
+        {
+          title: "Korrektur.",
+          text: "Ein Spielstand, dessen Jugendspieler nach 2020 geboren sind, scheitert nicht mehr an der Prüfung, die der Editor vor dem Schreiben macht.",
+        },
+      ],
       "0.5.2": [
         {
           title: "Mein Verein.",

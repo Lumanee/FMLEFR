@@ -99,9 +99,9 @@ pub use prize_money::{
     PrizeReadError, PrizeStage, PrizeUnavailable, StagePrizes, competition_prizes,
 };
 pub use profile::{
-    ArrayRvas, BuildProfile, ContractLayout, GameLayout, Layout, PlayerLayout, PluginFingerprint, ProfileNotes,
-    SelectionLayout, StaffLayout, TacticLayout, TacticsLayout, built_in_profiles, layout_for, profile_for,
-    profile_text,
+    ArrayRvas, BuildProfile, ContractLayout, GameLayout, Layout, LayoutOverrides, PlayerLayout, PluginFingerprint,
+    ProfileNotes, SelectionLayout, StaffLayout, TacticLayout, TacticsLayout, built_in_profiles, layout_for, layout_of,
+    profile_for, profile_text,
 };
 pub use relations::{HOMEGROWN_RULES, Relation, RelationPlan, RelationSet, Tie, TieTarget};
 pub use retirement::{PlannedRetirement, RetirementPlan, RetirementSet};

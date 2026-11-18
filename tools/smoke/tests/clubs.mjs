@@ -1,8 +1,11 @@
-// The club list's filters: the nation a club is from, the league its first team plays in this season and its
-// reputation. The best known clubs have a nation and a league (where the layout misplaced them they would have none);
-// each filter keeps to what it asks, through the commands and in the list; a mass edit plans for the clubs the list
-// shows. Writes nothing: the mass edit is only planned.
+// The clubs' finances and the club list's filters. The clubs of the leagues being played keep their finances, which
+// look real and read as the probe reads them (a finance record laid out otherwise leaves every club's finances unread,
+// and no check before a write fails for it). The filters: the nation a club is from, the league its first team plays
+// in this season and its reputation. The best known clubs have a nation and a league (where the layout misplaced them
+// they would have none); each filter keeps to what it asks, through the commands and in the list; a mass edit plans
+// for the clubs the list shows. Writes nothing: the mass edit is only planned.
 import { SHOWN, VIS } from "../lib/app.mjs";
+import { humanClubs } from "../lib/witness.mjs";
 
 export const name = "clubs";
 export const writes = false;
@@ -16,7 +19,42 @@ const fold = (text) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase(
 const BAR = `${VIS}(".club-filter-bar")`;
 const ROWS = `[...document.querySelectorAll(".club-grid tbody tr")].filter(${SHOWN})`;
 
-export async function run({ app, report }) {
+/**
+ * The finances of the user's clubs and of the best known men's clubs: those of the leagues being played keep them.
+ * The update of 17 November 2026 moved corporate facilities in the finance record, after which no club's finances
+ * were read on the new builds until their profiles said where.
+ */
+async function finances({ app, report, probe }) {
+  const human = await humanClubs(app);
+  const best = (await app.must("search_clubs", { query: "", limit: 40, filter: { women: false } })).rows;
+  const uids = [...new Set([...human, ...best.map((club) => club.uid)])];
+  const details = [];
+  for (const uid of uids) details.push(await app.must("club_details", { uid }));
+  const kept = details.filter((club) => club.finances !== null);
+  report.check("clubs of the leagues being played keep their finances", kept.length > 0,
+    `${kept.length} of ${uids.length}: ${kept.slice(0, 4).map((club) => club.name).join(", ")}`);
+  const mine = details.filter((club) => human.includes(club.uid));
+  if (mine.length > 0) {
+    report.check("the user's club keeps its finances", mine.every((club) => club.finances !== null),
+      mine.map((club) => `${club.name}: ${club.finances ? "kept" : "none"}`).join(", "));
+  }
+  if (kept.length === 0) return;
+  const real = kept.filter(({ finances: f, facilities }) =>
+    facilities.corporate >= 1 && facilities.corporate <= 20 && f.ticketPrice >= 1 && f.ticketPrice <= 1000 &&
+      f.transferBudget >= -1 && f.wageBudget >= 0 && f.totalWageBudget >= 0);
+  report.check("their corporate facilities, budgets and ticket prices look real", real.length === kept.length,
+    `${real.length} of ${kept.length}`);
+  const [club] = kept;
+  const fields = ["finance.balance", "finance.transfer_budget", "finance.wage_budget", "facilities.corporate"];
+  const seen = probe.get("club", club.uid, fields);
+  const shown = [club.finances.balance, club.finances.transferBudget, club.finances.wageBudget, club.facilities.corporate];
+  report.check(`the probe reads ${club.name}'s finances as the app does`,
+    fields.every((field, at) => seen[field] === shown[at]), JSON.stringify(seen));
+}
+
+export async function run({ app, report, probe }) {
+  await finances({ app, report, probe });
+
   // The best known men's clubs all have a nation, and nearly all a league this season, of a nation.
   const top = (await app.must("search_clubs", { query: "", limit: 200, filter: { women: false } })).rows;
   const withNation = top.filter((club) => club.nation && club.nationUid != null).length;
