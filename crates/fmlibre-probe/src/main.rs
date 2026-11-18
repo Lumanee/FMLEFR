@@ -429,6 +429,21 @@ enum Command {
         #[arg(long)]
         restore: bool,
     },
+    /// Move a club's whole staff to another club in the running game, as the app's Move all staff does: the senior
+    /// team's manager first, then the rest, each in his own job and on his contract, worked out from the game as the one
+    /// before left it; one refused stays, and is said.
+    StaffMoveAll {
+        /// The UID of the club whose staff move.
+        club: u32,
+        /// The UID of the club they join.
+        to: u32,
+        /// Move them back afterwards, the last one first, and check it: tests the move without changing the save.
+        #[arg(long)]
+        restore: bool,
+        /// With --restore, how many seconds to wait before moving them back, to look at the game meanwhile.
+        #[arg(long, default_value_t = 0)]
+        hold: u64,
+    },
     /// Give a member of staff another job at his club in the running game (a job code, see `staff`).
     StaffJob {
         /// The member of staff's id.
@@ -1228,6 +1243,7 @@ fn run(cli: Cli) -> Result<()> {
                 | Command::Release { .. }
                 | Command::StaffRelease { .. }
                 | Command::StaffMove { .. }
+                | Command::StaffMoveAll { .. }
                 | Command::StaffJob { .. }
                 | Command::StaffSign { .. }
                 | Command::Swap { .. }
@@ -1376,6 +1392,9 @@ fn run(cli: Cli) -> Result<()> {
         }
         Command::StaffMove { id, club, job, restore } => {
             staff_change(&connect(process, ArraySource::ProfileFirst)?, id, StaffAction::Move(club, job), restore)
+        }
+        Command::StaffMoveAll { club, to, restore, hold } => {
+            staff_move_all(&connect(process, ArraySource::ProfileFirst)?, club, to, restore.then_some(hold))
         }
         Command::StaffSign { id, club, job, wage, expires, restore } => {
             let terms = MoveTerms { wage, expires: expires.map(FmDate::to_number) };
@@ -5494,6 +5513,68 @@ fn staff_release(session: &Session, ids: &[u32], restore_after: Option<u64>) -> 
         for change in &done {
             let back = read.iter().find(|s| s.uid == change.member).and_then(|s| s.club_uid);
             ensure!(back == Some(change.from_club), "member of staff {} is not back at his club", change.member);
+        }
+    }
+    Ok(())
+}
+
+/// Moves the whole staff of the club `from` to the club `to`, one after another in the order the app's Move all staff
+/// takes them (the senior team's manager first), each in his own job and planned from the game as the one before left
+/// it; one refused is said and stays. With `restore_after`, waits that many seconds and moves them back, the last one
+/// first, as an undo of the batch does.
+fn staff_move_all(session: &Session, from: u32, to: u32, restore_after: Option<u64>) -> Result<()> {
+    let all = session.staff()?;
+    let clubs = ClubIndex::new(session.clubs()?);
+    let club = |uid: u32| clubs.get(uid).with_context(|| format!("no club with UID {uid}"));
+    let (source, joining) = (club(from)?, club(to)?);
+    ensure!(from != to, "the staff are at {} already", source.name);
+    let job = |code: u8| job_name(code).map_or_else(|| format!("job {code}"), str::to_owned);
+    let mut ids: Vec<u32> = all.iter().filter(|s| s.club_uid == Some(from)).map(|s| s.uid).collect();
+    session.manager_first(source, &mut ids);
+    let staff = StaffIndex::new(all);
+    println!("{} staff of {} to {}", ids.len(), source.name, joining.name);
+    let mut done = Vec::new();
+    for id in ids {
+        let member = staff.get(id).with_context(|| format!("no member of staff with id {id}"))?;
+        match session.plan_staff_move(member, joining, None).and_then(|plan| session.apply_staff_plan(&plan)) {
+            Ok(change) => {
+                let grew = if change.grew { " (a department list grown)" } else { "" };
+                println!("{} (id {id}), {}: moved{grew}", member.name, job(change.job.0));
+                done.push(change);
+            }
+            Err(err) => println!("{} (id {id}): stays: {err}", member.name),
+        }
+    }
+    // Read them again as the lists would.
+    let count = |label: &str| -> Result<()> {
+        let read = session.staff()?;
+        let at = |uid: u32| read.iter().filter(|s| s.club_uid == Some(uid)).count();
+        let moved = done.iter().filter(|c| read.iter().any(|s| s.uid == c.member && s.club_uid == Some(to))).count();
+        println!(
+            "  {label}: {} staff at {}, {} at {}; {moved} of the {} moved at {}",
+            at(from),
+            source.name,
+            at(to),
+            joining.name,
+            done.len(),
+            joining.name
+        );
+        Ok(())
+    };
+    count("now")?;
+    if let Some(hold) = restore_after {
+        if hold > 0 {
+            println!("  moving them back in {hold} s");
+            std::thread::sleep(std::time::Duration::from_secs(hold));
+        }
+        for change in done.iter().rev() {
+            session.undo_staff_change(change)?;
+        }
+        count("back")?;
+        let read = session.staff()?;
+        for change in &done {
+            let back = read.iter().find(|s| s.uid == change.member).and_then(|s| s.club_uid);
+            ensure!(back == Some(from), "member of staff {} is not back at {}", change.member, source.name);
         }
     }
     Ok(())

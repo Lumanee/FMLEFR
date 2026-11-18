@@ -144,13 +144,13 @@ function roleOf(team: ClubTeam, uid: number): CaptainRole | null {
 const ROLE_FIELD: Record<CaptainRole, string> = { captain: "captain", viceCaptain: "vice_captain" };
 
 /** Takes back what a result says was written. */
-type Undo = () => Promise<BatchUndo>;
+export type Undo = () => Promise<BatchUndo>;
 
 /**
  * What an action, a captaincy or an undo came to, for the line under the buttons. It is shown under the team it was
  * made to only.
  */
-interface Result {
+export interface Result {
   /** The team's place in the club's list (see `ClubTeam.index`). */
   team: number;
   message: string;
@@ -166,7 +166,7 @@ interface Result {
 const PROBLEMS_SHOWN = 5;
 
 /** The changes of a team action the game refused: whose and why; the first few, then how many more. */
-function refusalLines(failed: MassReport["failed"]): string[] {
+export function refusalLines(failed: MassReport["failed"]): string[] {
   const lines = failed.slice(0, PROBLEMS_SHOWN).map(({ name, error }) => text.refused(name, describeError(error)));
   return failed.length > PROBLEMS_SHOWN ? [...lines, massEditText.more(failed.length - PROBLEMS_SHOWN)] : lines;
 }
@@ -703,7 +703,7 @@ interface ActionButtonProps {
  * One of the actions on the team. While a write is under way it is only dimmed (aria-disabled): a disabled button loses
  * focus.
  */
-function ActionButton({ label, title, waiting, busy, onPress }: ActionButtonProps) {
+export function ActionButton({ label, title, waiting, busy, onPress }: ActionButtonProps) {
   return (
     <button
       type="button"
@@ -732,7 +732,7 @@ interface ResultLineProps {
  * What the last write came to, with the button that takes it back and what the game refused. A live region that is
  * always there, so that it is read out when it fills; it takes no room while it is empty.
  */
-function ResultLine({ result, busy, onUndo, ref }: ResultLineProps) {
+export function ResultLine({ result, busy, onUndo, ref }: ResultLineProps) {
   return (
     <div ref={ref} className="squad-result" role="status" tabIndex={-1}>
       {result && (

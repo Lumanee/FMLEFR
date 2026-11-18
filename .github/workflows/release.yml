@@ -1,11 +1,13 @@
 # Builds the Windows installer, the portable zip and the macOS app.
-# - A version tag (v0.1.0) runs the checks, builds, and opens a draft GitHub release with the
-#   three files, the macOS app's update and latest.json; a maintainer reviews the draft and
-#   publishes it. Once it is published, installed Windows copies and macOS apps find it through
-#   latest.json and update themselves.
-# - A pull request that changes how releases are built, or a run started by hand, builds the
-#   same files and keeps them as workflow artifacts only.
-# Every pull request is checked by ci.yml (formatting, clippy, tests and the interface's build).
+# - A version tag (v0.1.0) builds the three files, the macOS app's update and latest.json, and opens a draft GitHub
+#   release with them once CI (ci.yml) has passed for the tagged commit; a maintainer reviews the draft and publishes
+#   it. Once it is published, installed Windows copies and macOS apps find it through latest.json and update
+#   themselves.
+# - A pull request that changes how releases are built, or a run started by hand, builds the same files and keeps
+#   them as workflow artifacts only. A pull request that only changes the version number in tauri.conf.json (a
+#   release's own pull request) builds nothing: the tag builds the same files minutes later, into a draft.
+# The checks (formatting, clippy, tests and the interface's build) are ci.yml's, on every pull request and every push
+# to main; they are not run again here.
 name: Release
 
 on:
@@ -23,7 +25,49 @@ permissions:
   contents: write
 
 jobs:
+  # What the run builds, decided in seconds, before any build starts.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # On a pull request: its merge commit, and the commit it is merged into.
+          fetch-depth: 2
+
+      - name: Check that the tag matches the app's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(jq -r .version app/src-tauri/tauri.conf.json)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::The tag $GITHUB_REF_NAME does not match the app's version $version (app/src-tauri/tauri.conf.json)."
+            exit 1
+          fi
+
+      # A pull request builds the files only if it changes how they are built. A new version number does not, so
+      # tauri.conf.json is compared without it.
+      - name: Decide whether to build
+        id: decide
+        run: |
+          build=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            build=false
+            if ! git diff --quiet HEAD^1 HEAD -- .github/workflows/release.yml app/src-tauri/tauri.bridge.conf.json \
+              docs/portable-readme.txt; then
+              build=true
+            fi
+            conf=app/src-tauri/tauri.conf.json
+            if [ "$(git show "HEAD^1:$conf" | jq -S 'del(.version)')" != "$(git show "HEAD:$conf" | jq -S 'del(.version)')" ]; then
+              build=true
+            fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "Build the files: $build"
+
   windows:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,46 +78,31 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
+      # No Rust cache: CI's holds what its checks build, which a release build cannot use.
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Check that the tag matches the app's version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        run: |
-          $version = (Get-Content app/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne "${{ github.ref_name }}") {
-            throw "The tag ${{ github.ref_name }} does not match the app's version $version (app/src-tauri/tauri.conf.json)."
-          }
 
       - name: Install the interface's packages
         working-directory: app
         run: npm ci
 
-      # The Rust side embeds the built interface, so it is built first.
-      - name: Build the interface
-        working-directory: app
-        run: npm run build
-
-      - name: Checks
-        shell: bash
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy --workspace --all-targets -- -D warnings
-          cargo test --workspace
-
-      # The installer is signed with the key whose public half is in tauri.conf.json, so that installed copies accept
-      # it as an update; the signature lands beside it (.sig). The key and its password are the repository's secrets
-      # TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD; without them the build stops.
+      # `tauri build` builds the interface first (beforeBuildCommand), which the app embeds. The installer is signed
+      # with the key whose public half is in tauri.conf.json, so that installed copies accept it as an update; the
+      # signature lands beside it (.sig). The key and its password are the repository's secrets
+      # TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD; without them the build stops, except on a
+      # pull request from a fork, which gets no secrets: its installer is built without the signature.
       - name: Build the installer
         working-directory: app
+        shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --bundles nsis
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ] && [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            echo '{"bundle":{"createUpdaterArtifacts":false}}' > unsigned.conf.json
+            npx tauri build --bundles nsis --config unsigned.conf.json
+          else
+            npx tauri build --bundles nsis
+          fi
 
       - name: Package the installer and the portable zip
         shell: pwsh
@@ -81,7 +110,9 @@ jobs:
           New-Item -ItemType Directory -Force out | Out-Null
           $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
           Copy-Item $setup.FullName out/FMLibreEditor-Setup.exe
-          Copy-Item "$($setup.FullName).sig" out/FMLibreEditor-Setup.exe.sig
+          if (Test-Path "$($setup.FullName).sig") {
+            Copy-Item "$($setup.FullName).sig" out/FMLibreEditor-Setup.exe.sig
+          }
           New-Item -ItemType Directory -Force portable/FMLibreEditor | Out-Null
           Copy-Item target/release/FMLibreEditor.exe portable/FMLibreEditor/
           Copy-Item docs/portable-readme.txt portable/FMLibreEditor/README.txt
@@ -93,7 +124,60 @@ jobs:
           name: FMLibreEditor-windows
           path: out/*
 
+  # The macOS app is universal: Apple silicon and Intel Macs run the same one. Its two halves are built side by side,
+  # on two machines, as `tauri build --target universal-apple-darwin` builds them one after the other; the macos job
+  # joins them and bundles the app.
+  macos-build:
+    name: macos-build (${{ matrix.target }})
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # Both architectures, for the bridge and its launcher, which are universal so that Intel builds of the game load
+      # the bridge too. No Rust cache, as on Windows.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: Install the interface's packages
+        working-directory: app
+        run: npm ci
+
+      # tauri.bridge.conf.json lists the bridge and its launcher among the app's resources, which have to be in place
+      # before the app is built, so `npm run bridge` comes first. The macos job signs them.
+      - name: Build the app for ${{ matrix.target }}
+        working-directory: app
+        run: |
+          npm run bridge
+          npx tauri build --target ${{ matrix.target }} --no-bundle --config src-tauri/tauri.bridge.conf.json
+
+      # In a tar, which keeps the files' permissions; an artifact alone does not.
+      - name: Keep the build for the macos job
+        run: >
+          tar -cf "$RUNNER_TEMP/${{ matrix.target }}.tar" -C target
+          ${{ matrix.target }}/release/FMLibreEditor
+          universal-apple-darwin/release/libfmlibre_bridge.dylib
+          universal-apple-darwin/release/fmlibre-launch
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-${{ matrix.target }}
+          path: ${{ runner.temp }}/${{ matrix.target }}.tar
+          retention-days: 1
+
   macos:
+    needs: macos-build
     runs-on: macos-latest
     env:
       # With the maintainer's Apple Developer ID in the repository's secrets, the app is signed and notarized, and
@@ -113,39 +197,29 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      # Both architectures: the app and the bridge are universal, so that Intel builds of the
-      # game load the bridge too.
+      # `tauri bundle` reads the workspace with cargo.
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-          targets: aarch64-apple-darwin, x86_64-apple-darwin
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Check that the tag matches the app's version
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          version=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
-          if [ "v$version" != "$TAG" ]; then
-            echo "The tag $TAG does not match the app's version $version (app/src-tauri/tauri.conf.json)." >&2
-            exit 1
-          fi
 
       - name: Install the interface's packages
         working-directory: app
         run: npm ci
 
-      - name: Build the interface
-        working-directory: app
-        run: npm run build
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-build-*
+          path: ${{ runner.temp }}/builds
+          merge-multiple: true
 
-      # The macOS side of the code; the formatting is checked on Windows.
-      - name: Checks
+      # The universal app binary, joined with lipo as `tauri build --target universal-apple-darwin` joins it.
+      - name: Join the two halves
         run: |
-          cargo clippy --workspace --all-targets -- -D warnings
-          cargo test --workspace
+          mkdir -p target
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            tar -xf "$RUNNER_TEMP/builds/$target.tar" -C target
+          done
+          lipo -create -output target/universal-apple-darwin/release/FMLibreEditor \
+            target/aarch64-apple-darwin/release/FMLibreEditor target/x86_64-apple-darwin/release/FMLibreEditor
+          lipo -info target/universal-apple-darwin/release/FMLibreEditor
 
       # The certificate goes into a keychain of its own, which only this job uses.
       - name: Import the Developer ID certificate
@@ -174,10 +248,9 @@ jobs:
       # FMLibreEditor.app, universal, with the bridge and its launcher among its resources. With the
       # Developer ID, all three are signed with it and the hardened runtime; without it, ad hoc
       # (`npm run release:mac` does the same on a Mac of one's own).
-      - name: Build the app
+      - name: Bundle the app
         working-directory: app
         run: |
-          npm run bridge
           config=src-tauri/tauri.bridge.conf.json
           if [ "$SIGNED" = true ]; then
             for binary in ../target/universal-apple-darwin/release/libfmlibre_bridge.dylib \
@@ -192,7 +265,7 @@ jobs:
             '
             config=src-tauri/tauri.signed.conf.json
           fi
-          npx tauri build --target universal-apple-darwin --bundles app --config "$config"
+          npx tauri bundle --target universal-apple-darwin --bundles app --config "$config"
 
       # Apple's notary service scans the signed app (no review by anyone), usually in minutes; its
       # ticket is stapled to the app, so that it opens without a warning even offline.
@@ -222,7 +295,7 @@ jobs:
       # app (notarized, when it is signed), without macOS's extended attributes, signed like the
       # Windows installer with the key whose public half is in tauri.conf.json
       # (TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD), the version in the
-      # signature.
+      # signature. A pull request from a fork gets no secrets, and its .tar.gz stays unsigned.
       - name: Package the app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -233,8 +306,10 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$bundle/FMLibreEditor.app" out/FMLibreEditor-macOS.zip
           COPYFILE_DISABLE=1 tar -czf out/FMLibreEditor-macOS.app.tar.gz --no-xattrs --no-mac-metadata --no-acls \
             -C "$bundle" FMLibreEditor.app
-          version=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
-          (cd app && npx tauri signer sign --app-version "$version" ../out/FMLibreEditor-macOS.app.tar.gz)
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            version=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
+            (cd app && npx tauri signer sign --app-version "$version" ../out/FMLibreEditor-macOS.app.tar.gz)
+          fi
           ls -l out
 
       - uses: actions/upload-artifact@v4
@@ -247,11 +322,43 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [windows, macos]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
 
+      # The checks are ci.yml's: CI runs on every push to main, so it has usually passed for the tagged commit before
+      # the builds are done; this waits for it if it has not. For a tag on a commit CI has not checked, CI can be run
+      # by hand on the tag (gh workflow run ci.yml --ref <tag>) before this job is run again.
+      - name: Check that CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 60); do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA" \
+              --jq '[.workflow_runs[] | "\(.status)/\(.conclusion)"] | join(" ")')
+            case " $runs " in
+              *" completed/success "*)
+                echo "CI passed for $GITHUB_SHA."
+                exit 0
+                ;;
+              *" queued/"* | *" in_progress/"* | *" waiting/"* | *" pending/"* | *" requested/"*)
+                echo "CI is still running for $GITHUB_SHA ($runs)."
+                sleep 30
+                ;;
+              *)
+                echo "::error::CI has not passed for $GITHUB_SHA (${runs:-no run}). Run it on the tag (gh workflow run ci.yml --ref $GITHUB_REF_NAME), then run this job again."
+                exit 1
+                ;;
+            esac
+          done
+          echo "::error::CI did not finish for $GITHUB_SHA within 30 minutes."
+          exit 1
+
       - uses: actions/download-artifact@v4
         with:
+          pattern: FMLibreEditor-*
           path: out
           merge-multiple: true
 

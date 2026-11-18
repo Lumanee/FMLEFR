@@ -1140,6 +1140,38 @@ export const es: Strings = {
     release: "Rescindir a todos",
     releasing: "Rescindiendo…",
     cancel: "Cancelar",
+
+    moveAll: "Traspasar a todo el personal",
+    moveAllTitle:
+      "Traspasar de una vez a todo el personal del club a otro club, salvo a ti y a la directiva; antes lo pregunta una ventana",
+    moveNone: "No se puede traspasar a nadie del personal de este club",
+    moved: (count, club) =>
+      count === 1 ? `1 empleado traspasado a ${club}` : `${format(count)} empleados traspasados a ${club}`,
+    undoMoveTitle: "Devolver a este club al personal traspasado, con sus contratos",
+    moveTitle: "Traspasar a todo el personal",
+    moveSearch: "Buscar el club al que traspasar al personal",
+    movePick: "Elige el club al que se traspasa al personal.",
+    movePlanning: "Calculando a quién se puede traspasar…",
+    movePlan: (count, club) =>
+      count === 1 ? `1 empleado se traspasa a ${club}` : `${format(count)} empleados se traspasan a ${club}`,
+    moveNobody: (club) => `Nadie del personal de este club se puede traspasar a ${club}.`,
+    moveStays: {
+      managerTaken: (club) => `${club} ya tiene mánager`,
+      directorTaken: (club) => `${club} ya tiene director de fútbol`,
+      yourClub: (club) => `Diriges ${club}`,
+      other: "No se puede traspasar",
+    },
+    moveDoes: [
+      "Cada uno se une al nuevo club donde está su puesto: el departamento médico, técnico o de ojeo",
+      "Mismo salario y fin de contrato; cada contrato lleva la fecha del día del juego",
+      "Un mánager o un director de fútbol solo se une si el puesto del nuevo club está vacío; un puesto que queda aquí " +
+        "queda vacío, para que el club lo cubra",
+      "Se quedan: tú, la directiva y quienes el editor no puede traspasar",
+      "Aparece en Cambios, donde deshacerlo los devuelve a todos a este club",
+    ],
+    moveHint: "Nada cambia en el juego hasta que pulsas Traspasar a todos.",
+    move: "Traspasar a todos",
+    moving: "Traspasando…",
   },
 
   clubList: {
@@ -1226,6 +1258,7 @@ export const es: Strings = {
     squadHeading: (team, count) => `${team}: ${format(count)} ${count === 1 ? "jugador" : "jugadores"}`,
     squadLabel: (team) => `Jugadores de la selección: ${team}`,
     squadNote: "Los jugadores que el juego enumera para este equipo, en su orden. Aquí no se editan las convocatorias, los capitanes ni el contrato del seleccionador.",
+    actionsHint: "Las acciones afectan a todos los jugadores que enumera el primer equipo. Deshacer también está en la vista Cambios.",
     noTeams: "El juego no tiene equipos para esta selección, así que no hay plantilla ni reputación que mostrar.",
     reading: "Leyendo la plantilla…",
     noPlayers: "El juego no enumera jugadores para este equipo.",

@@ -1116,6 +1116,35 @@ export const ja: Strings = {
     release: "全員解除",
     releasing: "契約解除中…",
     cancel: "キャンセル",
+
+    moveAll: "全スタッフの移籍",
+    moveAllTitle: "あなたと役員会を除く、クラブの全スタッフを別のクラブへ一度に移籍させます。先に確認画面が開きます",
+    moveNone: "このクラブには移籍できるスタッフがいません",
+    moved: (count: number, club: string) => `スタッフ${format(count)}人が${club}に移籍しました`,
+    undoMoveTitle: "移籍したスタッフを、同じ契約のままこのクラブに戻します",
+    moveTitle: "全スタッフの移籍",
+    moveSearch: "スタッフの移籍先クラブを検索",
+    movePick: "スタッフの移籍先クラブを選んでください。",
+    movePlanning: "移籍できる人を確認中…",
+    movePlan: (count: number, club: string) => `スタッフ${format(count)}人が${club}に移籍します`,
+    moveNobody: (club: string) => `このクラブのスタッフに、${club}へ移籍できる人はいません。`,
+    moveStays: {
+      managerTaken: (club: string) => `${club}にはすでに監督がいます`,
+      directorTaken: (club: string) => `${club}にはすでにフットボールディレクターがいます`,
+      yourClub: (club: string) => `あなたが${club}を率いています`,
+      other: "移籍できません",
+    },
+    moveDoes: [
+      "各スタッフは、新しいクラブのその職がある部門（メディカル・コーチ・スカウト）に加わります",
+      "職、週給、契約満了日は同じで、各契約はゲーム内の日付から始まります",
+      "監督やフットボールディレクターは、新しいクラブのその座が空いている場合だけ加わります。こちらで空いた座は" +
+        "空席のままで、クラブが補充します",
+      "あなた、役員会、エディターが移籍させられない人は残ります",
+      "変更履歴に記録され、1回の取り消しで全員をこのクラブに戻せます",
+    ],
+    moveHint: "「全員移籍」を押すまで、ゲーム内では何も変わりません。",
+    move: "全員移籍",
+    moving: "移籍中…",
   },
 
   clubList: {
@@ -1200,6 +1229,7 @@ export const ja: Strings = {
     squadHeading: (team: string, count: number) => `${team}：${format(count)}人`,
     squadLabel: (team: string) => `代表チームの選手：${team}`,
     squadNote: "ゲームがこのチームに載せている選手を、ゲームの順に表示します。招集、キャプテン、監督の契約はここでは編集しません。",
+    actionsHint: "操作はトップチームに載っている全選手が対象です。元に戻す操作は変更履歴でも行えます。",
     noTeams: "ゲームにはこの代表のチームがないため、表示できる選手や評価はありません。",
     reading: "選手を読み込み中…",
     noPlayers: "ゲームはこのチームに選手を載せていません。",

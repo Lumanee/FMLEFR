@@ -11,17 +11,18 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fmlibre_core::{
     ArraySource, Buyer, COHESION_RANGE, CaptainRole, CaptainSet, Change, ChangeRow, Clause, ClauseSet, ClubDetails,
-    ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes, EditError, Entity,
-    EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo,
-    GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted,
-    Listed, Loan, Lock, MoveError, MovePlan, MoveTerms, NameChange, NameKind, Nation, NationalIndex, NationalSide,
-    NationalTeamSummary, NationalUnavailable, NewContract, NewStaffContract, Operation, Paid, People, PersonNames,
-    Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, PrizeAmount, PrizeChange,
-    PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS,
-    SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped,
-    Sponsorship, SponsorshipReadError, SponsorshipUnavailable, SquadReport, StadiumName, StadiumRename, StaffChange,
-    StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, TacticsSet, Target, Tie, TieTarget,
-    competition_prizes, diagnostics_report, find_game, nations, sort_players, sort_staff,
+    ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes, DIRECTOR_OF_FOOTBALL,
+    EditError, Entity, EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE,
+    GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES,
+    LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MANAGER, MoveError, MovePlan, MoveTerms, NameChange, NameKind, Nation,
+    NationalIndex, NationalSide, NationalTeamSummary, NationalUnavailable, NewContract, NewStaffContract, Operation,
+    Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary,
+    PrizeAmount, PrizeChange, PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet,
+    RetirementSet, Role, SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex,
+    Session, SessionError, Skipped, Sponsorship, SponsorshipReadError, SponsorshipUnavailable, SquadMember,
+    SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan,
+    StaffSummary, TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report, find_game, nations,
+    sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -1490,9 +1491,61 @@ impl Connection {
         self.session.plan_staff_release(member).map_err(|err| self.with_names(err.into()))
     }
 
+    /// The club `to` that the whole staff of the club `club` would move to, checked as a whole (another club, and both
+    /// men's or both women's clubs), and the ids of that staff in the order the move takes them: the senior team's
+    /// manager first (see `Session::manager_first`), then as the list has them.
+    fn staff_move_all(&self, club: u32, to: u32) -> Result<(ClubSummary, Vec<u32>), Failure> {
+        let from = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        let joining = self.clubs.get(to).ok_or_else(|| not_found(Entity::Club, to))?;
+        if club == to {
+            return Err(MoveError::SameClub.into());
+        }
+        if from.women != joining.women {
+            return Err(MoveError::MenAndWomen.into());
+        }
+        let mut members: Vec<u32> =
+            self.staff.iter().filter(|member| member.club_uid == Some(club)).map(|member| member.uid).collect();
+        self.session.manager_first(from, &mut members);
+        Ok((joining.clone(), members))
+    }
+
+    /// Writes what `plan` works out for each of the members of staff `members`, one after another, each from the game
+    /// as the one before left it, and logs them as one batch, which `undo_batch` undoes, the last one first. One refused
+    /// for a reason `stays` keeps him at his club for is passed over; one that fails is reported, and the others go on.
+    fn staff_batch(
+        &mut self,
+        members: Vec<u32>,
+        plan: impl Fn(&Session, &StaffSummary) -> Result<StaffPlan, MoveError>,
+        stays: fn(&MoveError) -> bool,
+    ) -> MassReport {
+        let batch = self.fresh_id();
+        let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+        for uid in members {
+            let Some(member) = self.staff.get(uid) else {
+                continue;
+            };
+            let name = member.name.clone();
+            let done = match plan(&self.session, member) {
+                Err(err) if stays(&err) => continue,
+                planned => planned.and_then(|planned| self.session.apply_staff_plan(&planned)),
+            };
+            match done {
+                Ok(done) => {
+                    self.log_staff(done, None, Some(batch));
+                    report.applied += 1;
+                }
+                Err(err) => {
+                    let error = self.with_names(err.into());
+                    report.failed.push(MassFailure { uid, name, field: "club".to_owned(), error });
+                }
+            }
+        }
+        report
+    }
+
     /// Logs a member of staff's move, signing or release, as a change of his `club`, or his new job, as a change of
     /// `contract.job`, and brings his list row up to date: for one signed, with the end of the contract `made`; for one
-    /// released, with no club, job or contract. `batch` groups the releases of a club's staff.
+    /// released, with no club, job or contract. `batch` groups the releases or moves of a club's whole staff.
     fn log_staff(&mut self, done: StaffChange, made: Option<NewStaffContract>, batch: Option<u32>) -> LoggedChange {
         let row = self.staff.get(done.member);
         let (club, club_uid, job, contract_expires) =
@@ -4038,29 +4091,88 @@ async fn release_club_staff(app: tauri::AppHandle, club: u32) -> Result<MassRepo
         }
         let members: Vec<u32> =
             connection.staff.iter().filter(|member| member.club_uid == Some(club)).map(|member| member.uid).collect();
-        let batch = connection.fresh_id();
-        let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
-        for uid in members {
-            let Some(member) = connection.staff.get(uid) else {
-                continue;
-            };
-            let name = member.name.clone();
-            let released = match connection.session.plan_staff_release(member) {
-                Err(err) if stays_at_club(&err) => continue,
-                planned => planned.and_then(|plan| connection.session.apply_staff_plan(&plan)),
-            };
-            match released {
-                Ok(done) => {
-                    connection.log_staff(done, None, Some(batch));
-                    report.applied += 1;
-                }
-                Err(err) => {
-                    let error = connection.with_names(err.into());
-                    report.failed.push(MassFailure { uid, name, field: "club".to_owned(), error });
-                }
+        Ok(connection.staff_batch(members, |session, member| session.plan_staff_release(member), stays_at_club))
+    })
+    .await?
+}
+
+/// Whether a move of a club's whole staff leaves a member of staff refused for `err` at his club, as `stays_at_club`
+/// does for Release all staff, and a director of football or a manager whose place at the new club is taken, or is the
+/// human manager's: not a failure to report.
+fn stays_on_move(err: &MoveError) -> bool {
+    stays_at_club(err)
+        || matches!(err, MoveError::DirectorTaken { .. } | MoveError::ManagerTaken { .. } | MoveError::YourClub)
+}
+
+/// Who takes the new club's places for a director of football and for a manager as a whole staff moves there, one after
+/// another: once one of them takes a place, the next one for it is refused, as the game will refuse him by then.
+#[derive(Default)]
+struct PlacesTaken {
+    director: Option<u32>,
+    manager: Option<u32>,
+}
+
+impl PlacesTaken {
+    /// Refuses `plan` where it puts its member of staff into a place that one before him takes; else notes him there.
+    fn take(&mut self, plan: &StaffPlan) -> Result<(), MoveError> {
+        let (place, taken): (_, fn(u32) -> MoveError) = match plan.job.1 {
+            DIRECTOR_OF_FOOTBALL => (&mut self.director, |uid| MoveError::DirectorTaken { uid }),
+            MANAGER => (&mut self.manager, |uid| MoveError::ManagerTaken { uid }),
+            _ => return Ok(()),
+        };
+        match *place {
+            Some(uid) => Err(taken(uid)),
+            None => {
+                *place = Some(plan.member);
+                Ok(())
             }
         }
-        Ok(report)
+    }
+}
+
+/// The staff of the club `club` as moving all of them to the club `to` would leave them, in the order the move takes
+/// them: each with why he would stay at his club (none for one who moves). Each is worked out from the game as it is
+/// now, but for the places for a director of football and a manager at the new club: one that one of them takes is
+/// taken for those after him. Refused as a whole for the same club, or a men's and a women's club. Nothing is written.
+/// Off the window's thread, as `club_staff`.
+#[tauri::command]
+async fn plan_club_staff_move(app: tauri::AppHandle, club: u32, to: u32) -> Result<Vec<ClubStaffRow>, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ClubStaffRow>, Failure> {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        let (joining, members) = connection.staff_move_all(club, to)?;
+        let mut places = PlacesTaken::default();
+        Ok(members
+            .into_iter()
+            .filter_map(|uid| connection.staff.get(uid))
+            .map(|member| {
+                let planned = connection.session.plan_staff_move(member, &joining, None);
+                let stays = planned.and_then(|plan| places.take(&plan)).err();
+                ClubStaffRow { member: member.clone(), stays: stays.map(|err| connection.with_names(err.into())) }
+            })
+            .collect())
+    })
+    .await?
+}
+
+/// Moves every member of staff of the club `club` that can be moved to the club `to`, each in his own job and on his
+/// contract, one after another in the order `plan_club_staff_move` lists them, each worked out from the game as the
+/// move before left it: those `stays_on_move` keeps stay. Logged as one batch, which `undo_batch` undoes, the last one
+/// first; a move that fails is reported and the others go on. Off the window's thread, as a club may have seventy.
+#[tauri::command]
+async fn move_club_staff(app: tauri::AppHandle, club: u32, to: u32) -> Result<MassReport, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<MassReport, Failure> {
+        let state = app.state::<AppState>();
+        let mut guard = state.0.lock()?;
+        let connection = guard.as_mut().ok_or_else(not_connected)?;
+        // A move changes the clubs' lists: refused once, not once for every member of staff.
+        if let Some(lock) = connection.session.structure_lock() {
+            return Err(MoveError::Locked(lock).into());
+        }
+        let (joining, members) = connection.staff_move_all(club, to)?;
+        let plan = |session: &Session, member: &StaffSummary| session.plan_staff_move(member, &joining, None);
+        Ok(connection.staff_batch(members, plan, stays_on_move))
     })
     .await?
 }
@@ -4562,6 +4674,20 @@ fn set_captain(
     Ok(connection.log_captain(done))
 }
 
+/// Heals, inspires or refreshes every player the senior team of the national team `uid` lists, read now, as Heal all,
+/// Inspire all and Refresh all do for a club's team. The changes are logged as one batch, which `undo_batch` undoes.
+#[tauri::command]
+fn national_team_action(state: State<'_, AppState>, uid: u32, action: TeamAction) -> Result<MassReport, Failure> {
+    if !matches!(action, TeamAction::Heal | TeamAction::Inspire | TeamAction::Refresh) {
+        return Err(Failure::new("national.action", "A national team has Heal all, Inspire all and Refresh all only."));
+    }
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let team = national_teams_of(connection)?.get(uid).ok_or_else(|| not_found(Entity::NationalTeam, uid))?;
+    let members = connection.session.national_squad(team, SENIOR_KIND, &connection.players)?.players;
+    act_on_players(connection, &members, action)
+}
+
 /// Does `action` to every player of the team `team` of the club `club`, read now: those out
 /// on loan too. The changes are logged as one batch, which `undo_batch` undoes.
 #[tauri::command]
@@ -4577,6 +4703,78 @@ fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamA
         .find(|found| found.index == team)
         .ok_or(MoveError::NoTeam { index: team })?
         .players;
+    match action {
+        // Cohesion with the club at its best, as FM27 Editor saw FMRTE's Improve Team Cohesion set it, for those who
+        // have an entry for the club: one is added nowhere, and the app counts those without one. The game shows the
+        // team's cohesion on its Dynamics page once it moves on.
+        TeamAction::MaxCohesion => {
+            let (_, best) = COHESION_RANGE;
+            let batch = connection.fresh_id();
+            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+            for member in &members {
+                let Some(player) = connection.players.get(member.uid) else {
+                    continue;
+                };
+                let name = player.name.clone();
+                let planned = connection.session.plan_cohesion(player, &summary, best);
+                let set = match planned {
+                    Ok(Some(plan)) if plan.before == best => continue,
+                    Ok(Some(plan)) => connection.session.apply_cohesion(&plan),
+                    Ok(None) => continue,
+                    Err(err) => Err(err),
+                };
+                match set {
+                    Ok(done) => {
+                        connection.log_cohesion(done, Some(batch));
+                        report.applied += 1;
+                    }
+                    Err(err) => report.failed.push(MassFailure {
+                        uid: member.uid,
+                        name,
+                        field: "cohesion".to_owned(),
+                        error: err.into(),
+                    }),
+                }
+            }
+            Ok(report)
+        }
+        // The tactic the human manager plays with the team known at its best: each player's record and history of
+        // training (see `familiarity.rs`). One the game keeps no history for has his record written; the app counts them.
+        TeamAction::MaxTactics => {
+            if let Some(lock) = connection.session.tactics_lock().or_else(|| connection.session.structure_lock()) {
+                return Err(MoveError::Locked(lock).into());
+            }
+            let batch = connection.fresh_id();
+            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+            let plans = connection.session.plan_max_tactics(&summary, team, &connection.players)?.unwrap_or_default();
+            for plan in plans.iter().filter(|plan| plan.writes()) {
+                let name = connection.player_name(plan.player);
+                match connection.session.apply_tactics(plan) {
+                    Ok(done) => {
+                        connection.log_tactics(done, Some(batch));
+                        report.applied += 1;
+                    }
+                    Err(err) => report.failed.push(MassFailure {
+                        uid: plan.player,
+                        name,
+                        field: "tactics".to_owned(),
+                        error: err.into(),
+                    }),
+                }
+            }
+            Ok(report)
+        }
+        _ => act_on_players(connection, &members, action),
+    }
+}
+
+/// Does `action` to `members`, the players of one team, logged as one batch: the actions a club's team and a national
+/// team share. Max cohesion and Max tactics need the club, and are `team_action`'s own.
+fn act_on_players(
+    connection: &mut Connection,
+    members: &[SquadMember],
+    action: TeamAction,
+) -> Result<MassReport, Failure> {
     // Healing and lifting bans change the players' records: refused once, not once for every player.
     if matches!(action, TeamAction::Heal | TeamAction::LiftBans)
         && let Some(lock) = connection.session.structure_lock()
@@ -4634,69 +4832,14 @@ fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamA
             }
             return Ok(report);
         }
-        // Cohesion with the club at its best, as FM27 Editor saw FMRTE's Improve Team Cohesion set it, for those who
-        // have an entry for the club: one is added nowhere, and the app counts those without one. The game shows the
-        // team's cohesion on its Dynamics page once it moves on.
-        TeamAction::MaxCohesion => {
-            let (_, best) = COHESION_RANGE;
-            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
-            for member in &members {
-                let Some(player) = connection.players.get(member.uid) else {
-                    continue;
-                };
-                let name = player.name.clone();
-                let planned = connection.session.plan_cohesion(player, &summary, best);
-                let set = match planned {
-                    Ok(Some(plan)) if plan.before == best => continue,
-                    Ok(Some(plan)) => connection.session.apply_cohesion(&plan),
-                    Ok(None) => continue,
-                    Err(err) => Err(err),
-                };
-                match set {
-                    Ok(done) => {
-                        connection.log_cohesion(done, Some(batch));
-                        report.applied += 1;
-                    }
-                    Err(err) => report.failed.push(MassFailure {
-                        uid: member.uid,
-                        name,
-                        field: "cohesion".to_owned(),
-                        error: err.into(),
-                    }),
-                }
-            }
-            return Ok(report);
-        }
-        // The tactic the human manager plays with the team known at its best: each player's record and history of
-        // training (see `familiarity.rs`). One the game keeps no history for has his record written; the app counts them.
-        TeamAction::MaxTactics => {
-            if let Some(lock) = connection.session.tactics_lock().or_else(|| connection.session.structure_lock()) {
-                return Err(MoveError::Locked(lock).into());
-            }
-            let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
-            let plans = connection.session.plan_max_tactics(&summary, team, &connection.players)?.unwrap_or_default();
-            for plan in plans.iter().filter(|plan| plan.writes()) {
-                let name = connection.player_name(plan.player);
-                match connection.session.apply_tactics(plan) {
-                    Ok(done) => {
-                        connection.log_tactics(done, Some(batch));
-                        report.applied += 1;
-                    }
-                    Err(err) => report.failed.push(MassFailure {
-                        uid: plan.player,
-                        name,
-                        field: "tactics".to_owned(),
-                        error: err.into(),
-                    }),
-                }
-            }
-            return Ok(report);
-        }
         // Morale at its best, and the reasons to be unhappy gone, as FMRTE's Inspire does.
         TeamAction::Inspire => &[("morale", 20), ("contract.unhappiness", 0)],
         // Rested as the game rests a player: full energy and sharpness, and jadedness at its least.
         TeamAction::Refresh => &[("condition", 10_000), ("match_sharpness", 10_000), ("jadedness", -500)],
         TeamAction::MaxAttributes => &[],
+        TeamAction::MaxCohesion | TeamAction::MaxTactics => {
+            return Err(Failure::new("team.action", "This action needs the club the team belongs to."));
+        }
     };
     let targets: Vec<(Target, String)> = members
         .iter()
@@ -4967,6 +5110,8 @@ pub fn run() {
             release_staff,
             club_staff,
             release_club_staff,
+            plan_club_staff_move,
+            move_club_staff,
             staff_jobs,
             heal_player,
             lift_bans,
@@ -4992,6 +5137,7 @@ pub fn run() {
             birth_cities,
             set_captain,
             team_action,
+            national_team_action,
             max_attributes,
             graphics_info,
             self_update::can_self_update,

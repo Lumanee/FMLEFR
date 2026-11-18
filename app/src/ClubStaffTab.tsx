@@ -1,22 +1,31 @@
-// The Staff tab of a club's profile: the club's staff, by department, and Release all staff, which releases every one
-// of them the editor can release after a dialog that asks first. Each leaves the club at once with no contract, as the
-// game's own staff without a club; you and the board stay, as do those the club holds in another way. The releases
-// are logged as one batch, which Undo here, or in the Changes view, takes back.
+// The Staff tab of a club's profile: the club's staff, by department, with Release all staff and Move all staff, each
+// after a dialog that asks first. Release all releases every one of them the editor can release: each leaves the club
+// at once with no contract, as the game's own staff without a club. Move all moves every one it can to the club picked
+// in its dialog, in the same job and on the same contract. You and the board stay, as do those the club holds in
+// another way. Each is logged as one batch, which Undo here, or in the Changes view, takes back.
 
-import { useContext, useEffect, useId, useRef, useState, type Ref } from "react";
+import { useContext, useEffect, useId, useRef, useState, type MouseEvent, type Ref } from "react";
 import { createPortal } from "react-dom";
 import { Ability } from "./Ability";
-import { changeLog, clubStaff, releaseClubStaff, undoBatch } from "./editing";
+import { ClubSearch } from "./ClubSearch";
+import { changeLog, clubStaff, moveClubStaff, planClubStaffMove, releaseClubStaff, undoBatch } from "./editing";
 import { describeError } from "./format";
 import { intlLocale } from "./i18n";
-import { clubStaffText as text, jobLabel, massEditText, profileText, staffListText } from "./labels";
+import { clubStaffText as text, jobLabel, massEditText, moveText, profileText, staffListText } from "./labels";
 import { undoFailureLines } from "./massDraft";
 import { ClubLine } from "./MoveDialog";
 import type { Loaded, PanelIds } from "./ProfileParts";
 import { HumanBadge } from "./StaffProfile";
-import type { BatchUndo, ClubStaffRow, Failure, MassReport } from "./types";
+import type { BatchUndo, ClubStaffRow, ClubSummary, Failure, MassReport } from "./types";
 import { useModal } from "./useModal";
 import { EditorContext } from "./useProfileEditing";
+
+/** The club whose staff the tab lists. */
+interface Club {
+  uid: number;
+  name: string;
+  women: boolean;
+}
 
 /** The club's staff, read again whenever `version` changes: the game data was read or written. */
 function useClubStaff(club: number, version: number): Loaded<ClubStaffRow[]> | null {
@@ -77,10 +86,32 @@ function staysLabel(stays: Failure): string {
   }
 }
 
+/**
+ * Why a member of staff stays when the rest move to the club named `to`, short: as for a release, or a place at `to`
+ * that is taken.
+ */
+function moveStaysLabel(stays: Failure, to: string): string {
+  switch (stays.code) {
+    case "staff.managerTaken":
+      return text.moveStays.managerTaken(to);
+    case "staff.directorTaken":
+      return text.moveStays.directorTaken(to);
+    case "staff.yourClub":
+      return text.moveStays.yourClub(to);
+    case "staff.you":
+    case "staff.job":
+    case "move.playerCoach":
+    case "staff.role":
+      return staysLabel(stays);
+    default:
+      return text.moveStays.other;
+  }
+}
+
 /** Takes back what a result says was written. */
 type Undo = () => Promise<BatchUndo>;
 
-/** What Release all or its undo came to, for the line under the button. */
+/** What Release all, Move all or an undo came to, for the line under the buttons. */
 interface Result {
   message: string;
   /** Whether the message is why it did not happen. */
@@ -89,41 +120,48 @@ interface Result {
   problems: string[];
   /** Null for what there is nothing to take back, or what was taken back already. */
   undo: Undo | null;
+  /** The hover text of the Undo button. */
+  undoTitle: string;
 }
 
-/** Most refusals the line under the button lists. */
+/** Most refusals the line under the buttons lists. */
 const PROBLEMS_SHOWN = 5;
 
-/** The releases the game refused: whose and why; the first few, then how many more. */
+/** The releases or moves the game refused: whose and why; the first few, then how many more. */
 function refusalLines(failed: MassReport["failed"]): string[] {
   const lines = failed.slice(0, PROBLEMS_SHOWN).map(({ name, error }) => text.refused(name, describeError(error)));
   return failed.length > PROBLEMS_SHOWN ? [...lines, massEditText.more(failed.length - PROBLEMS_SHOWN)] : lines;
 }
 
+/** The dialog open over the tab, if any. */
+type Asking = "release" | "move" | null;
+
 interface ClubStaffTabProps {
-  club: { uid: number; name: string; women: boolean };
+  club: Club;
   /** Changes when the game data is read again, so the staff are too. */
   version: number;
   /** The tab it is the panel of. */
   panel: PanelIds;
 }
 
-/** The staff of the club, with Release all staff above them. */
+/** The staff of the club, with Release all staff and Move all staff above them. */
 export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
   const { editable, onEdited, readOnlyNote } = useContext(EditorContext);
   const loaded = useClubStaff(club.uid, version);
   // Whether a write is under way, or done and waiting for the staff to be read again.
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = useState<Asking>(null);
   const alive = useRef(true);
   const resultBox = useRef<HTMLDivElement>(null);
   const releaseButton = useRef<HTMLButtonElement>(null);
-  const wasAsking = useRef(false);
+  const moveButton = useRef<HTMLButtonElement>(null);
+  const wasAsking = useRef<Asking>(null);
   // Set while a write may take the button that has focus out of play.
   const refocus = useRef(false);
 
   const rows = loaded?.details ? inOrder(loaded.details) : null;
+  // Those Release all releases. Move all moves no one else: you, the board and the like stay either way.
   const leaving = rows?.filter((row) => row.stays === null) ?? [];
   const staying = rows?.filter((row) => row.stays !== null) ?? [];
 
@@ -134,22 +172,23 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
     };
   }, []);
 
-  // A write stays busy until the staff have been read again: pressed in between, the button would work from rows that
+  // A write stays busy until the staff have been read again: pressed in between, a button would work from rows that
   // are out of date.
   useEffect(() => {
     setBusy(false);
   }, [loaded]);
 
-  // Once the dialog is gone, focus goes back to the button that opened it.
+  // Once a dialog is gone, focus goes back to the button that opened it.
   useEffect(() => {
-    if (wasAsking.current && !asking) {
-      releaseButton.current?.focus();
+    if (wasAsking.current !== null && asking === null) {
+      (wasAsking.current === "move" ? moveButton : releaseButton).current?.focus();
     }
     wasAsking.current = asking;
   }, [asking]);
 
-  // A write can take the button that had focus out of play: Release all once nobody is left to release, Undo once it
-  // is done. Focus then goes to the line under the button, so that someone using the keyboard stays in the tab.
+  // A write can take the button that had focus out of play: Release all or Move all once nobody is left to release or
+  // move, Undo once it is done. Focus then goes to the line under the buttons, so that someone using the keyboard
+  // stays in the tab.
   useEffect(() => {
     if (busy || !refocus.current) {
       return;
@@ -161,7 +200,7 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
     }
   });
 
-  /** Writes, busy until the staff are read again, with the result shown under the button. */
+  /** Writes, busy until the staff are read again, with the result shown under the buttons. */
   const write = async (task: () => Promise<Result>) => {
     if (busy) {
       return;
@@ -177,7 +216,7 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
       onEdited();
     } catch (e) {
       if (alive.current) {
-        setResult({ message: describeError(e), failed: true, problems: [], undo: null });
+        setResult({ message: describeError(e), failed: true, problems: [], undo: null, undoTitle: "" });
         setBusy(false);
       }
     }
@@ -192,6 +231,19 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
         problems: refusalLines(report.failed),
         // A release that wrote nothing has nothing to take back.
         undo: report.applied > 0 ? () => undoBatch(report.batch) : null,
+        undoTitle: text.undoTitle,
+      };
+    });
+
+  const moveAll = (to: ClubSummary) =>
+    write(async () => {
+      const report = await moveClubStaff(club.uid, to.uid);
+      return {
+        message: text.moved(report.applied, to.name),
+        failed: false,
+        problems: refusalLines(report.failed),
+        undo: report.applied > 0 ? () => undoBatch(report.batch) : null,
+        undoTitle: text.undoMoveTitle,
       };
     });
 
@@ -205,11 +257,13 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
         failed: false,
         problems: undoFailureLines(done.failed, log),
         undo: null,
+        undoTitle: "",
       };
     });
 
-  // What the button's hover text says: why it waits, or else what it does.
-  const title = !editable ? readOnlyNote : leaving.length === 0 ? text.releaseNone : text.releaseAllTitle;
+  // What the buttons' hover text says: why they wait, or else what they do.
+  const releaseTitle = !editable ? readOnlyNote : leaving.length === 0 ? text.releaseNone : text.releaseAllTitle;
+  const moveTitle = !editable ? readOnlyNote : leaving.length === 0 ? text.moveNone : text.moveAllTitle;
 
   return (
     <div
@@ -247,10 +301,23 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
                 aria-disabled={busy || undefined}
                 aria-busy={busy || undefined}
                 aria-haspopup="dialog"
-                title={title}
-                onClick={() => !busy && setAsking(true)}
+                title={releaseTitle}
+                onClick={() => !busy && setAsking("release")}
               >
                 {text.releaseAll(leaving.length)}
+              </button>
+              <button
+                ref={moveButton}
+                type="button"
+                className="squad-action"
+                disabled={!editable || leaving.length === 0}
+                aria-disabled={busy || undefined}
+                aria-busy={busy || undefined}
+                aria-haspopup="dialog"
+                title={moveTitle}
+                onClick={() => !busy && setAsking("move")}
+              >
+                {text.moveAll}
               </button>
             </div>
             <p className="note squad-hint">{text.hint}</p>
@@ -284,16 +351,26 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
         </>
       )}
 
-      {asking && (
+      {asking === "release" && (
         <ReleaseAllDialog
           club={club}
           leaving={leaving}
           staying={staying}
           onRelease={async () => {
             await releaseAll();
-            setAsking(false);
+            setAsking(null);
           }}
-          onClose={() => setAsking(false)}
+          onClose={() => setAsking(null)}
+        />
+      )}
+      {asking === "move" && (
+        <MoveAllDialog
+          club={club}
+          onMove={async (to) => {
+            await moveAll(to);
+            setAsking(null);
+          }}
+          onClose={() => setAsking(null)}
         />
       )}
     </div>
@@ -349,7 +426,7 @@ function ResultLine({ result, busy, onUndo, ref }: ResultLineProps) {
                 type="button"
                 className="squad-action"
                 aria-disabled={busy || undefined}
-                title={text.undoTitle}
+                title={result.undoTitle}
                 onClick={() => !busy && result.undo && onUndo(result.undo)}
               >
                 {text.undo}
@@ -369,11 +446,47 @@ function ResultLine({ result, busy, onUndo, ref }: ResultLineProps) {
   );
 }
 
-/** How many names of those who leave the dialog shows; the rest it counts. */
+/** How many names of those who leave a dialog shows; the rest it counts. */
 const NAMES_SHOWN = 8;
 
+/** A member of staff in a dialog's lists: the name, and the job. */
+const person = (row: ClubStaffRow) => (row.job === null ? row.name : `${row.name} (${jobLabel(row.job)})`);
+
+/** Those who leave the club: the first names, then how many more. */
+function LeavingList({ leaving }: { leaving: readonly ClubStaffRow[] }) {
+  const shown = leaving.slice(0, NAMES_SHOWN);
+  return (
+    <ul className="move-facts">
+      {shown.map((row) => (
+        <li key={row.uid}>{person(row)}</li>
+      ))}
+      {leaving.length > shown.length && <li>{text.more(leaving.length - shown.length)}</li>}
+    </ul>
+  );
+}
+
+/** Those who stay at the club, each with why, short; the hover text has the game's answer in full. */
+function StayingList({ staying, label }: { staying: readonly ClubStaffRow[]; label: (stays: Failure) => string }) {
+  return (
+    <ul className="move-facts">
+      {staying.map((row) => (
+        <li key={row.uid} title={row.stays ? describeError(row.stays) : undefined}>
+          {person(row)}: {row.stays && label(row.stays)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A click beside a dialog does nothing, and keeps focus where it is. */
+const keepFocus = (event: MouseEvent) => {
+  if (event.target === event.currentTarget) {
+    event.preventDefault();
+  }
+};
+
 interface ReleaseAllDialogProps {
-  club: { uid: number; name: string; women: boolean };
+  club: Club;
   /** Those Release all releases, and those it leaves at the club, with why. */
   leaving: readonly ClubStaffRow[];
   staying: readonly ClubStaffRow[];
@@ -400,19 +513,8 @@ function ReleaseAllDialog({ club, leaving, staying, onRelease, onClose }: Releas
     cancelButton.current?.focus();
   }, []);
 
-  const shown = leaving.slice(0, NAMES_SHOWN);
-  const person = (row: ClubStaffRow) => (row.job === null ? row.name : `${row.name} (${jobLabel(row.job)})`);
-
   return createPortal(
-    // A click beside the dialog does nothing, and keeps focus where it is.
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          event.preventDefault();
-        }
-      }}
-    >
+    <div className="modal-backdrop" onMouseDown={keepFocus}>
       <div
         ref={dialog}
         className="modal move-dialog"
@@ -440,24 +542,13 @@ function ReleaseAllDialog({ club, leaving, staying, onRelease, onClose }: Releas
 
           <section className="move-section" aria-labelledby={id("leaving")}>
             <h3 id={id("leaving")}>{text.leaving(leaving.length)}</h3>
-            <ul className="move-facts">
-              {shown.map((row) => (
-                <li key={row.uid}>{person(row)}</li>
-              ))}
-              {leaving.length > shown.length && <li>{text.more(leaving.length - shown.length)}</li>}
-            </ul>
+            <LeavingList leaving={leaving} />
           </section>
 
           {staying.length > 0 && (
             <section className="move-section" aria-labelledby={id("staying")}>
               <h3 id={id("staying")}>{text.staying(staying.length)}</h3>
-              <ul className="move-facts">
-                {staying.map((row) => (
-                  <li key={row.uid} title={row.stays ? describeError(row.stays) : undefined}>
-                    {person(row)}: {row.stays && staysLabel(row.stays)}
-                  </li>
-                ))}
-              </ul>
+              <StayingList staying={staying} label={staysLabel} />
             </section>
           )}
 
@@ -485,6 +576,172 @@ function ReleaseAllDialog({ club, leaving, staying, onRelease, onClose }: Releas
             {releasing ? text.releasing : text.release}
           </button>
           <button ref={cancelButton} type="button" disabled={releasing} onClick={onClose}>
+            {text.cancel}
+          </button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** What `planClubStaffMove` answered for the club with the UID `to`: the staff, or why none can move there. */
+type MovePlan = { to: number; rows: ClubStaffRow[] } | { to: number; error: string };
+
+interface MoveAllDialogProps {
+  club: Club;
+  /** Moves them to `to`; the dialog is closed once it is done, and the tab says what came of it. */
+  onMove: (to: ClubSummary) => Promise<void>;
+  onClose: () => void;
+}
+
+/**
+ * The dialog that asks before Move all: the club they leave, the club they join (a search, until one is picked), who
+ * moves there and who stays (and why), and what the move does. It stays up, busy, while the staff move; then the tab
+ * says what came of it.
+ */
+function MoveAllDialog({ club, onMove, onClose }: MoveAllDialogProps) {
+  const base = useId();
+  const id = (part: string) => `${base}-${part}`;
+  const dialog = useRef<HTMLDivElement>(null);
+  const changeButton = useRef<HTMLButtonElement>(null);
+  const [to, setTo] = useState<ClubSummary | null>(null);
+  const [plan, setPlan] = useState<MovePlan | null>(null);
+  const [moving, setMoving] = useState(false);
+
+  useModal(dialog, !moving, onClose);
+
+  // Who would move to the club picked, asked again for each club; an answer that comes after another pick is dropped.
+  useEffect(() => {
+    if (to === null) {
+      return;
+    }
+    let cancelled = false;
+    planClubStaffMove(club.uid, to.uid).then(
+      (rows) => !cancelled && setPlan({ to: to.uid, rows }),
+      (e) => !cancelled && setPlan({ to: to.uid, error: describeError(e) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [club.uid, to]);
+
+  // Once a club is picked, the search is gone: focus goes to the button that brings it back.
+  useEffect(() => {
+    if (to !== null) {
+      changeButton.current?.focus();
+    }
+  }, [to]);
+
+  const current = to !== null && plan?.to === to.uid ? plan : null;
+  const rows = current && "rows" in current ? inOrder(current.rows) : null;
+  const leaving = rows?.filter((row) => row.stays === null) ?? [];
+  const staying = rows?.filter((row) => row.stays !== null) ?? [];
+
+  // The line under the clubs: what to do first, the wait, why no one can move, or how many will.
+  const [tone, message] =
+    to === null
+      ? ["pending", text.movePick]
+      : current === null
+        ? ["pending", text.movePlanning]
+        : "error" in current
+          ? ["refused", current.error]
+          : leaving.length === 0
+            ? ["refused", text.moveNobody(to.name)]
+            : ["ok", text.movePlan(leaving.length, to.name)];
+
+  return createPortal(
+    <div className="modal-backdrop" onMouseDown={keepFocus}>
+      <div
+        ref={dialog}
+        className="modal move-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={id("title")}
+        aria-describedby={id("club")}
+        aria-busy={moving || undefined}
+        tabIndex={-1}
+      >
+        <header className="modal-head">
+          <h2 id={id("title")}>{text.moveTitle}</h2>
+          <p id={id("club")} className="move-player">
+            {club.name}
+          </p>
+        </header>
+
+        <div className="modal-body">
+          <section className="move-section" aria-labelledby={id("from")}>
+            <h3 id={id("from")}>{moveText.from}</h3>
+            <div className="move-club">
+              <ClubLine uid={club.uid} name={club.name} women={club.women} />
+            </div>
+          </section>
+
+          <section className="move-section" aria-labelledby={id("to")}>
+            <h3 id={id("to")}>{moveText.to}</h3>
+            {to === null ? (
+              // Escape in the search gives up the whole dialog: there is nothing else in it to go back to.
+              <ClubSearch label={text.moveSearch} women={club.women} except={club.uid} onPick={setTo} onCancel={onClose} />
+            ) : (
+              <div className="move-club">
+                <ClubLine uid={to.uid} name={to.name} women={to.women} />
+                <button
+                  ref={changeButton}
+                  type="button"
+                  className="move-change"
+                  disabled={moving}
+                  onClick={() => setTo(null)}
+                >
+                  {moveText.change}
+                </button>
+              </div>
+            )}
+          </section>
+
+          <p className={`move-plan ${tone}`} role="status">
+            {message}
+          </p>
+
+          {leaving.length > 0 && (
+            <section className="move-section" aria-labelledby={id("leaving")}>
+              <h3 id={id("leaving")}>{text.leaving(leaving.length)}</h3>
+              <LeavingList leaving={leaving} />
+            </section>
+          )}
+
+          {to !== null && staying.length > 0 && (
+            <section className="move-section" aria-labelledby={id("staying")}>
+              <h3 id={id("staying")}>{text.staying(staying.length)}</h3>
+              <StayingList staying={staying} label={(stays) => moveStaysLabel(stays, to.name)} />
+            </section>
+          )}
+
+          <section className="move-section" aria-labelledby={id("does")}>
+            <h3 id={id("does")}>{text.doesHeading}</h3>
+            <ul className="move-facts">
+              {text.moveDoes.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        <footer className="modal-foot">
+          <span className="move-foot-note">{text.moveHint}</span>
+          <button
+            type="button"
+            className="primary"
+            disabled={to === null || leaving.length === 0 || moving}
+            onClick={() => {
+              if (to !== null) {
+                setMoving(true);
+                void onMove(to);
+              }
+            }}
+          >
+            {moving ? text.moving : text.move}
+          </button>
+          <button type="button" disabled={moving} onClick={onClose}>
             {text.cancel}
           </button>
         </footer>

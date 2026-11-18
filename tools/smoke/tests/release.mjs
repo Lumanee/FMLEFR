@@ -34,7 +34,7 @@ function probedTies(probe, id) {
  * staff, by id. The export names clubs, and two clubs can share a name (Barcelona's staff and another Barcelona's), so
  * the staff are the ones the app lists for the club.
  */
-function probedAt(probe, folder, club, ids) {
+export function probedAt(probe, folder, club, ids) {
   const file = join(folder, `staff-${Date.now()}.json`);
   probe.run(["staff", "--limit", "1", "--export", file]);
   const clubs = new Map(JSON.parse(readFileSync(file, "utf8")).staff.map((row) => [row.uid, row.club]));
@@ -42,10 +42,10 @@ function probedAt(probe, folder, club, ids) {
 }
 
 /** The ids of `rows`, in order. */
-const idsOf = (rows) => rows.map((row) => row.uid).sort((a, b) => a - b);
+export const idsOf = (rows) => rows.map((row) => row.uid).sort((a, b) => a - b);
 
 /** Who the probe reads as the manager of the club `uid`: "Name (id)", "no one", or "" when it reads none. */
-function probedManager(probe, uid) {
+export function probedManager(probe, uid) {
   return probe.run(["club", uid]).match(/^\s+manager\s+(.*)$/m)?.[1]?.trim() ?? "";
 }
 

@@ -2,9 +2,10 @@
 // from the two arrays of containers the build profile places, with the reputation of each senior team and the players
 // the game lists for it, as the probe reads them; no tab of their own; the switch, the list, its search and its filter,
 // a team's profile with its squad, its teams (the senior team and its youth teams, #210) and the squad of one of its
-// youth teams as the probe reads them, a player opened from it, Edit offering the reputations of the senior and the youth
-// team (nothing is applied: the edits themselves are in the `edit` test), and the switch back to the clubs. Writes
-// nothing. On a build whose profile places no national teams, the note saying why, with the switch back.
+// youth teams as the probe reads them, a player opened from it, the senior team's Heal all, Inspire all and Refresh all
+// (#217) and none for a youth team, Edit offering the reputations of the senior and the youth team (nothing is applied:
+// the edits and the actions themselves are in the `edit` test), and the switch back to the clubs. Writes nothing. On a
+// build whose profile places no national teams, the note saying why, with the switch back.
 import { SHOWN, VIS } from "../lib/app.mjs";
 
 export const name = "nationals";
@@ -13,15 +14,17 @@ export const writes = false;
 /** More than the game's 502 containers. */
 const ALL = 1000;
 
-const ROWS = `[...document.querySelectorAll("table.national-grid tbody tr")].filter(${SHOWN})`;
-const PROFILE = `${VIS}(".profile:not(.popup)")`;
+export const ROWS = `[...document.querySelectorAll("table.national-grid tbody tr")].filter(${SHOWN})`;
+export const PROFILE = `${VIS}(".profile:not(.popup)")`;
 const POPUP = `document.querySelector(".modal-backdrop .profile.popup")`;
 /** The button of the Clubs tab's switch for "clubs" or "nationals", in the list on show. */
 const SWITCH = (teams) => `${VIS}('.teams-switch [data-teams="${teams}"]')`;
 const TAB_NAMES = `[...document.querySelectorAll("nav.tabs button")].map((b) => b.firstChild?.textContent.trim())`;
+/** The labels of the buttons that act on the senior team's players, in the profile on show (#217). */
+const ACTIONS = `[...(${PROFILE}?.querySelectorAll(".squad-buttons button") ?? [])].map((b) => b.textContent)`;
 
 /** Opens the Clubs tab on one of its two lists, by its switch. */
-async function showTeams(app, teams) {
+export async function showTeams(app, teams) {
   await app.openTab("Clubs");
   await app.waitFor(SWITCH(teams), "the Clubs tab's switch");
   await app.click(SWITCH(teams), teams === "clubs" ? "Clubs" : "National teams");
@@ -171,6 +174,11 @@ export async function run({ app, report, probe }) {
   report.check("the switch has a button for each of its teams, the senior team's pressed",
     labels.length === sides.length && (await app.js(`${buttons}[0]?.getAttribute("aria-pressed") === "true"`)),
     labels.join(", "));
+  // Heal all, Inspire all and Refresh all act on the senior team's players (#217): the `edit` test presses them.
+  const actions = await app.js(ACTIONS);
+  report.check("the senior team has Heal all, Inspire all and Refresh all",
+    actions.length === 3 && actions[0].startsWith("Heal all") && actions[1] === "Inspire all" && actions[2] === "Refresh all",
+    actions.join(", "));
   await app.shot("nationals-profile");
 
   await app.click(`${names}[0]`, `${shownNames[0]}'s name`);
@@ -196,6 +204,8 @@ export async function run({ app, report, probe }) {
     const shownReputation = await app.js(`${PROFILE}.querySelector(".national-team-reputation .rep")?.textContent`);
     report.check("its reputation is shown beside the switch",
       shownReputation?.replace(/\D/g, "") === String(youth.reputation), `${shownReputation} (${youth.reputation})`);
+    const youthActions = await app.js(ACTIONS);
+    report.check("a youth team has none of the senior team's actions", youthActions.length === 0, youthActions.join(", "));
     await app.shot("nationals-youth-team");
   }
 
