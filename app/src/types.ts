@@ -89,6 +89,11 @@ export interface ConnectionInfo {
   knownBuild: boolean;
   /** Whether the game's layout tells women from men, players and staff alike: the lists offer that filter only then. */
   genderKnown: boolean;
+  /**
+   * Whether a transfer can be arranged for the game to make the next day (`arrange_transfer`): the game's layout places
+   * its transfers, and the editor can take memory of the game's own (Windows).
+   */
+  arrangesTransfers: boolean;
   /** What the checks the editor makes before it writes found on this game. */
   health: Health;
   /** Only from `connect`: what it froze again of what was frozen in this save before, when there was any. */
@@ -978,6 +983,11 @@ export interface LoggedChange {
     released?: string;
     /** The fee the buying club paid the selling one, in pounds, if any. */
     fee?: number;
+    /**
+     * For a transfer arranged for the game to make (`arrange_transfer`): the day of the move, as a number like
+     * 20261019. The game moves him and pays the fee on that day; until then he is at his club.
+     */
+    arranged?: number;
   };
   /**
    * Set for a change to a player's ties, which is logged as a change of his field `tie.nationality`,
@@ -1167,6 +1177,18 @@ export interface MovePreview {
   contract?: NewContract;
   /** For a member of staff who has no club, the contract the editor makes for him. */
   staffContract?: NewStaffContract;
+}
+
+/** A transfer the game is to make the next day, as the plan has it (`plan_arranged_transfer`). */
+export interface ArrangedPreview {
+  from: ClubName;
+  to: ClubName;
+  /** Pounds; the game pays it on the day. */
+  fee: number;
+  /** The day the game makes the move, as a number like 20261019. */
+  moveDay: number;
+  /** The contract he is to have. */
+  contract: NewContract;
 }
 
 /** The contract the editor makes for a member of staff who has no club, as the plan has it. */

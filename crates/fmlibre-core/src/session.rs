@@ -193,6 +193,8 @@ pub struct Session {
     /// The C runtime's functions that take and give back blocks of the game's heap (see `heap.rs`), found the first
     /// time they are needed: none where the game has no such runtime loaded.
     pub(crate) runtime: OnceLock<Option<crate::heap::Runtime>>,
+    /// The game's transfer manager and its vtable, once found (see `arranged.rs`).
+    pub(crate) transfer_manager: Mutex<Option<(u64, u64)>>,
     /// What the checks found: worked out the first time it is needed, and again by [`Session::recheck`].
     health: Mutex<Option<Arc<Health>>>,
     /// Whether editing a build without a profile was allowed.
@@ -243,6 +245,7 @@ impl Session {
             own_memory: Mutex::new(None),
             pools_found: Mutex::new(Vec::new()),
             runtime: OnceLock::new(),
+            transfer_manager: Mutex::new(None),
             health: Mutex::new(None),
             unknown_build_allowed: AtomicBool::new(false),
             search_all: source == ArraySource::ScanOnly,
@@ -586,6 +589,7 @@ impl Session {
             own_memory: Mutex::new(None),
             pools_found: Mutex::new(Vec::new()),
             runtime: OnceLock::new(),
+            transfer_manager: Mutex::new(None),
             health: Mutex::new(None),
             unknown_build_allowed: AtomicBool::new(false),
             search_all: false,

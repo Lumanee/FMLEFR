@@ -390,7 +390,8 @@ impl fmt::Display for MoveError {
             MoveError::FreeAgent => f.write_str("the player is a free agent, with no club to leave or swap"),
             MoveError::SameClub => f.write_str("the player is at this club already"),
             MoveError::OnLoan => f.write_str(
-                "the player is on loan: recall him from his loan first, or make the loan permanent, in the Loan part of \n                 his profile",
+                "the player is on loan: recall him from his loan first, or make the loan permanent, in the Loan part of \
+                 his profile",
             ),
             MoveError::NotOnLoan => f.write_str("the player is not on loan"),
             MoveError::PlayerCoach => f.write_str("player-coaches cannot be moved: they work as staff too"),
@@ -531,7 +532,8 @@ impl fmt::Display for MoveError {
             }
             MoveError::DealUnderWay => f.write_str("the player already has a move agreed, or an offer not yet answered"),
             MoveError::NoGameMemory => f.write_str(
-                "the editor could not take memory in the game for this: Windows did not let it run the game's own \n                 functions for it",
+                "the editor could not take memory in the game for this: Windows did not let it run the game's own \
+                 functions for it",
             ),
             MoveError::Locked(lock) => write!(f, "nothing was changed: {lock}"),
             MoveError::Memory(err) => write!(f, "{err}"),

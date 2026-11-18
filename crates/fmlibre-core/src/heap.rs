@@ -117,12 +117,13 @@ impl Session {
     }
 }
 
-/// A string of `size` bytes with its terminating zero, unlike any other: the editor's mark, the time and a count.
+/// A string of `size` bytes with its terminating zero, unlike any other: the editor's mark, a count and the time, which a
+/// short string cuts.
 fn marker(size: usize) -> Vec<u8> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNT: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-    let head = format!("FMLE{nanos:x}.{}.", COUNT.fetch_add(1, Ordering::Relaxed));
+    let head = format!("FMLE{:x}.{nanos:x}.", COUNT.fetch_add(1, Ordering::Relaxed));
     let mut text: Vec<u8> = head.bytes().chain(std::iter::repeat(b'x')).take(size - 1).collect();
     text.push(0);
     text
@@ -141,5 +142,6 @@ mod tests {
             assert!(!text[..size - 1].contains(&0));
         }
         assert_ne!(marker(64), marker(64));
+        assert_ne!(marker(16), marker(16));
     }
 }

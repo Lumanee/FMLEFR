@@ -28,11 +28,13 @@ export interface EditorState {
   editable: boolean;
   /** Why nothing can be edited, for the hover of what is turned off: the colophon's note. */
   readOnlyNote: string;
+  /** Whether the editor can arrange a transfer for the game to make on its next day (see `arrangeTransfer`). */
+  arrangesTransfers: boolean;
   /** Called after changes were written or undone: the lists, the open profile and the change log read again. */
   onEdited: () => void;
 }
 
-export const EditorContext = createContext<EditorState>({ editable: false, readOnlyNote: "", onEdited: () => {} });
+export const EditorContext = createContext<EditorState>({ editable: false, readOnlyNote: "", arrangesTransfers: false, onEdited: () => {} });
 
 /** The inputs of the profile being edited (header and body), for the components that draw them. */
 export interface EditSession {

@@ -41,6 +41,18 @@ code). On Windows it puts no code of its own in the
 game; on macOS the game loads one small library of ours, the bridge (see
 [On macOS](#on-macos)).
 
+A transfer arranged for the game to make (Windows) needs memory the game gives back to the
+C runtime's `free()` later, which memory of the editor's own would not survive: the move due
+on a day, and any list larger than the game's own allocator hands out. The editor has the
+game's C runtime take that memory: it runs `ucrtbase.dll`'s `_strdup` in the game, on a
+thread of its own (`CreateRemoteThread`, see `Process::call`), with a string of the size it
+needs, unlike any other, and finds the block `_strdup` took by that string; it gives a
+block back with the runtime's `free` the same way (`heap.rs`). These are functions the game
+has loaded; the editor writes no code into the game for them. The offer and the contract of
+such a transfer go in slots of the game's pools, as above (see `arranged.rs`). Until the day,
+the app refuses to move, swap or release the player another way: the game makes the transfer
+from the club he is at.
+
 Before every write it checks five things:
 - the game still has the save the editor read (see [When the game loads a save](#when-the-game-loads-a-save));
 - the object still belongs to the same person;

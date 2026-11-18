@@ -223,6 +223,10 @@ const errors: ErrorTexts = {
   "move.sameClub": () => "该球员已在这家俱乐部。",
   "move.unusualContract": () => "该球员的合同不是普通的球员合同。",
   "sign.noDate": () => "编辑器无法读取游戏内日期，而新合同需要从该日期开始。",
+  "arrange.unknown": () => "编辑器在这个版本的游戏中找不到游戏存放转会的位置。",
+  "arrange.underWay": () => "该球员已有谈妥的调动，或有尚未答复的报价。",
+  "arrange.noMemory": () => "编辑器无法为此在游戏中申请内存：Windows 不允许它代为运行游戏自己的函数。",
+  "arrange.made": () => "游戏已经办理了这笔转会，或改动了安排时写入的内容：无法撤销。",
   "sign.noModel": () => "该俱乐部一线队中没有持普通合同的球员，无法据此拟定新合同。",
   "sign.noPool": () => "在此游戏版本中，编辑器找不到游戏存放合同的位置，因此无法为自由球员签约。",
   "sign.poolFull": () =>
@@ -1706,6 +1710,7 @@ export const zhCN: Strings = {
     released: (name: string) => `${name} 已解约`,
     /** Under a transfer that had a fee: the amount, written out. */
     fee: (amount: string) => `转会费 ${amount}`,
+    arranged: (date: string) => `游戏会在 ${date} 办理调动`,
     /** Under a recall from loan that took the loan's option to buy away, which its undo writes back. */
     optionRemoved: (amount: string) => `已移除买断选项（${amount}）`,
     /** What a heal changed, in the place of its values: `count` is how many injuries the player had. */
@@ -2049,9 +2054,28 @@ export const zhCN: Strings = {
 
     // The switch at the top of the dialog: a move to a club, or a swap with one of its players.
     /** Its name for assistive technology. */
-    modeLabel: "转会或交换",
-    modeMove: "转会至俱乐部",
+    modeLabel: "转会、立即调动或交换",
+    modeMove: "立即调动",
     modeSwap: "与球员互换",
+    modeArrange: "转会",
+    arrangeNote:
+      "游戏会在下一天办理这笔转会，和它自己的转会一样：球员的履历会保留本赛季在原俱乐部的比赛，记录新俱乐部及转会费，" +
+      "转会费由游戏支付。",
+    moveNote: "编辑器会立刻调动球员。游戏的履历不会记录这次调动：本赛季算在新俱乐部名下，没有转会费。",
+    arrangeUnavailable:
+      "这个版本的游戏或这个系统不允许编辑器安排由游戏办理的转会：“立即调动”会立刻调动球员。",
+    arrangeChecking: "正在检查转会…首次需要几秒钟来找到游戏的转会数据。",
+    movesOn: (date: string) => `游戏会在 ${date} 办理调动`,
+    arrangeFee: (amount: string) => `转会费 ${amount}，当天由游戏支付`,
+    arrangeContract: (wage: string, expires: string) => `合同：周薪 ${wage}，到期日 ${expires}`,
+    arrangeDoes: [
+      "现在安排：在游戏中点击“继续”后，游戏会在下一天办理调动",
+      "履历保留本赛季在原俱乐部的比赛，并记录新俱乐部及转会费",
+      "转会费由游戏当天支付，和它自己的转会一样",
+      "从那天起与新俱乐部签约；周薪和合同到期日只有在你设置新值时才会改变",
+      "记录在“改动记录”中，到那天之前一次撤销即可取消",
+    ],
+    arrangeButton: "安排转会",
 
     // Choosing the club
     /** The name of the search box, and of the list of clubs under it, for assistive technology. */
@@ -2240,6 +2264,8 @@ export const zhCN: Strings = {
     // The foot
     /** Nothing changes in the game until Transfer, or Swap. */
     hint: "点击“转会”后才会修改游戏。",
+    arrangeHint: "点击“安排转会”后才会修改游戏。",
+    moveNowHint: "点击“立即调动”后才会修改游戏。",
     move: "转会",
     moving: "正在转会…",
     cancel: "取消",

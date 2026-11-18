@@ -269,6 +269,13 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "El juego no tiene sitio para otro contrato hasta que haga uno él mismo, como hace al pasar los días: avanza un " +
     "día en el juego y vuelve a intentarlo.",
+  "arrange.unknown": () => "El editor no encuentra dónde guarda el juego sus traspasos en esta versión del juego.",
+  "arrange.underWay": () => "El jugador ya tiene un movimiento acordado, o una oferta sin responder.",
+  "arrange.noMemory": () =>
+    "El editor no pudo reservar memoria en el juego para esto: Windows no le dejó ejecutar por él las propias " +
+    "funciones del juego.",
+  "arrange.made": () =>
+    "El juego ya ha hecho este traspaso, o ha cambiado lo que escribió prepararlo: no se puede deshacer.",
   "sign.noModel": () =>
     "El club no tiene en su primer equipo ningún jugador con un contrato corriente en el que basar el nuevo.",
   "sign.noDate": () => "El editor no puede leer la fecha del juego, que es cuando empieza el nuevo contrato.",
@@ -1568,6 +1575,7 @@ export const es: Strings = {
     swappedWith: (name) => `Intercambiado por ${name}`,
     released: (name) => `Contrato rescindido: ${name}`,
     fee: (amount) => `Traspaso: ${amount}`,
+    arranged: (date) => `El juego hace el movimiento el ${date}`,
     optionRemoved: (amount) => `Opción de compra (${amount}) eliminada`,
     healed: (count) => (count === 1 ? "1 lesión curada" : `${format(count)} lesiones curadas`),
     lifted: (count) => (count === 1 ? "1 sanción levantada" : `${format(count)} sanciones levantadas`),
@@ -1871,9 +1879,31 @@ export const es: Strings = {
     from: "Origen",
     to: "Destino",
 
-    modeLabel: "Traspaso o intercambio",
-    modeMove: "Traspasar a un club",
+    modeLabel: "Traspaso, mover ahora o intercambio",
+    modeMove: "Mover ahora",
     modeSwap: "Intercambiar por un jugador",
+    modeArrange: "Traspaso",
+    arrangeNote:
+      "El juego hace el traspaso en su siguiente día, como hace los suyos: su historial conserva los partidos de esta " +
+      "temporada con su antiguo club, anota el nuevo club con el precio, y el juego paga el precio.",
+    moveNote:
+      "El editor lo mueve al instante. El historial del juego no lo recoge: esta temporada aparece con el nuevo club, " +
+      "sin precio.",
+    arrangeUnavailable:
+      "Esta versión del juego, o este sistema, no deja que el editor prepare un traspaso para que lo haga el juego: " +
+      "Mover ahora lo mueve al instante.",
+    arrangeChecking: "Comprobando el traspaso… la primera vez, encontrar los traspasos del juego tarda unos segundos.",
+    movesOn: (date) => `El juego hace el movimiento el ${date}`,
+    arrangeFee: (amount) => `Precio ${amount}, que paga el juego ese día`,
+    arrangeContract: (wage, expires) => `Contrato: ${wage} a la semana hasta el ${expires}`,
+    arrangeDoes: [
+      "Acordado ahora: el juego hace el movimiento en su siguiente día, cuando pulses Continuar en el juego",
+      "Su historial conserva los partidos de esta temporada con su antiguo club y anota el nuevo club con el precio",
+      "El juego paga el precio ese día, como paga sus propios traspasos",
+      "Contrato con el nuevo club desde ese día; el salario y el fin de contrato solo cambian si fijas otros nuevos",
+      "Aparece en Cambios, donde un solo Deshacer lo anula hasta ese día",
+    ],
+    arrangeButton: "Preparar traspaso",
 
     // El club
     searchLabel: "Buscar el club al que traspasar",
@@ -2030,6 +2060,8 @@ export const es: Strings = {
 
     // El pie
     hint: "Nada cambia en el juego hasta que pulsas Traspasar.",
+    arrangeHint: "Nada cambia en el juego hasta que pulsas Preparar traspaso.",
+    moveNowHint: "Nada cambia en el juego hasta que pulsas Mover ahora.",
     move: "Traspasar",
     moving: "Traspasando…",
     cancel: "Cancelar",

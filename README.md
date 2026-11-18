@@ -62,6 +62,9 @@ How to install and use it: [docs/INSTALL.md](docs/INSTALL.md).
 - Transfer, swap or release players, sign free agents, and move staff between clubs in their
   own job or another (doctors, analysts and directors of football too), or sign staff who have
   no club.
+- Arrange a transfer for the game to make on its next day (Windows): the game moves the
+  player, pays the fee, and keeps the move in his career history, with this season's matches
+  at his old club, as it does for its own transfers.
 - Mass edit many at once, with a preview; undo any change.
 - Export the player, staff or club list, with its search and filters, to CSV or JSON for a
   spreadsheet or your own tools: attributes, positions, personality, contracts, club finances

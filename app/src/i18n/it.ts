@@ -297,6 +297,14 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "Il gioco non ha posto per un altro contratto finché non ne crea uno lui, come fa con il passare dei giorni: " +
     "continua di un giorno nel gioco e riprova.",
+  "arrange.unknown": () => "L'editor non trova dove il gioco tiene i suoi trasferimenti in questa versione del gioco.",
+  "arrange.underWay": () => "Il giocatore ha già uno spostamento concordato, o un'offerta ancora senza risposta.",
+  "arrange.noMemory": () =>
+    "L'editor non ha potuto prendere memoria nel gioco per questo: Windows non gli ha lasciato eseguire al suo posto " +
+    "le funzioni del gioco.",
+  "arrange.made": () =>
+    "Il gioco ha già fatto questo trasferimento, o ha cambiato ciò che la preparazione aveva scritto: non si può " +
+    "annullare.",
   "sign.noModel": () =>
     "La società non ha in prima squadra nessun giocatore con un contratto normale su cui modellare quello nuovo.",
   "sign.noDate": () => "L'editor non riesce a leggere la data del gioco, da cui parte il nuovo contratto.",
@@ -1608,6 +1616,7 @@ export const it: Strings = {
     swappedWith: (name) => `Scambiato con ${name}`,
     released: (name) => `${name} svincolato`,
     fee: (amount) => `Costo ${amount}`,
+    arranged: (date) => `Il gioco fa lo spostamento il ${date}`,
     optionRemoved: (amount) => `Diritto di riscatto (${amount}) tolto`,
     healed: (count) => (count === 1 ? "1 infortunio guarito" : `${format(count)} infortuni guariti`),
     lifted: (count) => (count === 1 ? "1 squalifica revocata" : `${format(count)} squalifiche revocate`),
@@ -1896,9 +1905,32 @@ export const it: Strings = {
     from: "Da",
     to: "A",
 
-    modeLabel: "Trasferimento o scambio",
-    modeMove: "Trasferisci in una società",
+    modeLabel: "Trasferimento, sposta subito o scambio",
+    modeMove: "Sposta subito",
     modeSwap: "Scambia con un giocatore",
+    modeArrange: "Trasferimento",
+    arrangeNote:
+      "Il gioco fa il trasferimento al giorno successivo, come fa con i suoi: la cronologia del giocatore conserva le " +
+      "partite di questa stagione con la vecchia società, riporta la nuova società con il costo, e il gioco paga il " +
+      "costo.",
+    moveNote:
+      "L'editor lo sposta subito. La cronologia del gioco non lo riporta: questa stagione appare sotto la nuova " +
+      "società, senza costo.",
+    arrangeUnavailable:
+      "Questa versione del gioco, o questo sistema, non permette all'editor di preparare un trasferimento che farà il " +
+      "gioco: Sposta subito lo sposta subito.",
+    arrangeChecking: "Controllo del trasferimento… la prima volta, trovare i trasferimenti del gioco richiede qualche secondo.",
+    movesOn: (date) => `Il gioco fa lo spostamento il ${date}`,
+    arrangeFee: (amount) => `Costo ${amount}, pagato dal gioco quel giorno`,
+    arrangeContract: (wage, expires) => `Contratto: ${wage} a settimana fino al ${expires}`,
+    arrangeDoes: [
+      "Concordato ora: il gioco fa lo spostamento al giorno successivo, quando premi Continua nel gioco",
+      "La sua cronologia conserva le partite di questa stagione con la vecchia società e riporta la nuova società con il costo",
+      "Il gioco paga il costo quel giorno, come per i suoi trasferimenti",
+      "Contratto con la nuova società da quel giorno; stipendio e scadenza cambiano solo se ne imposti di nuovi",
+      "Riportato in Modifiche, dove un solo ripristino lo annulla fino a quel giorno",
+    ],
+    arrangeButton: "Prepara trasferimento",
 
     // La scelta del club
     searchLabel: "Cerca la società in cui trasferirlo",
@@ -2059,6 +2091,8 @@ export const it: Strings = {
 
     // Il piè di pagina
     hint: "Nel gioco non cambia nulla finché non premi Trasferisci.",
+    arrangeHint: "Nel gioco non cambia nulla finché non premi Prepara trasferimento.",
+    moveNowHint: "Nel gioco non cambia nulla finché non premi Sposta subito.",
     move: "Trasferisci",
     moving: "Trasferimento…",
     cancel: "Annulla",

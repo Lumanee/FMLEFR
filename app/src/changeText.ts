@@ -75,6 +75,9 @@ function notesOf(change: LoggedChange): string[] {
   if (moved?.fee !== undefined) {
     notes.push(text.fee(formatMoney(moved.fee)));
   }
+  if (moved?.arranged !== undefined) {
+    notes.push(text.arranged(formatDate(dateFromNumber(moved.arranged))));
+  }
   if (recall !== undefined) {
     notes.push(text.optionRemoved(formatMoney(recall.optionFee)));
   }

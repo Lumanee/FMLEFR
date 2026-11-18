@@ -5063,18 +5063,21 @@ fn arrange_transfer(
     let plan = session.plan_arranged_transfer(player, to, terms, fee, &human)?;
     let from = clubs.get(plan.from_club).map_or("?", |club| club.name.as_str());
     println!(
-        "{} (UID {uid}): {from} -> {}, fee £{}, offer {} at {:#x}, contract at {:#x}, moves on {} (planned in {:.1} s)",
+        "{} (UID {uid}): {from} -> {}, fee £{}, offer {}, moves on {} (planned in {:.1} s)",
         player.name,
         to.name,
         plan.fee,
         plan.offer_number,
-        plan.offer,
-        plan.contract,
         plan.move_day.to_number(),
         started.elapsed().as_secs_f64()
     );
-    let done = session.apply_arranged_transfer(plan)?;
-    println!("  arranged: the game makes the move on {}", done.move_day.to_number());
+    let done = session.apply_arranged_transfer(&plan)?;
+    println!(
+        "  arranged: offer at {:#x}, contract at {:#x}; the game makes the move on {}",
+        done.offer,
+        done.contract,
+        done.move_day.to_number()
+    );
     if let Some(hold) = restore_after {
         if hold > 0 {
             println!("  taking it back in {hold} s");

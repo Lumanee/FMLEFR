@@ -32,6 +32,7 @@ use crate::players::PlayerSummary;
 use crate::profile::TransfersLayout;
 use crate::rtti;
 use crate::session::Session;
+use crate::signing::NewContract;
 use crate::transfer::{MAX_FEE, MoveError, MoveTerms, Patch, Patches, PointerList};
 
 /// The most offers the editor takes the manager's list to hold.
@@ -58,8 +59,17 @@ const UNSET_DATE: [u8; 4] = [0x01, 0x00, 0x6C, 0x07];
 /// The room a list the editor makes has, in elements, and how a full one grows: by half again, as the game's do.
 const NEW_LIST_ROOM: u64 = 4;
 
-/// What arranging a transfer does, worked out from the game as it is now. The entry, the move due and the lists they
-/// join are made as it is written.
+/// Where an object of an arranged transfer goes: the first free slot of the game's pool of them, taken as the game takes
+/// one, or, when the pool has none free, a block of the game's heap taken as the transfer is written, which the pool
+/// takes as its own once the game lets go of it.
+#[derive(Debug, Clone)]
+enum Placement {
+    Slot { slot: u64, was: Vec<u8>, pool: Patch },
+    Heap,
+}
+
+/// What arranging a transfer does, worked out from the game as it is now. Nothing of the game's is taken for it: the
+/// slots and blocks it needs are taken as it is written.
 #[derive(Debug, Clone)]
 pub struct ArrangedPlan {
     pub player: u32,
@@ -70,13 +80,11 @@ pub struct ArrangedPlan {
     /// The day the game makes the move.
     pub move_day: FmDate,
     pub offer_number: u32,
-    /// Where the offer and the contract go.
-    pub offer: u64,
-    pub contract: u64,
-    /// Taking the two slots and filling them.
-    patches: Vec<Patch>,
-    /// Blocks of the game's heap already taken for the plan: a slot of a pool that had none free.
-    blocks: Vec<u64>,
+    /// What the contract he is to have says.
+    pub terms: NewContract,
+    /// The offer and the contract, and where each goes.
+    offer: (Vec<u8>, Placement),
+    contract: (Vec<u8>, Placement),
     /// The player's object and person block, and the transfer manager.
     object: u64,
     person: u64,
@@ -88,6 +96,9 @@ pub struct ArrangedPlan {
 pub struct Arranged {
     pub player: u32,
     pub move_day: FmDate,
+    /// Where the offer and the contract went.
+    pub offer: u64,
+    pub contract: u64,
     patches: Vec<Patch>,
     /// The blocks of the game's heap the editor took, given back by an undo.
     blocks: Vec<u64>,
@@ -183,7 +194,7 @@ impl Session {
 
     /// Works out arranging the move of `player` to the senior team of `club` for the next day, for `fee` pounds, on the
     /// contract `terms` (see the module's notes). `human_clubs` are the UIDs of the clubs human managers run. Nothing
-    /// is written, but a pool with no slot free has one taken of the game's heap for it.
+    /// is written, and nothing of the game's is taken.
     pub fn plan_arranged_transfer(
         &self,
         player: &PlayerSummary,
@@ -252,17 +263,15 @@ impl Session {
         let model = process.read_bytes(leaving.contract, contract_size as usize)?;
         let contract = self.new_contract(model, leaving.object, joining.senior, terms, today, move_day, None);
 
-        let mut patches = Patches::default();
-        let mut blocks = Vec::new();
-        let offer_at = self.slot_for(model_offer, t.offer_size, pools, offer, &mut patches, &mut blocks)?;
-        let contract_at = self.slot_for(leaving.contract, contract_size, pools, contract, &mut patches, &mut blocks);
-        let contract_at = match contract_at {
-            Ok(at) => at,
-            Err(err) => {
-                self.give_back(&blocks);
-                return Err(err);
-            }
+        let c = &layout.contract;
+        let field = |offset: u64, kind: Kind| kind.decode(&contract[offset as usize..offset as usize + 4]);
+        let made = NewContract {
+            wage: field(c.wage, Kind::I32),
+            expires: field(c.expires, Kind::Date),
+            squad_status: contract[c.squad_status as usize],
         };
+        let offer_at = self.placement(model_offer, t.offer_size, pools)?;
+        let contract_at = self.placement(leaving.contract, contract_size, pools)?;
         Ok(ArrangedPlan {
             player: player.uid,
             from_club: leaving.club_uid,
@@ -270,33 +279,38 @@ impl Session {
             fee: i64::from(fee),
             move_day,
             offer_number: number,
-            offer: offer_at,
-            contract: contract_at,
-            patches: patches.0,
-            blocks,
+            terms: made,
+            offer: (offer, offer_at),
+            contract: (contract, contract_at),
             object: leaving.object,
             person,
             manager,
         })
     }
 
-    /// Gives back the blocks of the game's heap an arranged transfer took, when it is not written after all.
-    pub fn drop_arranged_plan(&self, plan: ArrangedPlan) {
-        self.give_back(&plan.blocks);
-    }
-
     /// Writes an arranged transfer: the offer and the contract into their slots, the entry and the move due into blocks
     /// of the game's heap, then the links to them, the offer and the move due last. When a write fails, the ones before
     /// it are put back and the blocks given back.
-    pub fn apply_arranged_transfer(&self, plan: ArrangedPlan) -> Result<Arranged, MoveError> {
+    pub fn apply_arranged_transfer(&self, plan: &ArrangedPlan) -> Result<Arranged, MoveError> {
         let t = self.transfers_layout()?;
-        let mut blocks = plan.blocks.clone();
-        let result = self.arranged_links(t, &plan, &mut blocks).and_then(|links| {
-            let all: Vec<Patch> = plan.patches.iter().cloned().chain(links).collect();
-            self.apply_patches(&all).map(|()| all)
-        });
+        // Refused before any block of the game's heap is taken, as the writes themselves would be.
+        if let Some(lock) = self.structure_lock() {
+            return Err(MoveError::Locked(lock));
+        }
+        let mut blocks = Vec::new();
+        let mut placed = (0, 0);
+        let result = self
+            .arranged_patches(t, plan, &mut blocks, &mut placed)
+            .and_then(|all| self.apply_patches(&all).map(|()| all));
         match result {
-            Ok(patches) => Ok(Arranged { player: plan.player, move_day: plan.move_day, patches, blocks }),
+            Ok(patches) => Ok(Arranged {
+                player: plan.player,
+                move_day: plan.move_day,
+                offer: placed.0,
+                contract: placed.1,
+                patches,
+                blocks,
+            }),
             Err(err) => {
                 self.give_back(&blocks);
                 Err(err)
@@ -312,41 +326,57 @@ impl Session {
         Ok(())
     }
 
-    /// The entry and the move due, made in blocks of the game's heap, and the writes that link them and the offer in.
-    fn arranged_links(
+    /// The writes of an arranged transfer: the offer and the contract placed, the entry and the move due made in blocks
+    /// of the game's heap, then the links to them. `placed` gets where the offer and the contract went.
+    fn arranged_patches(
         &self,
         t: &TransfersLayout,
         plan: &ArrangedPlan,
         blocks: &mut Vec<u64>,
+        placed: &mut (u64, u64),
     ) -> Result<Vec<Patch>, MoveError> {
         let p = &self.layout.player;
+        let mut links = Patches::default();
+        let offer = self.place(&plan.offer.1, &plan.offer.0, &mut links, blocks)?;
+        let contract = self.place(&plan.contract.1, &plan.contract.0, &mut links, blocks)?;
+        *placed = (offer, contract);
         let entry = self.heap_block(t.entry_size as usize)?;
         blocks.push(entry);
-        self.process.write_bytes(entry, &entry_bytes(t, plan.contract, plan.offer_number))?;
+        self.process.write_bytes(entry, &entry_bytes(t, contract, plan.offer_number))?;
         let due = self.heap_block(t.due_size as usize)?;
         blocks.push(due);
         self.process.write_bytes(due, &due_bytes(t, plan.person, plan.move_day, plan.offer_number))?;
 
-        let mut links = Patches::default();
         let entries_at = plan.object + p.at(t.player_entries, 0);
         self.add_to_record(t, entries_at, &entry.to_le_bytes(), &mut links, blocks)?;
         let numbers_at = plan.object + p.at(t.player_offer_numbers, 0);
         self.add_to_record(t, numbers_at, &plan.offer_number.to_le_bytes(), &mut links, blocks)?;
         // The offer, then the move due, once all they lead to is in place; then the flag that a move is due.
-        self.add_to_list(plan.manager + t.offers, &plan.offer.to_le_bytes(), &mut links, blocks)?;
+        self.add_to_list(plan.manager + t.offers, &offer.to_le_bytes(), &mut links, blocks)?;
         self.add_to_list(plan.manager + t.due, &due.to_le_bytes(), &mut links, blocks)?;
         let flag = self.process.read_bytes(plan.manager + t.due_flag, 1)?;
         links.push(plan.manager + t.due_flag, flag, [1]);
         Ok(links.0)
     }
 
-    /// The transfer manager: the one object of its class.
+    /// The transfer manager: the one object of its class. Found once, in a pass over the game's memory, and kept while
+    /// it is still there: the game makes another when it loads a save.
     fn transfer_manager(&self, t: &TransfersLayout) -> Result<u64, MoveError> {
+        let mut kept = self.transfer_manager.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((manager, vtable)) = *kept
+            && self.process.read_u64(manager).ok() == Some(vtable)
+        {
+            return Ok(manager);
+        }
         let vtables = rtti::vtables(&self.process, &self.plugin, &t.manager_class);
         let objects = rtti::objects(&self.process, &self.plugin, &vtables)?;
-        let managers: Vec<u64> = objects.into_values().flatten().collect();
+        let managers: Vec<(u64, u64)> =
+            objects.into_iter().flat_map(|(vtable, at)| at.into_iter().map(move |manager| (manager, vtable))).collect();
         match managers[..] {
-            [manager] => Ok(manager),
+            [found] => {
+                *kept = Some(found);
+                Ok(found.0)
+            }
             _ => Err(MoveError::NoTransfers),
         }
     }
@@ -356,32 +386,37 @@ impl Session {
         PointerList::read_up_to(&self.process, header, MOST_OFFERS)?.ok_or(MoveError::NoTransfers)
     }
 
-    /// Where an object of `size` bytes goes: the first free slot of the pool that holds `model`, taken as the game takes
-    /// one, or, when the pool has none free, a block of the game's heap, which the pool takes as its own once the game
-    /// lets go of it. Its bytes become `bytes`.
-    fn slot_for(
+    /// Where an object of `size` bytes of the class `model` is one of goes (see [`Placement`]).
+    fn placement(&self, model: u64, size: u64, pools: &crate::profile::PoolLayout) -> Result<Placement, MoveError> {
+        let pool = self.pool_holding(model, size)?;
+        match pool.take(&self.process, pools) {
+            Ok(taken) => Ok(Placement::Slot { slot: taken.slot, was: taken.was, pool: taken.pool }),
+            Err(MoveError::PoolFull) => Ok(Placement::Heap),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// The writes that place `bytes` where `placement` says, and where that is: a block of the game's heap is taken
+    /// now.
+    fn place(
         &self,
-        model: u64,
-        size: u64,
-        pools: &crate::profile::PoolLayout,
-        bytes: Vec<u8>,
+        placement: &Placement,
+        bytes: &[u8],
         patches: &mut Patches,
         blocks: &mut Vec<u64>,
     ) -> Result<u64, MoveError> {
-        let pool = self.pool_holding(model, size)?;
-        match pool.take(&self.process, pools) {
-            Ok(taken) => {
-                patches.push(taken.pool.address, taken.pool.before, taken.pool.after);
-                patches.push(taken.slot, taken.was, bytes);
-                Ok(taken.slot)
+        match placement {
+            Placement::Slot { slot, was, pool } => {
+                patches.push(pool.address, pool.before.clone(), pool.after.clone());
+                patches.push(*slot, was.clone(), bytes.to_vec());
+                Ok(*slot)
             }
-            Err(MoveError::PoolFull) => {
-                let block = self.heap_block(size as usize)?;
+            Placement::Heap => {
+                let block = self.heap_block(bytes.len())?;
                 blocks.push(block);
-                patches.push(block, vec![0; size as usize], bytes);
+                patches.push(block, vec![0; bytes.len()], bytes.to_vec());
                 Ok(block)
             }
-            Err(err) => Err(err),
         }
     }
 
