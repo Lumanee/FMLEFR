@@ -172,30 +172,30 @@ pub struct RoomMaker {
 
 /// What ties a player to his club, checked: the player, the team he plays for, his
 /// contract and the team that employs him, the club, and every list of it that holds him.
-struct Departure {
-    uid: u32,
-    object: u64,
-    team: u64,
-    contract: u64,
-    employer: u64,
+pub(crate) struct Departure {
+    pub(crate) uid: u32,
+    pub(crate) object: u64,
+    pub(crate) team: u64,
+    pub(crate) contract: u64,
+    pub(crate) employer: u64,
     /// The contract's bytes, as read.
-    record: Vec<u8>,
-    club: u64,
-    club_uid: u32,
+    pub(crate) record: Vec<u8>,
+    pub(crate) club: u64,
+    pub(crate) club_uid: u32,
     /// Whether a human manager runs the club.
-    human: bool,
+    pub(crate) human: bool,
     /// The club's teams.
-    teams: Vec<u64>,
+    pub(crate) teams: Vec<u64>,
     /// Each list of the club that holds him: the team, the list, where in it he is, and what it holds.
-    leaving: Vec<(u64, PointerList, usize, Vec<u64>)>,
+    pub(crate) leaving: Vec<(u64, PointerList, usize, Vec<u64>)>,
 }
 
 /// The senior team a player joins, and its list.
-struct Arrival {
-    club_uid: u32,
-    senior: u64,
-    list: PointerList,
-    elements: Vec<u64>,
+pub(crate) struct Arrival {
+    pub(crate) club_uid: u32,
+    pub(crate) senior: u64,
+    pub(crate) list: PointerList,
+    pub(crate) elements: Vec<u64>,
 }
 
 #[derive(Debug)]
@@ -369,6 +369,12 @@ pub enum MoveError {
     },
     /// The editor cannot read the in-game date, which a new contract starts on.
     NoDate,
+    /// The editor cannot find the game's transfer manager, or its lists do not check out, in this version of the game.
+    NoTransfers,
+    /// The player has a move agreed, or an offer the selling club or he has yet to answer.
+    DealUnderWay,
+    /// The editor could not take memory of the game's own heap, which what it adds here needs (see `heap.rs`).
+    NoGameMemory,
     /// The editor does not make this change to this game: see [`Lock`].
     Locked(Lock),
     Memory(fmlibre_mem::Error),
@@ -520,6 +526,13 @@ impl fmt::Display for MoveError {
                 f.write_str("none of this club's staff has a full contract of their own to model a new one on")
             }
             MoveError::NoDate => f.write_str("the editor cannot read the in-game date, which a new contract starts on"),
+            MoveError::NoTransfers => {
+                f.write_str("the editor cannot find where the game keeps its transfers in this version of the game")
+            }
+            MoveError::DealUnderWay => f.write_str("the player already has a move agreed, or an offer not yet answered"),
+            MoveError::NoGameMemory => f.write_str(
+                "the editor could not take memory in the game for this: Windows did not let it run the game's own \n                 functions for it",
+            ),
             MoveError::Locked(lock) => write!(f, "nothing was changed: {lock}"),
             MoveError::Memory(err) => write!(f, "{err}"),
         }
@@ -587,6 +600,9 @@ impl Coded for MoveError {
             MoveError::NoModel => "sign.noModel",
             MoveError::NoStaffModel { .. } => "staff.noModel",
             MoveError::NoDate => "sign.noDate",
+            MoveError::NoTransfers => "arrange.unknown",
+            MoveError::DealUnderWay => "arrange.underWay",
+            MoveError::NoGameMemory => "arrange.noMemory",
             MoveError::Locked(lock) => lock.code(),
             MoveError::Memory(err) => err.code(),
         }
@@ -1165,7 +1181,7 @@ impl Session {
     }
 
     /// Checks what ties `player` to his club and reads every list of it that holds him.
-    fn departure(&self, player: &PlayerSummary, human_clubs: &[u32]) -> Result<Departure, MoveError> {
+    pub(crate) fn departure(&self, player: &PlayerSummary, human_clubs: &[u32]) -> Result<Departure, MoveError> {
         let (process, layout) = (&self.process, &self.layout);
         let (p, c) = (&layout.player, &layout.contract);
         let object = player.address;
@@ -1269,7 +1285,7 @@ impl Session {
 
     /// Checks the senior team of the club at `club` for the player `leaving` describes, and
     /// reads its list.
-    fn arrival(&self, club: u64, leaving: &Departure) -> Result<Arrival, MoveError> {
+    pub(crate) fn arrival(&self, club: u64, leaving: &Departure) -> Result<Arrival, MoveError> {
         let (process, layout) = (&self.process, &self.layout);
         let club_uid = process.read_u32(club + layout.club.uid)?;
         if club == leaving.club {

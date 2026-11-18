@@ -190,6 +190,9 @@ pub struct Session {
     /// Where the game's pools of objects were found that the editor took a slot of, or looked for one in (see
     /// `object_pool.rs`).
     pub(crate) pools_found: Mutex<Vec<u64>>,
+    /// The C runtime's functions that take and give back blocks of the game's heap (see `heap.rs`), found the first
+    /// time they are needed: none where the game has no such runtime loaded.
+    pub(crate) runtime: OnceLock<Option<crate::heap::Runtime>>,
     /// What the checks found: worked out the first time it is needed, and again by [`Session::recheck`].
     health: Mutex<Option<Arc<Health>>>,
     /// Whether editing a build without a profile was allowed.
@@ -239,6 +242,7 @@ impl Session {
             loan_class: OnceLock::new(),
             own_memory: Mutex::new(None),
             pools_found: Mutex::new(Vec::new()),
+            runtime: OnceLock::new(),
             health: Mutex::new(None),
             unknown_build_allowed: AtomicBool::new(false),
             search_all: source == ArraySource::ScanOnly,
@@ -581,6 +585,7 @@ impl Session {
             loan_class: OnceLock::new(),
             own_memory: Mutex::new(None),
             pools_found: Mutex::new(Vec::new()),
+            runtime: OnceLock::new(),
             health: Mutex::new(None),
             unknown_build_allowed: AtomicBool::new(false),
             search_all: false,

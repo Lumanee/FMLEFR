@@ -636,3 +636,51 @@ container_nation = 0x170      # pointer back to its nation
 nation_code = 0x28            # an FM string: "ITA"
 nation_men = 0x108            # 0x110 on the Mac
 nation_women = 0x110          # 0x118 on the Mac
+
+# The game's transfers, and a move agreed for a later day, which the game makes on that day as it makes its own: it
+# keeps the player's season with the club he leaves, opens one with the club he joins, writes the fee into the
+# history and pays it (see crates/fmlibre-core/src/arranged.rs and docs/recon/fm27-transfers.md). Read on Game Pass
+# 0.9.2524.0, on a save of October 2026: Ebere Eze from Arsenal to West Ham for £7,777,777, arranged by the editor,
+# was made by the game on the day, which kept Arsenal's row of his season with his matches.
+[transfers]
+manager_class = "TRANSFER_MANAGER"
+offers = 0x20             # in the manager: (begin, end, capacity) of pointers to the offers (5,178 after a load)
+due = 0x50                # (begin, end, capacity) of pointers to the moves due on a day (103), malloc'd blocks
+due_flag = 0x68           # u8: 1 while a move is due
+offer_class = "FULL_TRANSFER_OFFER"
+offer_size = 0xD0         # slots of the game's pool of offers
+offer_one = 0x08          # 1
+offer_flags = 0x30        # 0x40 on the agreed transfers the game makes most
+offer_person = 0x38       # the player's person block
+offer_buyer = 0x40        # the senior team he joins
+offer_buyer_again = 0x48  # the same
+offer_seller = 0x50       # the team that employs him
+offer_fee = 0x58          # u32 pounds
+offer_number = 0x5C       # u32: the entries and the moves due name the offer by it
+offer_count = 0x60        # u32: a count of the offers made
+offer_unset = [0x64, 0x68] # i32 -1
+offer_accepted = 0x6C     # date, unset until the move
+offer_moved = 0x70        # date the move was made, unset until then
+offer_made = 0x74         # date the offer was made
+offer_lapses = 0x78       # date it lapses, 30 days on
+offer_move_day = 0x7C     # date of the move
+offer_later = 0x80        # date, unset
+offer_state = 0x8D        # u8: 19 agreed and waiting for its day, 20 made
+offer_payment = 0xA8      # pointer to how the fee is paid; null pays it at once
+entry_size = 0x48
+entry_one = 0x00          # u32 1
+entry_contract = 0x10     # pointer to the contract
+entry_number = 0x28       # u32 the offer's number
+entry_no_amount = 0x2C    # i32 -9,999,999
+entry_date = 0x38         # date, unset
+entry_state = 0x3E        # u8: 2 agreed and waiting
+entry_one_again = 0x3F    # u8 1
+entry_agreed = 0x40       # u8 1
+entry_kind = 0x41         # u8: 2 a transfer with a fee
+due_size = 0x10
+due_person = 0x00         # the player's person block
+due_day = 0x08            # date of the move, without flags
+due_number = 0x0C         # u32 the offer's number
+player_offer_numbers = 0x320 # in a player: pointer to his record of offers' numbers, a list of u32
+player_entries = 0x328    # in a player: pointer to his record of entries, a list of pointers
+record_size = 0x28        # a record: (begin, end, capacity), then 16 bytes of nothing

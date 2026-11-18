@@ -3,6 +3,7 @@
 
 #![cfg(any(windows, target_os = "macos"))]
 
+mod arranged;
 #[cfg(target_os = "macos")]
 pub mod bridge_setup;
 mod calibrate;
@@ -21,6 +22,7 @@ mod filter;
 mod game;
 mod graphics;
 mod health;
+mod heap;
 mod index;
 mod loans;
 mod locate;
@@ -54,6 +56,7 @@ mod transfer;
 mod tree;
 mod youth_intake;
 
+pub use arranged::{Arranged, ArrangedPlan};
 pub use calibrate::{ArrayRef, EntityArrays, calibrate};
 pub use clauses::{
     ClausePlan, ClauseSet, MOST_CLAUSE_AMOUNT, MOST_CLAUSE_CONDITION, RELEASE_CLAUSE, RELEASE_CLAUSES,

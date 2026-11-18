@@ -80,6 +80,68 @@ pub struct Layout {
     /// The nations' national teams (see `national.rs`); only in the layouts they have been checked in.
     #[serde(default)]
     pub national: Option<NationalLayout>,
+    /// The game's transfers and a move agreed for a later day (see `arranged.rs`); only in the layouts they have been
+    /// checked in.
+    #[serde(default)]
+    pub transfers: Option<TransfersLayout>,
+}
+
+/// How the game keeps its transfers and a move agreed for a later day (see `arranged.rs` and
+/// docs/recon/fm27-transfers.md): the transfer manager, found by its class, holds the list of offers and the list of
+/// the moves due on a day; an agreed offer names the player and the clubs, the fee and the day of the move; the contract
+/// he is to have is held by an entry that the player's record of entries lists, as his record of offers lists the
+/// offer's number.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TransfersLayout {
+    /// The transfer manager's class, as written in C++, and in it: its list of offers, its list of the moves due on a
+    /// day, and the flag it raises while one is due.
+    pub manager_class: String,
+    pub offers: u64,
+    pub due: u64,
+    pub due_flag: u64,
+    /// An offer's class and size, and its fields.
+    pub offer_class: String,
+    pub offer_size: u64,
+    pub offer_one: u64,
+    pub offer_flags: u64,
+    pub offer_person: u64,
+    pub offer_buyer: u64,
+    pub offer_buyer_again: u64,
+    pub offer_seller: u64,
+    pub offer_fee: u64,
+    pub offer_number: u64,
+    pub offer_count: u64,
+    pub offer_unset: Vec<u64>,
+    pub offer_accepted: u64,
+    pub offer_moved: u64,
+    pub offer_made: u64,
+    pub offer_lapses: u64,
+    pub offer_move_day: u64,
+    pub offer_later: u64,
+    pub offer_state: u64,
+    pub offer_payment: u64,
+    /// An entry of a contract not yet in force: its size and fields.
+    pub entry_size: u64,
+    pub entry_one: u64,
+    pub entry_contract: u64,
+    pub entry_number: u64,
+    pub entry_no_amount: u64,
+    pub entry_date: u64,
+    pub entry_state: u64,
+    pub entry_one_again: u64,
+    pub entry_agreed: u64,
+    pub entry_kind: u64,
+    /// A move due on a day: its size, and where it keeps the person block, the day and the offer's number.
+    pub due_size: u64,
+    pub due_person: u64,
+    pub due_day: u64,
+    pub due_number: u64,
+    /// In a player (shifted like the person block): pointers to his record of offers' numbers and to his record of
+    /// entries; and how large a record is.
+    pub player_offer_numbers: u64,
+    pub player_entries: u64,
+    pub record_size: u64,
 }
 
 /// How the game keeps a nation's national teams (see `national.rs`): each nation has two containers, one for its men's
@@ -1223,6 +1285,12 @@ pub fn built_in_profiles() -> impl Iterator<Item = BuildProfile> {
 
 fn parse<T: serde::de::DeserializeOwned>(text: &str) -> T {
     toml::from_str(text).expect("built-in profiles are checked by the unit tests")
+}
+
+/// The Windows object layout, as written, for the unit tests of other modules.
+#[cfg(test)]
+pub(crate) fn windows_layout() -> Layout {
+    parse(include_str!("../../../profiles/fm27/layout.toml"))
 }
 
 /// What `fmlibre-probe profile` writes in comments around the values of a build profile.

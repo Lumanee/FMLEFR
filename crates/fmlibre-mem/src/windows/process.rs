@@ -1,7 +1,9 @@
 use std::ffi::c_void;
 use std::path::PathBuf;
 
-use windows_sys::Win32::Foundation::{APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS, HANDLE};
+use windows_sys::Win32::Foundation::{
+    APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
 use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
 use windows_sys::Win32::Storage::Packaging::Appx::GetPackageFullName;
 use windows_sys::Win32::System::Diagnostics::Debug::{ReadProcessMemory, WriteProcessMemory};
@@ -10,13 +12,17 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
 };
 use windows_sys::Win32::System::Memory::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, VirtualAllocEx};
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_ACCESS_RIGHTS, PROCESS_NAME_WIN32,
-    PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, QueryFullProcessImageNameW,
+    CreateRemoteThread, GetCurrentProcess, GetExitCodeThread, LPTHREAD_START_ROUTINE, OpenProcess, OpenProcessToken,
+    PROCESS_ACCESS_RIGHTS, PROCESS_CREATE_THREAD, PROCESS_NAME_WIN32, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
+    PROCESS_VM_READ, PROCESS_VM_WRITE, QueryFullProcessImageNameW, WaitForSingleObject,
 };
 
 use super::handle::{OwnedHandle, create_snapshot, from_wide};
 use super::region::{Region, region_at};
 use crate::error::{Error, Result, last_error};
+
+/// How long [`Process::call`] waits for the function it runs, in milliseconds.
+const CALL_WAIT: u32 = 10_000;
 
 /// A process seen in a system snapshot; not opened.
 #[derive(Debug, Clone)]
@@ -81,10 +87,11 @@ impl Process {
         Self::open(pid, PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false)
     }
 
-    /// Opens `pid` for reading and also for writing its memory with [`Process::write_bytes`].
+    /// Opens `pid` for reading and also for writing its memory with [`Process::write_bytes`], and for running one of its
+    /// functions with [`Process::call`] where Windows allows it.
     pub fn open_read_write(pid: u32) -> Result<Self> {
         let access = PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION;
-        Self::open(pid, access, true)
+        Self::open(pid, access | PROCESS_CREATE_THREAD, true).or_else(|_| Self::open(pid, access, true))
     }
 
     fn open(pid: u32, access: PROCESS_ACCESS_RIGHTS, writable: bool) -> Result<Self> {
@@ -185,6 +192,35 @@ impl Process {
         Ok(at as u64)
     }
 
+    /// Runs `function`, a function the process has loaded that takes one argument, on a new thread in the process with
+    /// `argument`, waits for it to return, and gives back the low 32 bits of what it returned: what Windows keeps of a
+    /// thread's result. No code is written into the process. Gives up after `CALL_WAIT` milliseconds.
+    pub fn call(&self, function: u64, argument: u64) -> Result<u32> {
+        if !self.writable {
+            return Err(Error::ReadOnly);
+        }
+        // SAFETY: the address is only ever run in the other process, as the start of its new thread.
+        let start: LPTHREAD_START_ROUTINE = unsafe { std::mem::transmute::<u64, LPTHREAD_START_ROUTINE>(function) };
+        let mut id = 0u32;
+        let thread = unsafe {
+            CreateRemoteThread(self.handle.0, std::ptr::null(), 0, start, argument as *const c_void, 0, &mut id)
+        };
+        if thread.is_null() {
+            return Err(Error::last("CreateRemoteThread"));
+        }
+        let thread = OwnedHandle(thread);
+        match unsafe { WaitForSingleObject(thread.0, CALL_WAIT) } {
+            WAIT_OBJECT_0 => {}
+            WAIT_TIMEOUT => return Err(Error::Win32 { op: "WaitForSingleObject", code: WAIT_TIMEOUT }),
+            _ => return Err(Error::last("WaitForSingleObject")),
+        }
+        let mut code = 0u32;
+        if unsafe { GetExitCodeThread(thread.0, &mut code) } == 0 {
+            return Err(Error::last("GetExitCodeThread"));
+        }
+        Ok(code)
+    }
+
     /// Only heap data can be written: the whole range must lie in one region of
     /// committed, private, writable and non-executable memory. Anything else, such as
     /// a module's code or data, is refused before Windows is asked, because
@@ -276,6 +312,19 @@ mod tests {
 
         let read_only = Process::open_read(std::process::id()).expect("open this process");
         assert!(matches!(read_only.write_static(data, &[1]), Err(Error::ReadOnly)));
+    }
+
+    unsafe extern "system" fn add_one(argument: *mut c_void) -> u32 {
+        argument as u32 + 1
+    }
+
+    #[test]
+    fn runs_a_function_of_the_process_on_a_thread_of_its_own() {
+        let process = Process::open_read_write(std::process::id()).expect("open this process");
+        let function = add_one as unsafe extern "system" fn(*mut c_void) -> u32 as usize as u64;
+        assert_eq!(process.call(function, 41).expect("run it"), 42);
+        let read_only = Process::open_read(std::process::id()).expect("open this process");
+        assert!(matches!(read_only.call(function, 41), Err(Error::ReadOnly)));
     }
 
     #[test]

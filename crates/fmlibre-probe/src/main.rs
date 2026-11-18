@@ -291,6 +291,29 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         hold: u64,
     },
+    /// Arrange a transfer for the next day in the running game, for the game to make on that day as it makes its own:
+    /// an agreed offer with the fee and the contract he is to have, and the move due on that day.
+    Arrange {
+        /// The player's UID.
+        uid: u32,
+        /// The UID of the club he joins.
+        club: u32,
+        /// The fee in pounds.
+        #[arg(long, default_value_t = 0)]
+        fee: i64,
+        /// A new wage in pounds per week; his contract's otherwise.
+        #[arg(long)]
+        wage: Option<i64>,
+        /// A new contract end as YYYY-MM-DD; the end of next season otherwise.
+        #[arg(long)]
+        expires: Option<String>,
+        /// Take it back afterwards and check it.
+        #[arg(long)]
+        restore: bool,
+        /// With --restore, how many seconds to wait before taking it back.
+        #[arg(long, default_value_t = 0)]
+        hold: u64,
+    },
     /// Make the loan of a player permanent in the running game: he stays at the club he is on loan to, now under
     /// contract with it, and leaves his own club.
     Permanent {
@@ -1230,6 +1253,7 @@ fn run(cli: Cli) -> Result<()> {
         Some(
             Command::Set { .. }
                 | Command::Move { .. }
+                | Command::Arrange { .. }
                 | Command::Permanent { .. }
                 | Command::StadiumName { name: Some(_), .. }
                 | Command::Rename { first: Some(_), .. }
@@ -1351,6 +1375,11 @@ fn run(cli: Cli) -> Result<()> {
             let terms = MoveTerms { wage, expires };
             let session = connect(process, ArraySource::ProfileFirst)?;
             move_player(&session, uid, club, terms, fee, release, restore.then_some(hold))
+        }
+        Command::Arrange { uid, club, fee, wage, expires, restore, hold } => {
+            let expires = expires.as_deref().map(parse_iso_date).transpose()?.map(FmDate::to_number);
+            let session = connect(process, ArraySource::ProfileFirst)?;
+            arrange_transfer(&session, uid, club, MoveTerms { wage, expires }, fee, restore.then_some(hold))
         }
         Command::Permanent { uid, wage, expires, restore, hold } => {
             let expires = expires.as_deref().map(parse_iso_date).transpose()?.map(FmDate::to_number);
@@ -5011,6 +5040,48 @@ fn move_player(
         if !paid.is_empty() {
             println!("  fee taken back");
         }
+    }
+    Ok(())
+}
+
+/// Arranges the transfer of the player `uid` to the club `club` for the next day, shows what it wrote, and with
+/// `restore_after` takes it back and checks it.
+fn arrange_transfer(
+    session: &Session,
+    uid: u32,
+    club: u32,
+    terms: MoveTerms,
+    fee: i64,
+    restore_after: Option<u64>,
+) -> Result<()> {
+    let players = PlayerIndex::new(session.players()?);
+    let clubs = ClubIndex::new(session.clubs()?);
+    let player = players.get(uid).with_context(|| format!("no player with UID {uid}"))?;
+    let to = clubs.get(club).with_context(|| format!("no club with UID {club}"))?;
+    let human: Vec<u32> = session.staff()?.iter().filter(|s| s.is_human).filter_map(|s| s.club_uid).collect();
+    let started = std::time::Instant::now();
+    let plan = session.plan_arranged_transfer(player, to, terms, fee, &human)?;
+    let from = clubs.get(plan.from_club).map_or("?", |club| club.name.as_str());
+    println!(
+        "{} (UID {uid}): {from} -> {}, fee £{}, offer {} at {:#x}, contract at {:#x}, moves on {} (planned in {:.1} s)",
+        player.name,
+        to.name,
+        plan.fee,
+        plan.offer_number,
+        plan.offer,
+        plan.contract,
+        plan.move_day.to_number(),
+        started.elapsed().as_secs_f64()
+    );
+    let done = session.apply_arranged_transfer(plan)?;
+    println!("  arranged: the game makes the move on {}", done.move_day.to_number());
+    if let Some(hold) = restore_after {
+        if hold > 0 {
+            println!("  taking it back in {hold} s");
+            std::thread::sleep(std::time::Duration::from_secs(hold));
+        }
+        session.undo_arranged_transfer(&done)?;
+        println!("  taken back");
     }
     Ok(())
 }
