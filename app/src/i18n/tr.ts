@@ -2889,6 +2889,24 @@ export const tr: Strings = {
     link: "Yenilikler",
     command: "Bu sürümdeki yenilikler",
     versions: {
+      "0.5.3": [
+        {
+          title: "FM27'nin 17 Kasım güncellemesi.",
+          text: "Windows'ta Game Pass 0.9.2524.0 ve Steam 26620374 sürümleri tanınıyor; güncellemenin yerini değiştirdiği kulüp finansları ve takımınızın oynadığı taktik yeniden okunuyor.",
+        },
+        {
+          title: "Milli takımlar.",
+          text: "Kulüp listesinin üstündeki seçici her ülkenin erkek ve kadın milli takımlarını gösteriyor: takımın kadrosu, genç takımları (U21, U20 ve diğerleri) ve onların kadroları, her birinin düzenleyebileceğiniz itibarıyla.",
+        },
+        {
+          title: "Lig para ödülü.",
+          text: "Bir kulübün genel bakışı, liginin bu sezon sezon sonu sıralamasına göre ve maç başına ne ödediğini gösteriyor; tutarlar sezon bitene kadar ligdeki her kulüp için değiştirilebiliyor.",
+        },
+        {
+          title: "Düzeltme.",
+          text: "Altyapı oyuncuları 2020'den sonra doğmuş bir kayıt, editörün yazmadan önceki denetimine artık takılmıyor.",
+        },
+      ],
       "0.5.2": [
         {
           title: "Kulübüm.",

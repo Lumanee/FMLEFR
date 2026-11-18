@@ -3332,6 +3332,24 @@ export const en = {
      * the dialog shows it in English. A release adds its version here (see docs/DEVELOPING.md).
      */
     versions: {
+      "0.5.3": [
+        {
+          title: "FM27's update of 17 November.",
+          text: "On Windows, Game Pass 0.9.2524.0 and Steam build 26620374 are known builds, and the clubs' finances and the tactic your team plays are read again where the update moved them.",
+        },
+        {
+          title: "National teams.",
+          text: "The switch over the club list shows every nation's men's and women's teams: a team's squad, its youth teams (Under 21, Under 20 and the others) with theirs, and the reputation of each, which you can edit.",
+        },
+        {
+          title: "League prize money.",
+          text: "A club's overview shows what its league pays this season, by final position and per match, and the amounts can be changed for every club in the league until the season ends.",
+        },
+        {
+          title: "Fix.",
+          text: "A save whose youth players were born after 2020 no longer fails the check the editor makes before it writes.",
+        },
+      ],
       "0.5.2": [
         {
           title: "My club.",
