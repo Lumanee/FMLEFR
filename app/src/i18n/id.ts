@@ -1085,6 +1085,35 @@ export const id: Strings = {
     release: "Lepas semua",
     releasing: "Melepas…",
     cancel: "Batal",
+
+    moveAll: "Pindahkan semua staf",
+    moveAllTitle: "Pindahkan semua staf klub ke klub lain sekaligus, kecuali kamu dan dewan; sebuah jendela bertanya dulu",
+    moveNone: "Tidak ada staf klub ini yang bisa dipindahkan",
+    moved: (count: number, club: string) => `${format(count)} staf pindah ke ${club}`,
+    undoMoveTitle: "Kembalikan staf yang dipindahkan ke klub ini, dengan kontrak mereka",
+    moveTitle: "Pindahkan semua staf",
+    moveSearch: "Cari klub tujuan perpindahan staf",
+    movePick: "Pilih klub tujuan staf.",
+    movePlanning: "Memeriksa siapa yang bisa pindah…",
+    movePlan: (count: number, club: string) => `${format(count)} staf pindah ke ${club}`,
+    moveNobody: (club: string) => `Tidak ada staf klub ini yang bisa pindah ke ${club}.`,
+    moveStays: {
+      managerTaken: (club: string) => `${club} sudah punya manajer`,
+      directorTaken: (club: string) => `${club} sudah punya direktur sepak bola`,
+      yourClub: (club: string) => `Kamu menangani ${club}`,
+      other: "Tidak bisa dipindahkan",
+    },
+    moveDoes: [
+      "Masing-masing bergabung dengan klub baru di tempat pekerjaannya berada: departemen medis, kepelatihan, atau pemanduan bakat",
+      "Pekerjaan, gaji, dan akhir kontrak sama; setiap kontrak bertanggal sejak tanggal game",
+      "Manajer atau direktur sepak bola hanya bergabung jika posisi di klub baru kosong; posisi yang ditinggalkan di sini " +
+        "tetap kosong, untuk diisi klub",
+      "Kamu, dewan, dan mereka yang tidak bisa dipindahkan editor tetap tinggal",
+      "Tercantum di Perubahan, tempat satu kali urungkan mengembalikan semuanya ke klub ini",
+    ],
+    moveHint: "Tidak ada yang berubah di game sampai kamu menekan Pindahkan semua.",
+    move: "Pindahkan semua",
+    moving: "Memindahkan…",
   },
 
   clubList: {
