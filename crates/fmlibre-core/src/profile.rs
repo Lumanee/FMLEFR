@@ -1688,8 +1688,12 @@ mod tests {
     fn builds_lay_out_what_their_profiles_say() {
         let layout = layout_for(27).expect("FM27 layout");
         let tactics = layout.tactics.as_ref().expect("the layout places the tactics");
-        let moved: Vec<String> =
-            built_in_profiles().filter(|profile| !profile.layout.is_empty()).map(|profile| profile.name).collect();
+        // A profile's offsets are its layout's: Windows builds' are layout.toml's, the Mac halves' layout-macos.toml's.
+        let windows = |profile: &BuildProfile| matches!(profile.plugin, PluginFingerprint::Pe { .. });
+        let moved: Vec<String> = built_in_profiles()
+            .filter(|profile| !profile.layout.is_empty() && windows(profile))
+            .map(|profile| profile.name)
+            .collect();
         assert_eq!(moved, ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374"]);
         for profile in built_in_profiles() {
             let laid = layout_of(27, &profile.layout).expect("FM27 layout");
@@ -1722,7 +1726,7 @@ mod tests {
         }
         // On Windows: the new builds' places, 4 and 8 bytes past the old ones.
         #[cfg(windows)]
-        for profile in built_in_profiles().filter(|profile| !profile.layout.is_empty()) {
+        for profile in built_in_profiles().filter(|profile| !profile.layout.is_empty() && windows(profile)) {
             let laid = layout_of(27, &profile.layout).expect("FM27 layout");
             let laid_tactics = laid.tactics.expect("the layout places the tactics");
             assert_eq!(laid.club_finance.corporate, 0x8AD, "{}", profile.name);
