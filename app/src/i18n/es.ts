@@ -2965,6 +2965,24 @@ export const es: Strings = {
     link: "Novedades",
     command: "Novedades de esta versión",
     versions: {
+      "0.5.3": [
+        {
+          title: "La actualización de FM27 del 17 de noviembre.",
+          text: "En Windows y macOS, Game Pass 0.9.2524.0 y la build 26620374 de Steam son versiones conocidas, y las finanzas de los clubes y la táctica de tu equipo se vuelven a leer donde la actualización las movió.",
+        },
+        {
+          title: "Selecciones.",
+          text: "El selector sobre la lista de clubes muestra las selecciones masculinas y femeninas de cada país: la plantilla de una selección, sus categorías inferiores (Sub-21, Sub-20 y las demás) con las suyas, y la reputación de cada una, que puedes editar.",
+        },
+        {
+          title: "Premios de la liga.",
+          text: "La vista general de un club muestra lo que paga su liga esta temporada, por posición final y por partido, y los importes se pueden cambiar para todos los clubes de la liga hasta que acabe la temporada.",
+        },
+        {
+          title: "Corrección.",
+          text: "Una partida cuyos juveniles nacieron después de 2020 ya no falla la comprobación que hace el editor antes de escribir.",
+        },
+      ],
       "0.5.2": [
         {
           title: "Mi club.",

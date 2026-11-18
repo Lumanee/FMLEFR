@@ -2979,6 +2979,24 @@ export const it: Strings = {
     link: "Novità",
     command: "Novità di questa versione",
     versions: {
+      "0.5.3": [
+        {
+          title: "L'aggiornamento di FM27 del 17 novembre.",
+          text: "Su Windows e macOS, Game Pass 0.9.2524.0 e la build Steam 26620374 sono versioni conosciute, e le finanze delle società e la tattica della tua squadra si leggono di nuovo dove l'aggiornamento le ha spostate.",
+        },
+        {
+          title: "Nazionali.",
+          text: "Il selettore sopra l'elenco delle società mostra le nazionali maschili e femminili di ogni paese: la rosa di una nazionale, le sue giovanili (Under 21, Under 20 e le altre) con le loro rose, e la reputazione di ciascuna, che puoi modificare.",
+        },
+        {
+          title: "Montepremi del campionato.",
+          text: "La panoramica di una società mostra quanto paga il suo campionato in questa stagione, per piazzamento finale e per partita, e gli importi si possono cambiare per tutte le società del campionato fino alla fine della stagione.",
+        },
+        {
+          title: "Correzione.",
+          text: "Un salvataggio con giovani nati dopo il 2020 non fallisce più il controllo che l'editor fa prima di scrivere.",
+        },
+      ],
       "0.5.2": [
         {
           title: "La mia società.",

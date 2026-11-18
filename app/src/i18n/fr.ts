@@ -3073,6 +3073,24 @@ export const fr: Strings = {
     link: "Nouveautés",
     command: "Nouveautés de cette version",
     versions: {
+      "0.5.3": [
+        {
+          title: "La mise à jour de FM27 du 17 novembre.",
+          text: "Sous Windows et macOS, Game Pass 0.9.2524.0 et le build Steam 26620374 sont des versions connues, et les finances des clubs et la tactique de votre équipe sont de nouveau lues là où la mise à jour les a déplacées.",
+        },
+        {
+          title: "Sélections.",
+          text: "Le sélecteur au-dessus de la liste des clubs montre les sélections masculines et féminines de chaque pays, avec l'effectif d'une sélection, ses équipes de jeunes (moins de 21 ans, moins de 20 ans et les autres) et leurs effectifs, et la réputation de chacune, que vous pouvez modifier.",
+        },
+        {
+          title: "Primes du championnat.",
+          text: "La vue d'ensemble d'un club montre ce que paie son championnat cette saison, selon le classement final et par match, et les montants peuvent être changés pour tous les clubs du championnat jusqu'à la fin de la saison.",
+        },
+        {
+          title: "Correction.",
+          text: "Une sauvegarde dont des jeunes joueurs sont nés après 2020 ne bloque plus la vérification que fait l'éditeur avant d'écrire.",
+        },
+      ],
       "0.5.2": [
         {
           title: "Mon club.",
