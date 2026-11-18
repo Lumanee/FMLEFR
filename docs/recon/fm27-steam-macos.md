@@ -451,6 +451,37 @@ The new profiles take 27.0.1's places with the new UUIDs. With the arm64 one the
 records, 40 histories of training), and Max tactics, written to Arsenal's 25 senior players and undone, left every
 record and every history entry as it was.
 
+## The update of 17 November 2026 (Steam build 26620374)
+
+Steam's update of 17 November 2026 (version 27.1.0.2505117, the same update as Game Pass 0.9.2524.0 and the Windows
+side of build 26620374) gave both halves of `game_plugin` new UUIDs: arm64 `869F5F90-…`, Intel `864625AF-…`. Every
+place moved: `__DATA` starts 0x34000 further on in the arm64 half (`0x5774000`) and 0x50000 in the Intel half
+(`0x5D26000`). Without a profile the editor found the arrays, the date, the retirement manager and the game's own object
+by itself, and all twelve checks passed; the game stayed read-only until Edit anyway.
+
+- **arm64:** read on the maintainer's save (Arsenal, 14 July 2027). The date at `0x5781DC8` and the retirement
+  manager's static at `0x57782B8` sit 0x10 further into `__DATA` than before, the arrays at `0x57A2FC8`, `0x57A3010`
+  and `0x57A3180` 0x178 further. `instances` finds one `TACTICS_MANAGER` and one `TRAINING_MANAGER`, and `refs` one
+  pointer in the plugin to each, `game_plugin+0x5778320` (still 0x68 after the retirement manager's) and `+0x5775758`.
+  The national teams' arrays sit 0xA8 and 0xC0 past the players pair, 251 containers each, and the prize money reads
+  as on Windows (the Premier League's 20 places from £53,100,000, Serie A's from £28,691,666).
+- **Intel:** not run; checked in the file. Its code's RIP-relative loads peak where build 26577676's did, moved as the
+  arm64 half's (the date and the retirement manager's static 0x10 more than `__DATA`, the arrays 0x180 more), with the
+  same counts around each: 7,630 at the date `0x5D33710`, 197 and 181 at the players' begin and end `0x5D53368`, 19
+  and 19 at the staff's, 106 and 94 at the clubs', 66 at the retirement manager's static `0x5D29F00` (still 0x9810
+  before the date) and 537 at the game's own object's `0x5D54E50`.
+
+As on Windows, two objects keep something a few bytes further on, and neither has a check of its own:
+- The club finance record keeps corporate facilities at 0x8AD, not 0x8A9: Arsenal 19, Liverpool 16, Tottenham Hotspur
+  20 there, and 0 at 0x8A9. Read at 0x8A9, no club's finances look real, so `fields club --stats` finds no class for
+  the full record ("finances are not writable"); read at 0x8AD it finds it, and 336 clubs keep their finances.
+- A team's tactics keep the list of tactics at 0x1008 and the index of the one in use at 0x1020, not 0x1000 and
+  0x1018: with them `training-history 602` finds Arsenal's tactic in use (options 5, 17, 10, 4, 6, 10, each among the
+  options the players' familiarity records list for its area); with the old places it finds none.
+
+Both profiles name them under `[layout.club_finance]` and `[layout.tactics]`; the Intel half's are the arm64 half's, as
+the Mac layout is the same for both.
+
 ## The game's own object and its count of saves loaded
 
 The object of the class `game_plugin::GAME_UI` (see `layout.toml`'s `[game]`) is laid out as on Windows: at `+0x100`
