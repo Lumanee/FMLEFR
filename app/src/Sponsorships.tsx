@@ -68,7 +68,8 @@ function Deal({ deal }: { deal: Sponsorship }) {
         )}
       </h4>
       <dl className="stats">
-        <Fact label={text.perSeason}>{formatMoney(deal.perSeason)}</Fact>
+        {/* Many deals keep no amount per season (0), only their total: the line would say £0. */}
+        {deal.perSeason > 0 && <Fact label={text.perSeason}>{formatMoney(deal.perSeason)}</Fact>}
         <Fact label={text.total}>{formatMoney(deal.total)}</Fact>
         {term !== "" && (
           <Fact label={text.term}>{deal.years === null ? term : `${term} (${text.years(deal.years)})`}</Fact>

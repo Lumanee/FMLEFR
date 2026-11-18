@@ -44,9 +44,16 @@ Kinds 6 and 17 are in the entries of clubs and are not on the screen; 2 was seen
 - The screen lists the deals that have not ended. It reads an entry again from the next day in the game after a change.
 - A deal can leave the list before its end date, for reasons not known.
 
+- On Game Pass 0.9.2524.0 (a save of January 2028) many deals keep no amount per season and no reputation (`+0x0C` and
+  `+0x12` read 0): nearly every deal of Manchester United, Barcelona, Real Madrid, Napoli and Benfica. The others keep
+  both, and their amount per season is the total divided by the years (Beşiktaş's six, Manchester City's newer ones).
+  The app shows a deal's amount per season only where it keeps one. Kind 18, which #114 did not name, was 32 of the 621
+  deals of 90 clubs, mostly a single year that has ended.
+
 ## Open
 
 - The end date of a club membership deal read 12.6.2029 where the screen showed 28.5.2029.
 - The screen's amount per season for one youth team deal was the total divided by its years, not the entry's `+0x0C`.
+- What the screen shows, and what the game pays each season, for a deal that keeps no amount per season.
 - Adding a deal needs a longer list: its capacity always equals its count, so the game's own list would have to be
   reallocated. Not tried.

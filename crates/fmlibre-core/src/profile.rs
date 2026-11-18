@@ -1761,8 +1761,9 @@ mod tests {
         );
     }
 
-    /// The app shows a club's sponsorship deals only on the builds they were read and matched to the game's screen on
-    /// (#114): the Windows build the issue's reports are from, and the Mac build they were read on here.
+    /// The app shows a club's sponsorship deals only on the builds they were read on (#114): the Windows build the
+    /// issue's reports are from and the Mac build they were matched to the game's screen on, and Game Pass 0.9.2524.0,
+    /// where the deals of 90 clubs were read.
     #[test]
     fn sponsorships_are_shown_only_on_the_builds_they_were_checked_on() {
         let mut checked: Vec<String> =
@@ -1770,7 +1771,11 @@ mod tests {
         checked.sort();
         assert_eq!(
             checked,
-            ["FM27 Steam build 26340721 (27.0.0)", "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"]
+            [
+                "FM27 0.9.2524.0 (Game Pass)",
+                "FM27 Steam build 26340721 (27.0.0)",
+                "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"
+            ]
         );
         assert!(layout_for(27).is_some_and(|layout| layout.sponsorship.is_some()));
     }
