@@ -21,6 +21,10 @@ game_ui = 0x5701B50
 # matched to the game's screens: the Champions League league phase pays £1.8M per win and £601K per draw there.
 prize_money = true
 
+# A club's sponsorship deals (layout.toml, [sponsorship]; #114) were read on this build and matched to the entries of
+# VfB Stuttgart's Sponsorship screen, by amount and date, in the reports of the issue; not read by this editor on it yet.
+sponsorships = true
+
 # game_plugin.dll as mapped in memory; these two values identify the build.
 [plugin]
 size_of_image = 0x1821C000

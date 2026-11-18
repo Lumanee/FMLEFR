@@ -1381,6 +1381,38 @@ export const en = {
       groups > 1 ? `For every club in ${league}, in ${format(groups)} groups` : `For every club in ${league}`,
   },
 
+  /**
+   * A club's sponsorship deals, in its finances: each deal by the name the game's Sponsorship screen gives its kind, what
+   * it pays per season and in all, its term and the change a relegation (or a promotion) brings. It only reads; the
+   * amounts are kept in pounds and shown in the chosen currency.
+   */
+  sponsorships: {
+    /** The heading of the group in a club's Overview, under its finances. */
+    title: "Sponsorship deals",
+    reading: "Reading the club's sponsorship deals…",
+    /** When the club holds no deal. */
+    none: "The club has no sponsorship deals.",
+    perSeason: "Per season",
+    total: "Total value",
+    term: "Term",
+    /** The length of a deal, as the game's screen counts it. */
+    years: (count: number) => (count === 1 ? "1 year" : `${format(count)} years`),
+    /** The name of a kind the game's screen is not known to name here. */
+    unnamed: (kind: number) => `Type ${format(kind)}`,
+    unnamedTitle: "Nobody has matched this kind of deal to a name on the game's screen yet, and the screen may not list it.",
+    /** A badge on a deal that ended before the game's date. */
+    ended: "Ended",
+    endedTitle: "The deal ended before the game's date. The game's Sponsorship screen no longer lists it.",
+    /** What a deal's percentage does: on relegation, and for a kit manufacturer on promotion. */
+    falls: (percent: number) => `Falls by ${format(percent)}% on relegation`,
+    rises: (percent: number) => `Rises by ${format(percent)}% on promotion to the top division`,
+    /** Under the deals. */
+    note: "Read only. These are the amounts the game keeps for each deal. Its Sponsorship screen lists the deals that have not ended.",
+    /** Where the app cannot show the deals: why. */
+    unavailableBuild: "Nobody has checked yet where this version of the game keeps the sponsorship deals, so the editor shows none rather than read the wrong memory.",
+    unavailableUnreadable: "The editor looked for the sponsorship deals where it expects them on this version of the game, but what it found does not read as the game's, so it shows none.",
+  },
+
   /** The app around the lists: the sidebar, the status line and the connect panel. */
   app: {
     /** The small line under the name in the sidebar. */

@@ -1391,6 +1391,25 @@ export const zhCN: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `${league} 的每家俱乐部，共 ${format(groups)} 个小组` : `${league} 的每家俱乐部`,
   },
+
+  sponsorships: {
+    title: "赞助合同",
+    reading: "正在读取俱乐部的赞助合同…",
+    none: "该俱乐部没有赞助合同。",
+    perSeason: "每赛季",
+    total: "总额",
+    term: "期限",
+    years: (count) => `${format(count)} 年`,
+    unnamed: (kind) => `类型 ${format(kind)}`,
+    unnamedTitle: "这种合同类型尚未与游戏界面上的名称对应，界面也可能不显示它。",
+    ended: "已结束",
+    endedTitle: "该合同在游戏日期之前已结束，游戏的赞助界面不再列出它。",
+    falls: (percent) => `降级时减少 ${format(percent)}%`,
+    rises: (percent) => `升入顶级联赛时增加 ${format(percent)}%`,
+    note: "只读。这是游戏为每份合同保存的金额。游戏的赞助界面会列出尚未结束的合同。",
+    unavailableBuild: "尚无人确认此版本游戏把赞助合同存放在哪里，因此编辑器不显示，以免读取错误的内存。",
+    unavailableUnreadable: "编辑器在此版本游戏中预期的位置查找了赞助合同，但找到的内容不像游戏的数据，因此不显示。",
+  },
   app: {
     /** The small line under the name in the sidebar. */
     stage: "测试版",

@@ -70,6 +70,9 @@ pub struct Layout {
     /// The prize money a competition's stages pay (see `prize_money.rs`); only in the layouts it has been checked in.
     #[serde(default)]
     pub prize_money: Option<PrizeMoneyLayout>,
+    /// The sponsorship deals a club holds (see `sponsorship.rs`); only in the layouts they have been checked in.
+    #[serde(default)]
+    pub sponsorship: Option<SponsorshipLayout>,
     /// The game's tables of first, last and common names (see `names.rs`); only in the layouts they have been checked
     /// in.
     #[serde(default)]
@@ -201,6 +204,49 @@ pub struct PrizeMoneyLayout {
     pub win_again: u64,
     pub draw: u64,
     pub loss: u64,
+}
+
+/// The sponsorship deals a club holds (see `sponsorship.rs`): the club points at a `(begin, end, capacity)` record whose
+/// list holds one pointer per deal, and each pointer leads to an entry of `entry_size` bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SponsorshipLayout {
+    /// In the club: the pointer to the record that holds the list of deals.
+    pub club_list: u64,
+    /// The size of an entry.
+    pub entry_size: u64,
+    /// In an entry: the start and the end date, each a `u16` day of the year and a `u16` year.
+    pub start: u64,
+    pub end: u64,
+    /// In an entry: `u32` pounds, the total value of the deal and the amount per season.
+    pub total: u64,
+    pub per_season: u64,
+    /// In an entry: a `u16` percentage, by which the deal falls on relegation (or, for a kit manufacturer, rises on a
+    /// promotion to the top division).
+    pub percent: u64,
+    /// In an entry: a `u16`, the club's reputation when the deal was signed.
+    pub reputation: u64,
+    /// In an entry: a `u8` kind, which the game names in its Sponsorship screen.
+    pub kind: u64,
+}
+
+impl SponsorshipLayout {
+    /// How many bytes of an entry the editor reads.
+    pub fn end_of_entry(&self) -> u64 {
+        [
+            self.start + 4,
+            self.end + 4,
+            self.total + 4,
+            self.per_season + 4,
+            self.percent + 2,
+            self.reputation + 2,
+            self.kind + 1,
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(0)
+        .max(self.entry_size)
+    }
 }
 
 /// One of the game's pools of objects (see `object_pool.rs`), a static of the game plugin, from where it keeps the
@@ -1002,6 +1048,10 @@ pub struct BuildProfile {
     /// game shows. The app shows and changes it only on such builds; the probe reads it on any.
     #[serde(default)]
     pub prize_money: bool,
+    /// Whether a club's sponsorship deals ([`SponsorshipLayout`]) were read on this build and matched to the game's
+    /// Sponsorship screen. The app shows them only on such builds; the probe reads them on any.
+    #[serde(default)]
+    pub sponsorships: bool,
     /// Where the build keeps its arrays of national teams' containers, for the builds they were read on; none where
     /// they were not, which leaves the National teams tab off.
     #[serde(default)]
@@ -1220,6 +1270,9 @@ pub fn profile_text(profile: &BuildProfile, notes: &ProfileNotes) -> String {
     }
     if profile.prize_money {
         text += "\nprize_money = true\n";
+    }
+    if profile.sponsorships {
+        text += "\nsponsorships = true\n";
     }
     text += "\n# game_plugin as mapped in memory; these values identify the build.\n[plugin]\n";
     match profile.plugin {
@@ -1706,6 +1759,25 @@ mod tests {
                 "FM27 Steam build 26620374 (macOS, Apple silicon)",
             ]
         );
+    }
+
+    /// The app shows a club's sponsorship deals only on the builds they were read on (#114): the Windows build the
+    /// issue's reports are from and the Mac build they were matched to the game's screen on, and Game Pass 0.9.2524.0,
+    /// where the deals of 90 clubs were read.
+    #[test]
+    fn sponsorships_are_shown_only_on_the_builds_they_were_checked_on() {
+        let mut checked: Vec<String> =
+            built_in_profiles().filter(|profile| profile.sponsorships).map(|profile| profile.name).collect();
+        checked.sort();
+        assert_eq!(
+            checked,
+            [
+                "FM27 0.9.2524.0 (Game Pass)",
+                "FM27 Steam build 26340721 (27.0.0)",
+                "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)"
+            ]
+        );
+        assert!(layout_for(27).is_some_and(|layout| layout.sponsorship.is_some()));
     }
 
     /// Since the update of 17 November 2026 the club finance record keeps corporate facilities 4 bytes further on, and a

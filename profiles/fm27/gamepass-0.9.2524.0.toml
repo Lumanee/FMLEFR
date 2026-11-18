@@ -36,6 +36,12 @@ training_manager = 0x53EA210
 # £57,964 and £1,229 per win, draw and loss: to the pound what 0.9.2435.0 read.
 prize_money = true
 
+# A club's sponsorship deals (layout.toml, [sponsorship]; #114) were read on this build on a save of January 2028: the
+# lists of 90 clubs (the 60 best known men's clubs and 30 further down) all read as deals, 621 of them, of the kinds #114
+# named and 2, 6, 17 and 18; each entry that keeps an amount per season keeps its total divided by its years, as
+# Beşiktaş's six do (Main Kit £11,448,234 over 3 years, £3,816,078 a season). Not compared with the game's screen.
+sponsorships = true
+
 # game_plugin as mapped in memory; these values identify the build.
 [plugin]
 size_of_image = 0x179AD000

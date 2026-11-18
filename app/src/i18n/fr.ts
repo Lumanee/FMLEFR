@@ -1393,6 +1393,25 @@ export const fr: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `Pour chaque club de ${league}, dans ${format(groups)} groupes` : `Pour chaque club de ${league}`,
   },
+
+  sponsorships: {
+    title: "Contrats de sponsoring",
+    reading: "Lecture des contrats de sponsoring du club…",
+    none: "Le club n'a aucun contrat de sponsoring.",
+    perSeason: "Par saison",
+    total: "Valeur totale",
+    term: "Durée",
+    years: (count) => `${format(count)} ${plural(count) ? "ans" : "an"}`,
+    unnamed: (kind) => `Type ${format(kind)}`,
+    unnamedTitle: "Personne n'a encore associé ce type de contrat à un nom de l'écran du jeu, et l'écran peut ne pas l'afficher.",
+    ended: "Terminé",
+    endedTitle: "Le contrat s'est terminé avant la date du jeu. L'écran Sponsoring du jeu ne l'affiche plus.",
+    falls: (percent) => `Baisse de ${format(percent)} % en cas de relégation`,
+    rises: (percent) => `Hausse de ${format(percent)} % en cas de promotion dans l'élite`,
+    note: "Lecture seule. Ce sont les montants que le jeu conserve pour chaque contrat. Son écran Sponsoring affiche les contrats qui ne sont pas terminés.",
+    unavailableBuild: "Personne n'a encore vérifié où cette version du jeu garde les contrats de sponsoring ; l'éditeur n'en montre donc aucun plutôt que de lire la mauvaise mémoire.",
+    unavailableUnreadable: "L'éditeur a cherché les contrats de sponsoring là où il les attend dans cette version du jeu, mais ce qu'il a trouvé ne ressemble pas aux données du jeu ; il n'en montre donc aucun.",
+  },
   app: {
     stage: "bêta",
     settingsLabel: "Paramètres",

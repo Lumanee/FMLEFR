@@ -19,9 +19,10 @@ use fmlibre_core::{
     Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary,
     PrizeAmount, PrizeChange, PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet,
     RetirementSet, Role, SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex,
-    Session, SessionError, Skipped, SquadMember, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails,
-    StaffFilter, StaffIndex, StaffOrder, StaffPlan, StaffSummary, TacticsSet, Target, Tie, TieTarget,
-    competition_prizes, diagnostics_report, find_game, nations, sort_players, sort_staff,
+    Session, SessionError, Skipped, Sponsorship, SponsorshipReadError, SponsorshipUnavailable, SquadMember,
+    SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan,
+    StaffSummary, TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report, find_game, nations,
+    sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -3015,6 +3016,32 @@ async fn league_prizes(app: tauri::AppHandle, club: u32, again: bool) -> Result<
     .await?
 }
 
+/// The sponsorship deals the club `club` holds, as its Sponsorship screen lists them and the ones that have ended too; or
+/// why this version of the game shows none. Read from the game each time, a few pointers and no scan. Only reads.
+#[tauri::command]
+fn club_sponsorships(state: State<'_, AppState>, club: u32) -> Result<ClubSponsorships, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+    match connection.session.checked_sponsorships(summary) {
+        Ok(deals) => Ok(ClubSponsorships { unavailable: None, deals }),
+        Err(SponsorshipReadError::Unavailable(reason)) => {
+            Ok(ClubSponsorships { unavailable: Some(reason), deals: Vec::new() })
+        }
+        Err(SponsorshipReadError::Memory(err)) => Err(err.into()),
+    }
+}
+
+/// A club's sponsorship deals, or why the app shows none on this version of the game.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClubSponsorships {
+    /// "build": nobody has checked the deals on this build yet; "unreadable": it was checked, but what the editor found
+    /// does not read as the game's.
+    unavailable: Option<SponsorshipUnavailable>,
+    deals: Vec<Sponsorship>,
+}
+
 /// What a club's league pays, or why the app shows none on this version of the game.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -5029,6 +5056,7 @@ pub fn run() {
             search_clubs,
             club_leagues,
             league_prizes,
+            club_sponsorships,
             set_league_prizes,
             national_status,
             search_national_teams,

@@ -133,6 +133,8 @@ export const clubListText = strings.clubList;
 
 /** A club's league prize money, in its finances: what the league pays this season, and changing it. */
 export const leaguePrizesText = strings.leaguePrizes;
+/** A club's sponsorship deals, in its finances: each deal by its kind, what it pays and its term. */
+export const sponsorshipsText = strings.sponsorships;
 /** The Clubs tab's national teams: the list, the profile of a national team and why there may be none. */
 export const nationalText = strings.national;
 

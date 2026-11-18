@@ -1278,6 +1278,25 @@ export const tr: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `${league} içindeki her kulüp için, ${format(groups)} grupta` : `${league} içindeki her kulüp için`,
   },
+
+  sponsorships: {
+    title: "Sponsorluk anlaşmaları",
+    reading: "Kulübün sponsorluk anlaşmaları okunuyor…",
+    none: "Kulübün sponsorluk anlaşması yok.",
+    perSeason: "Sezon başına",
+    total: "Toplam değer",
+    term: "Süre",
+    years: (count) => `${format(count)} yıl`,
+    unnamed: (kind) => `Tür ${format(kind)}`,
+    unnamedTitle: "Bu anlaşma türü henüz oyunun ekranındaki bir adla eşleştirilmedi ve ekran onu göstermiyor olabilir.",
+    ended: "Bitti",
+    endedTitle: "Anlaşma oyundaki tarihten önce bitti. Oyunun Sponsorluk ekranı artık onu göstermiyor.",
+    falls: (percent) => `Küme düşerse %${format(percent)} azalır`,
+    rises: (percent) => `En üst lige çıkılırsa %${format(percent)} artar`,
+    note: "Yalnızca okunur. Bunlar oyunun her anlaşma için tuttuğu tutarlardır. Oyunun Sponsorluk ekranı bitmemiş anlaşmaları listeler.",
+    unavailableBuild: "Oyunun bu sürümünün sponsorluk anlaşmalarını nerede tuttuğunu henüz kimse denetlemedi; bu yüzden editör yanlış belleği okumak yerine hiçbirini göstermiyor.",
+    unavailableUnreadable: "Editör sponsorluk anlaşmalarını oyunun bu sürümünde beklediği yerde aradı, ancak bulduğu şey oyunun verisi gibi okunmuyor; bu yüzden hiçbirini göstermiyor.",
+  },
   app: {
     stage: "beta",
     settingsLabel: "Ayarlar",

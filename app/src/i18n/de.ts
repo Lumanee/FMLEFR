@@ -1377,6 +1377,25 @@ export const de: Strings = {
     changedIn: (league, groups) =>
       groups > 1 ? `Für jeden Verein in ${league}, in ${format(groups)} Gruppen` : `Für jeden Verein in ${league}`,
   },
+
+  sponsorships: {
+    title: "Sponsorenverträge",
+    reading: "Die Sponsorenverträge des Vereins werden gelesen …",
+    none: "Der Verein hat keine Sponsorenverträge.",
+    perSeason: "Pro Saison",
+    total: "Gesamtwert",
+    term: "Laufzeit",
+    years: (count) => (count === 1 ? "1 Jahr" : `${format(count)} Jahre`),
+    unnamed: (kind) => `Typ ${format(kind)}`,
+    unnamedTitle: "Diese Art von Vertrag wurde noch keinem Namen im Bildschirm des Spiels zugeordnet; möglicherweise zeigt er sie nicht an.",
+    ended: "Abgelaufen",
+    endedTitle: "Der Vertrag ist vor dem Datum im Spiel abgelaufen. Der Sponsoring-Bildschirm des Spiels zeigt ihn nicht mehr an.",
+    falls: (percent) => `Sinkt bei Abstieg um ${format(percent)} %`,
+    rises: (percent) => `Steigt bei Aufstieg in die höchste Liga um ${format(percent)} %`,
+    note: "Nur lesend. Das sind die Beträge, die das Spiel für jeden Vertrag speichert. Der Sponsoring-Bildschirm zeigt die Verträge, die noch nicht abgelaufen sind.",
+    unavailableBuild: "Noch niemand hat geprüft, wo diese Version des Spiels die Sponsorenverträge ablegt; der Editor zeigt sie daher nicht an, statt den falschen Speicher zu lesen.",
+    unavailableUnreadable: "Der Editor hat die Sponsorenverträge dort gesucht, wo er sie in dieser Version des Spiels erwartet, doch was er fand, sieht nicht nach den Daten des Spiels aus; deshalb zeigt er keine an.",
+  },
   app: {
     stage: "Beta",
     settingsLabel: "Einstellungen",

@@ -7574,6 +7574,28 @@ kbd {
   flex: none;
 }
 
+/* A club's sponsorship deals, under its finances: one block a deal, those that ended after the others and set back. */
+.sponsor-deal + .sponsor-deal {
+  margin-top: 12px;
+}
+
+.sponsor-deal h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sponsor-deal.ended {
+  opacity: 0.65;
+}
+
+.sponsor-ended {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* A club's league prize money, under its finances: a stage's list by position in two columns once the panel is wide
    enough, and the button that turns the amounts into inputs. */
 .league-stage + .league-stage {
