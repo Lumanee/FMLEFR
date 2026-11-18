@@ -12,7 +12,7 @@ Please follow the [code of conduct](CODE_OF_CONDUCT.md).
   [issue](https://github.com/tozmoz/FMLibreEditor/issues/new/choose). For a bug, say which version
   of the app you use and where you run FM27 (Game Pass, Steam or macOS). If the app connects to
   the game, paste what Copy diagnostics, at the foot of its window, copies (versions later than
-  0.5.0 have it).
+  0.5.0 have it). A screenshot helps a lot.
 - **Ask a question or share an idea:**
   [Discussions](https://github.com/tozmoz/FMLibreEditor/discussions).
 - **Test:** run the latest release on your storefront and say what works and what does not. A
@@ -33,8 +33,14 @@ Please follow the [code of conduct](CODE_OF_CONDUCT.md).
 3. Build and run it: [docs/DEVELOPING.md](docs/DEVELOPING.md#building). For work on the interface
    you do not need the game: `npm install` and `npm run dev` in `app/` open the interface in a
    browser with made-up players (`app/src/dev/mock.ts`).
-4. Open a pull request. A draft is fine if you want early feedback or are stuck: say what you
-   are unsure about. The template asks how you checked it; having only one platform is fine.
+4. Open a pull request and keep its description short. Three things matter most:
+   - what it changes, in a sentence or two;
+   - the platform and game build you tried it on (macOS Steam 26620374, Apple silicon). Having
+     only one platform is fine;
+   - a screenshot, for anything you can see in the app.
+
+   Anything longer (research, notes per build) goes at the end, in a `<details>` block if you
+   like. A draft is fine if you want early feedback or are stuck: say what you are unsure about.
 
 CI runs the checks on every pull request, on Windows and macOS. To run them yourself first:
 
