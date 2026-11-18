@@ -128,8 +128,13 @@ async function throughTheApp(app, report, probe, from, to) {
   await app.waitFor(search, "the dialog again");
   await app.setInput(search, from.name);
   await sleep(800);
-  const offered = await app.js(`[...${ask}.querySelectorAll(".move-results .move-option")].map((o) => o.textContent)`);
-  report.check("the search leaves out the club itself", !offered.some((text) => text.startsWith(from.name)), offered.slice(0, 3).join(" | "));
+  // By the whole name: other clubs' names can start with it (Arsenal de Sarandí, Arsenal Tula), and another men's club
+  // can even have the same name, which the search offers.
+  const offered = await app.js(`[...${ask}.querySelectorAll(".move-results .move-option .move-club-name")].map((o) => o.textContent)`);
+  const namesakes = (await app.must("search_clubs", { query: from.name, limit: 100, filter: { women: false } })).rows
+    .filter((club) => club.name === from.name && club.uid !== from.uid).length;
+  report.check("the search leaves out the club itself", offered.filter((name) => name === from.name).length === namesakes,
+    `${offered.slice(0, 3).join(" | ")}; ${namesakes} other club(s) named ${from.name}`);
   await app.setInput(search, to.name);
   const option = `[...${ask}.querySelectorAll(".move-results .move-option")].find((o) => o.textContent.includes(${JSON.stringify(to.name)}))`;
   await app.waitFor(option, `${to.name} in the search`);
