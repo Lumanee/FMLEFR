@@ -1332,6 +1332,7 @@ export const de: Strings = {
     squadHeading: (team, count) => `${team}: ${format(count)} Spieler`,
     squadLabel: (team) => `Spieler der Nationalmannschaft: ${team}`,
     squadNote: "Die Spieler, die das Spiel für diese Mannschaft aufführt, in seiner Reihenfolge. Nominierungen, Kapitäne und der Vertrag des Trainers werden hier nicht bearbeitet.",
+    actionsHint: "Die Aktionen betreffen alle Spieler, die die erste Mannschaft aufführt. Rückgängig gibt es auch unter Änderungen.",
     noTeams: "Das Spiel führt für dieses Team keine Mannschaften, daher gibt es keinen Kader und kein Ansehen zu zeigen.",
     reading: "Kader wird gelesen …",
     noPlayers: "Das Spiel führt für dieses Team keine Spieler auf.",

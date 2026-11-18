@@ -125,7 +125,8 @@ The captain was not found on these screens: Donnarumma's profile does not say he
 
 The Clubs tab's National teams list (#169) reads the containers from the two arrays above, lists each nation's men's
 and women's team with the reputation of its senior team, shows the squad as the game lists it (a player's name opens
-his profile) and edits the reputation through the same guarded write as a club's. Calling players up, the captains and
+his profile) and edits the reputation through the same guarded write as a club's. Heal all, Inspire all and Refresh
+all act on the players the senior team lists, as in a club's Squad tab (#210). Calling players up, the captains and
 the manager's contract are not in it. It works where the build's profile names the two arrays (`[national_teams]`) and
 the layout the containers (`[national]`): the Mac build above, and the Windows builds below. On the Mac build and a save
 of 19 September 2026,

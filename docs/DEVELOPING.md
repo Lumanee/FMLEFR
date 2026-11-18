@@ -97,6 +97,10 @@ profile reads them all (`Session::national_sides`) and edits each one's reputati
 `national::OTHER_KINDS`. A kind two teams of a container share is neither shown nor written. The app names the kinds by
 `national.teamKinds` in the languages' files, and a kind missing there as "Type N".
 
+The senior team's profile has Heal all, Inspire all and Refresh all for the players it lists, as a club's Squad tab
+has them: the `national_team_action` command reads the squad (`Session::national_squad`) and hands it to
+`act_on_players`, which `team_action` uses for a club's team too. The changes are one batch, undone as one.
+
 ### After an update of the game
 
 Each build of the game moves its static data. A build profile in `profiles/` (identified by `game_plugin`'s headers)

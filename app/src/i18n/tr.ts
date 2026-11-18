@@ -1233,6 +1233,7 @@ export const tr: Strings = {
     squadHeading: (team, count) => `${team}: ${format(count)} oyuncu`,
     squadLabel: (team) => `Milli takım oyuncuları: ${team}`,
     squadNote: "Oyunun bu takım için listelediği oyuncular, oyunun sırasıyla. Çağrılar, kaptanlar ve teknik direktörün sözleşmesi burada düzenlenmez.",
+    actionsHint: "İşlemler A takımın listelediği tüm oyunculara uygulanır. Geri alma Değişiklikler bölümünde de var.",
     noTeams: "Oyun bu milli takım için hiçbir takım tutmuyor, bu yüzden gösterilecek kadro veya itibar yok.",
     reading: "Kadro okunuyor…",
     noPlayers: "Oyun bu takım için oyuncu listelemiyor.",

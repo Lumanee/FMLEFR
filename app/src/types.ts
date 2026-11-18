@@ -1080,6 +1080,9 @@ export type CaptainRole = "captain" | "viceCaptain";
  */
 export type TeamAction = "heal" | "liftBans" | "inspire" | "refresh" | "maxAttributes" | "maxCohesion" | "maxTactics";
 
+/** The actions a national team's senior team has: Heal all, Inspire all and Refresh all. */
+export type NationalTeamAction = Extract<TeamAction, "heal" | "inspire" | "refresh">;
+
 /** The columns that sort a squad table. */
 export type SquadSort =
   | "name"
