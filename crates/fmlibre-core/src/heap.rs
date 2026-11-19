@@ -119,6 +119,7 @@ impl Session {
 
 /// A string of `size` bytes with its terminating zero, unlike any other: the editor's mark, a count and the time, which a
 /// short string cuts.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn marker(size: usize) -> Vec<u8> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNT: AtomicU64 = AtomicU64::new(0);
