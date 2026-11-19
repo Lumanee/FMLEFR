@@ -49,10 +49,13 @@ export async function run({ app, report, probe }) {
     plan.from.uid === from.uid && plan.to.uid === to.uid && plan.fee === fee && plan.moveDay === tomorrow,
     `${plan.from.name} → ${plan.to.name}, £${plan.fee}, on ${plan.moveDay} (next day ${tomorrow})`,
   );
+  // His contract keeps its end, given no other.
+  const ends = player.contractExpires;
+  const ownEnd = ends ? ends.year * 10000 + ends.month * 100 + ends.day : 0;
   report.check(
-    "and the contract he is to have",
-    plan.contract.wage > 0 && plan.contract.expires > tomorrow,
-    JSON.stringify(plan.contract),
+    "and the contract he is to have, which keeps the end of his own",
+    plan.contract.wage > 0 && (ownEnd > tomorrow ? plan.contract.expires === ownEnd : plan.contract.expires > tomorrow),
+    `${JSON.stringify(plan.contract)}, his own ends ${ownEnd}`,
   );
 
   const arranged = await app.must("arrange_transfer", { uid: player.uid, club: to.uid, terms: {}, fee });

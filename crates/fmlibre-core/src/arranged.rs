@@ -261,10 +261,15 @@ impl Session {
         let offer =
             offer_bytes(t, &template, person, joining.senior, leaving.employer, fee, number, count, today, move_day);
         let model = process.read_bytes(leaving.contract, contract_size as usize)?;
-        let contract = self.new_contract(model, leaving.object, joining.senior, terms, today, move_day, None);
-
+        // His contract keeps its end unless the terms give another, as a move made now keeps it; one that ends by the
+        // day of the move runs to the end of next season, as a new contract does.
         let c = &layout.contract;
-        let field = |offset: u64, kind: Kind| kind.decode(&contract[offset as usize..offset as usize + 4]);
+        let field = |bytes: &[u8], offset: u64, kind: Kind| kind.decode(&bytes[offset as usize..offset as usize + 4]);
+        let own_end = field(&model, c.expires, Kind::Date);
+        let kept = (own_end > move_day.to_number()).then_some(own_end);
+        let terms = MoveTerms { expires: terms.expires.or(kept), ..terms };
+        let contract = self.new_contract(model, leaving.object, joining.senior, terms, today, move_day, None);
+        let field = |offset: u64, kind: Kind| field(&contract, offset, kind);
         let made = NewContract {
             wage: field(c.wage, Kind::I32),
             expires: field(c.expires, Kind::Date),

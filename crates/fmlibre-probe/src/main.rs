@@ -304,7 +304,7 @@ enum Command {
         /// A new wage in pounds per week; his contract's otherwise.
         #[arg(long)]
         wage: Option<i64>,
-        /// A new contract end as YYYY-MM-DD; the end of next season otherwise.
+        /// A new contract end as YYYY-MM-DD; his contract's otherwise.
         #[arg(long)]
         expires: Option<String>,
         /// Take it back afterwards and check it.
