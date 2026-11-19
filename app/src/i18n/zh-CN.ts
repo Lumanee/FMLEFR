@@ -2069,7 +2069,7 @@ export const zhCN: Strings = {
     arrangeFee: (amount: string) => `转会费 ${amount}，当天由游戏支付`,
     arrangeContract: (wage: string, expires: string) => `合同：周薪 ${wage}，到期日 ${expires}`,
     arrangeDoes: [
-      "现在安排：在游戏中点击“继续”后，游戏会在下一天办理调动",
+      "现在安排：游戏进入下一天时，会办理调动",
       "履历保留本赛季在原俱乐部的比赛，并记录新俱乐部及转会费",
       "转会费由游戏当天支付，和它自己的转会一样",
       "从那天起与新俱乐部签约；周薪和合同到期日只有在你设置新值时才会改变",

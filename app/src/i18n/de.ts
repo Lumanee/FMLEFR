@@ -1973,7 +1973,7 @@ export const de: Strings = {
     arrangeFee: (amount) => `Ablöse ${amount}, am Tag vom Spiel bezahlt`,
     arrangeContract: (wage, expires) => `Vertrag: ${wage} pro Woche bis ${expires}`,
     arrangeDoes: [
-      "Jetzt vereinbart: Das Spiel führt den Wechsel an seinem nächsten Tag aus, sobald Sie im Spiel fortfahren",
+      "Jetzt vereinbart: Das Spiel führt den Wechsel aus, sobald es seinen nächsten Tag erreicht",
       "Die Historie behält die Spiele dieser Saison beim alten Verein und führt den neuen Verein mit der Ablöse auf",
       "Das Spiel zahlt die Ablöse an diesem Tag, wie bei seinen eigenen Transfers",
       "Vertrag beim neuen Verein ab diesem Tag; Gehalt und Vertragsende ändern sich nur, wenn Sie neue festlegen",

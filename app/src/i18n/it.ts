@@ -1924,7 +1924,7 @@ export const it: Strings = {
     arrangeFee: (amount) => `Costo ${amount}, pagato dal gioco quel giorno`,
     arrangeContract: (wage, expires) => `Contratto: ${wage} a settimana fino al ${expires}`,
     arrangeDoes: [
-      "Concordato ora: il gioco fa lo spostamento al giorno successivo, quando premi Continua nel gioco",
+      "Concordato ora: il gioco fa lo spostamento quando arriva al giorno successivo",
       "La sua cronologia conserva le partite di questa stagione con la vecchia società e riporta la nuova società con il costo",
       "Il gioco paga il costo quel giorno, come per i suoi trasferimenti",
       "Contratto con la nuova società da quel giorno; stipendio e scadenza cambiano solo se ne imposti di nuovi",

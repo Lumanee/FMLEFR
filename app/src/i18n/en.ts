@@ -2118,7 +2118,7 @@ export const en = {
     arrangeContract: (wage: string, expires: string) => `Contract: ${wage} a week, until ${expires}`,
     /** What arranging the transfer does, one line each, in the place of `does`. */
     arrangeDoes: [
-      "Agreed now: the game makes the move on its next day, once you continue in the game",
+      "Agreed now: the game makes the move when it reaches its next day",
       "His history keeps this season's matches with his old club, and lists the new club with the fee",
       "The game pays the fee on the day, as it pays for its own transfers",
       "Contract with the new club from that day; wage and contract end change only if you set new ones",

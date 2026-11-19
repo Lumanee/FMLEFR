@@ -1986,7 +1986,7 @@ export const fr: Strings = {
     arrangeFee: (amount) => `Montant\u00a0: ${amount}, payé par le jeu ce jour-là`,
     arrangeContract: (wage, expires) => `Contrat\u00a0: ${wage} par semaine jusqu'au ${expires}`,
     arrangeDoes: [
-      "Convenu maintenant\u00a0: le jeu effectue le déplacement à son prochain jour, quand vous continuez dans le jeu",
+      "Convenu maintenant\u00a0: le jeu effectue le déplacement quand il arrive à son prochain jour",
       "Son historique garde les matchs de cette saison avec son ancien club et indique le nouveau club avec le montant",
       "Le jeu paie le montant ce jour-là, comme pour ses propres transferts",
       "Contrat avec le nouveau club à partir de ce jour\u00a0; le salaire et la fin du contrat ne changent que si vous en fixez de nouveaux",

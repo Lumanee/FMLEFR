@@ -1851,7 +1851,7 @@ export const tr: Strings = {
     arrangeFee: (amount) => `Bonservis bedeli ${amount}, o gün oyun tarafından ödenir`,
     arrangeContract: (wage, expires) => `Sözleşme: haftalık ${wage}, ${expires} tarihine kadar`,
     arrangeDoes: [
-      "Şimdi anlaşılır: oyun transferi ertesi gün, oyunda Devam'a basılınca yapar",
+      "Şimdi anlaşılır: oyun transferi, oyunda ertesi güne geçilince yapar",
       "Oyuncunun geçmişinde bu sezonki maçları eski kulübünde kalır, yeni kulübü bonservis bedeliyle görünür",
       "Bedeli oyun o gün öder, kendi transferlerinde olduğu gibi",
       "O günden itibaren yeni kulüple sözleşme; maaş ve sözleşme bitişi, yeni değer girilmedikçe aynı kalır",

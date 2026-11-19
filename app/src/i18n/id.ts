@@ -1793,7 +1793,7 @@ export const id: Strings = {
     arrangeFee: (amount: string) => `Biaya ${amount}, dibayar game pada hari itu`,
     arrangeContract: (wage: string, expires: string) => `Kontrak: ${wage} per minggu sampai ${expires}`,
     arrangeDoes: [
-      "Diatur sekarang: game melakukan perpindahan pada hari berikutnya, setelah kamu menekan Lanjutkan di game",
+      "Diatur sekarang: game melakukan perpindahan saat game sampai di hari berikutnya",
       "Riwayatnya tetap mencatat pertandingan musim ini bersama klub lama dan mencantumkan klub baru beserta biayanya",
       "Game membayar biayanya pada hari itu, seperti untuk transfernya sendiri",
       "Kontrak dengan klub baru mulai hari itu; gaji dan akhir kontrak hanya berubah jika kamu mengisi yang baru",
