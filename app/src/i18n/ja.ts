@@ -146,6 +146,11 @@ const errors: ErrorTexts = {
     "契約できません。",
   "sign.poolFull": () =>
     "ゲームが新しい契約枠を作るまで、契約を追加する空きがありません。ゲームを1日進めてから、もう一度お試しください。",
+  "arrange.unknown": () => "このバージョンのゲームで、ゲームが移籍を保持している場所をエディターが見つけられません。",
+  "arrange.underWay": () => "この選手にはすでに合意済みの移動、または未回答のオファーがあります。",
+  "arrange.noMemory": () =>
+    "エディターはこのためのゲーム内メモリを確保できませんでした。システムが、ゲーム自身の関数を代わりに実行することを許可しませんでした。",
+  "arrange.made": () => "ゲームはすでにこの移籍を行ったか、手配で書き込まれた内容を変更したため、元に戻せません。",
   "sign.noModel": () => "このクラブのトップチームには、新しい契約の手本にできる通常の契約選手がいません。",
   "sign.noDate": () => "新しい契約の開始日となるゲーム内の日付を、エディターが読み取れませんでした。",
   "move.outOfRange": (p) => `${p.value} は${field(p.field)}として無効な値です。${p.min}〜${p.max} の範囲で入力してください。`,
@@ -1519,6 +1524,7 @@ export const ja: Strings = {
     swappedWith: (name: string) => `${name}とトレード`,
     released: (name: string) => `${name}を契約解除`,
     fee: (amount: string) => `移籍金 ${amount}`,
+    arranged: (date: string) => `ゲームは${date}に移動を行います`,
     optionRemoved: (amount: string) => `買い取りオプション（${amount}）を削除`,
     healed: (count: number) => `負傷${format(count)}件を治療`,
     lifted: (count: number) => `出場停止${format(count)}件を解除`,
@@ -1791,9 +1797,31 @@ export const ja: Strings = {
     from: "移籍元",
     to: "移籍先",
 
-    modeLabel: "移籍またはトレード",
-    modeMove: "クラブへ移籍",
+    modeLabel: "移籍、今すぐ移動、またはトレード",
+    modeMove: "今すぐ移動",
     modeSwap: "選手とトレード",
+    modeArrange: "移籍",
+    arrangeNote:
+      "ゲームが次の日に、自身の移籍と同じように移籍を行います。選手の履歴には今季の試合が元のクラブのものとして残り、" +
+      "新しいクラブが移籍金とともに記録され、移籍金はゲームが支払います。",
+    moveNote:
+      "エディターがその場で選手を移動します。ゲームの履歴には記録されません。今季は新しいクラブの所属として表示され、" +
+      "移籍金もありません。",
+    arrangeUnavailable:
+      "このバージョンのゲーム、またはこのシステムでは、エディターがゲームに実行させる移籍を手配できません。" +
+      "「今すぐ移動」ならその場で移動します。",
+    arrangeChecking: "移籍を確認しています…初回はゲームの移籍処理を見つけるのに数秒かかります。",
+    movesOn: (date: string) => `ゲームは${date}に移動を行います`,
+    arrangeFee: (amount: string) => `移籍金 ${amount}、当日にゲームが支払います`,
+    arrangeContract: (wage: string, expires: string) => `契約：週${wage}、${expires}まで`,
+    arrangeDoes: [
+      "今すぐ手配されます。ゲーム内で次の日になると、ゲームが移動を行います",
+      "履歴には今季の試合が元のクラブのものとして残り、新しいクラブが移籍金とともに記録されます",
+      "移籍金は、ゲーム自身の移籍と同じく、当日にゲームが支払います",
+      "その日から新しいクラブとの契約になります。週給と契約期間は、新しい値を入力しない限り変わりません",
+      "変更履歴に記録され、当日まではワンクリックの元に戻す操作で取り消せます",
+    ],
+    arrangeButton: "移籍を手配",
 
     // Choosing the club
     searchLabel: "移籍先のクラブを検索",
@@ -1941,6 +1969,8 @@ export const ja: Strings = {
 
     // The foot
     hint: "「移籍」を押すまで、ゲーム内では何も変わりません。",
+    arrangeHint: "「移籍を手配」を押すまで、ゲーム内では何も変わりません。",
+    moveNowHint: "「今すぐ移動」を押すまで、ゲーム内では何も変わりません。",
     move: "移籍",
     moving: "移籍中…",
     cancel: "キャンセル",

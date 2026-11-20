@@ -265,7 +265,11 @@ function App() {
       : connection.writable
         ? appText.noteUnknownBuild
         : appText.noteReadOnly;
-  const editor = useMemo(() => ({ editable, readOnlyNote: note, onEdited: edited }), [editable, note, edited]);
+  const arrangesTransfers = connection?.arrangesTransfers ?? false;
+  const editor = useMemo(
+    () => ({ editable, readOnlyNote: note, arrangesTransfers, onEdited: edited }),
+    [editable, note, arrangesTransfers, edited],
+  );
 
   // With edits pending in the open profile, leaving for another view asks first.
   const show = (id: View) => {

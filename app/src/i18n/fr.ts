@@ -322,6 +322,14 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "Le jeu n'a plus de place pour un autre contrat tant qu'il n'en crée pas un lui-même, comme il le fait au fil des " +
     "jours\u00a0: avancez d'un jour dans le jeu, puis réessayez.",
+  "arrange.unknown": () => "L'éditeur ne trouve pas où le jeu garde ses transferts dans cette version du jeu.",
+  "arrange.underWay": () => "Le joueur a déjà un déplacement convenu, ou une offre qui n'a pas encore de réponse.",
+  "arrange.noMemory": () =>
+    "L'éditeur n'a pas pu réserver de mémoire dans le jeu pour cela\u00a0: le système ne l'a pas laissé exécuter pour " +
+    "lui les fonctions propres au jeu.",
+  "arrange.made": () =>
+    "Le jeu a déjà effectué ce transfert, ou a modifié ce que sa préparation avait écrit\u00a0: il ne peut pas être " +
+    "annulé.",
   "sign.noModel": () =>
     "Le club n'a aucun joueur sous simple contrat avec son équipe première sur lequel calquer le nouveau contrat.",
   "sign.noDate": () => "L'éditeur ne parvient pas à lire la date du jeu, à laquelle commence le nouveau contrat.",
@@ -1662,6 +1670,7 @@ export const fr: Strings = {
     swappedWith: (name) => `Échange avec ${name}`,
     released: (name) => `Libération ${de(name)}`,
     fee: (amount) => `Montant\u00a0: ${amount}`,
+    arranged: (date) => `Le jeu effectue le déplacement le ${date}`,
     optionRemoved: (amount) => `Option d'achat (${amount}) supprimée`,
     healed: (count) => counted(count, "blessure soignée", "blessures soignées"),
     lifted: (count) => counted(count, "suspension levée", "suspensions levées"),
@@ -1958,9 +1967,32 @@ export const fr: Strings = {
     from: "De",
     to: "Vers",
 
-    modeLabel: "Transfert ou échange",
-    modeMove: "Transférer vers un club",
+    modeLabel: "Transfert, déplacer maintenant ou échange",
+    modeMove: "Déplacer maintenant",
     modeSwap: "Échanger avec un joueur",
+    modeArrange: "Transfert",
+    arrangeNote:
+      "Le jeu effectue le transfert à son prochain jour, comme il le fait pour les siens\u00a0: l'historique du " +
+      "joueur garde les matchs de cette saison avec son ancien club, indique le nouveau club avec le montant, et le " +
+      "jeu paie le montant.",
+    moveNote:
+      "L'éditeur le déplace aussitôt. L'historique du jeu ne l'indique pas\u00a0: cette saison apparaît sous le " +
+      "nouveau club, sans montant.",
+    arrangeUnavailable:
+      "Cette version du jeu, ou ce système, ne permet pas à l'éditeur de préparer un transfert que le jeu " +
+      "effectuera\u00a0: Déplacer maintenant le déplace aussitôt.",
+    arrangeChecking: "Vérification du transfert… la première fois, retrouver les transferts du jeu prend quelques secondes.",
+    movesOn: (date) => `Le jeu effectue le déplacement le ${date}`,
+    arrangeFee: (amount) => `Montant\u00a0: ${amount}, payé par le jeu ce jour-là`,
+    arrangeContract: (wage, expires) => `Contrat\u00a0: ${wage} par semaine jusqu'au ${expires}`,
+    arrangeDoes: [
+      "Convenu maintenant\u00a0: le jeu effectue le déplacement quand il arrive à son prochain jour",
+      "Son historique garde les matchs de cette saison avec son ancien club et indique le nouveau club avec le montant",
+      "Le jeu paie le montant ce jour-là, comme pour ses propres transferts",
+      "Contrat avec le nouveau club à partir de ce jour\u00a0; le salaire et la fin du contrat ne changent que si vous en fixez de nouveaux",
+      "Indiqué dans Modifications, où une seule annulation le retire jusqu'à ce jour",
+    ],
+    arrangeButton: "Préparer le transfert",
 
     // Le choix du club
     searchLabel: "Rechercher le club où le transférer",
@@ -2122,6 +2154,8 @@ export const fr: Strings = {
 
     // Le pied de la fenêtre
     hint: "Rien ne change dans le jeu tant que vous n'appuyez pas sur Transférer.",
+    arrangeHint: "Rien ne change dans le jeu tant que vous n'appuyez pas sur Préparer le transfert.",
+    moveNowHint: "Rien ne change dans le jeu tant que vous n'appuyez pas sur Déplacer maintenant.",
     move: "Transférer",
     moving: "Transfert…",
     cancel: "Annuler",

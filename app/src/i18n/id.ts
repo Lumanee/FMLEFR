@@ -135,6 +135,13 @@ const errors: ErrorTexts = {
     "Di versi game ini editor tidak bisa menemukan tempat game menyimpan kontrak, jadi tidak bisa memberi kontrak kepada agen bebas.",
   "sign.poolFull": () =>
     "Game tidak punya tempat untuk kontrak lain; tempat akan terbuka saat game membuat kontraknya sendiri seiring berjalannya hari. Lanjutkan satu hari di game lalu coba lagi.",
+  "arrange.unknown": () => "Editor tidak menemukan tempat game menyimpan transfernya di versi game ini.",
+  "arrange.underWay": () => "Pemain sudah punya perpindahan yang disepakati, atau tawaran yang belum dijawab.",
+  "arrange.noMemory": () =>
+    "Editor tidak bisa mengambil memori di game untuk ini: sistem tidak mengizinkannya menjalankan fungsi game " +
+    "sendiri untuknya.",
+  "arrange.made": () =>
+    "Game sudah melakukan transfer ini, atau mengubah apa yang ditulis saat mengaturnya: tidak bisa diurungkan.",
   "sign.noModel": () => "Tim senior klub tidak punya pemain dengan kontrak biasa untuk dijadikan contoh kontrak baru.",
   "sign.noDate": () => "Editor tidak bisa membaca tanggal dalam game; kontrak baru dimulai pada tanggal itu.",
   "move.outOfRange": (p) => `${p.value} bukan nilai ${field(p.field)} yang valid: harus dari ${p.min} sampai ${p.max}.`,
@@ -1492,6 +1499,7 @@ export const id: Strings = {
     swappedWith: (name: string) => `Ditukar dengan ${name}`,
     released: (name: string) => `${name} dilepas`,
     fee: (amount: string) => `Biaya ${amount}`,
+    arranged: (date: string) => `Game melakukan perpindahan pada ${date}`,
     optionRemoved: (amount: string) => `Opsi beli (${amount}) dihapus`,
     healed: (count: number) => `${format(count)} cedera disembuhkan`,
     lifted: (count: number) => `${format(count)} larangan bermain dicabut`,
@@ -1766,9 +1774,32 @@ export const id: Strings = {
     from: "Dari",
     to: "Ke",
 
-    modeLabel: "Transfer atau tukar",
-    modeMove: "Transfer ke klub",
+    modeLabel: "Transfer, pindah sekarang, atau tukar",
+    modeMove: "Pindah sekarang",
     modeSwap: "Tukar dengan pemain",
+    modeArrange: "Transfer",
+    arrangeNote:
+      "Game melakukan transfer pada hari berikutnya, seperti transfernya sendiri: riwayat pemain tetap mencatat " +
+      "pertandingan musim ini bersama klub lamanya, mencantumkan klub baru beserta biayanya, dan game yang " +
+      "membayar biayanya.",
+    moveNote:
+      "Editor memindahkannya seketika. Riwayat game tidak mencatatnya: musim ini tampil di bawah klub baru, tanpa " +
+      "biaya.",
+    arrangeUnavailable:
+      "Versi game ini, atau sistem ini, tidak membiarkan editor mengatur transfer untuk dilakukan game: Pindah " +
+      "sekarang memindahkannya seketika.",
+    arrangeChecking: "Memeriksa transfer… untuk pertama kali, mencari transfer game butuh beberapa detik.",
+    movesOn: (date: string) => `Game melakukan perpindahan pada ${date}`,
+    arrangeFee: (amount: string) => `Biaya ${amount}, dibayar game pada hari itu`,
+    arrangeContract: (wage: string, expires: string) => `Kontrak: ${wage} per minggu sampai ${expires}`,
+    arrangeDoes: [
+      "Diatur sekarang: game melakukan perpindahan saat game sampai di hari berikutnya",
+      "Riwayatnya tetap mencatat pertandingan musim ini bersama klub lama dan mencantumkan klub baru beserta biayanya",
+      "Game membayar biayanya pada hari itu, seperti untuk transfernya sendiri",
+      "Kontrak dengan klub baru mulai hari itu; gaji dan akhir kontrak hanya berubah jika kamu mengisi yang baru",
+      "Tercatat di Perubahan, tempat satu kali Urungkan membatalkannya sampai hari itu",
+    ],
+    arrangeButton: "Atur transfer",
 
     searchLabel: "Cari klub tujuan transfer",
     resultsLabel: "Klub yang ditemukan",
@@ -1915,6 +1946,8 @@ export const id: Strings = {
     signing: "Merekrut…",
 
     hint: "Tidak ada yang berubah di game sampai kamu menekan Transfer.",
+    arrangeHint: "Tidak ada yang berubah di game sampai kamu menekan Atur transfer.",
+    moveNowHint: "Tidak ada yang berubah di game sampai kamu menekan Pindah sekarang.",
     move: "Transfer",
     moving: "Mentransfer…",
     cancel: "Batal",

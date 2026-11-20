@@ -298,6 +298,14 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "Das Spiel hat keinen Platz für einen weiteren Vertrag, bis es selbst einen anlegt, wie es im Lauf der Tage " +
     "geschieht: Fahren Sie im Spiel einen Tag fort und versuchen Sie es dann erneut.",
+  "arrange.unknown": () => "Der Editor findet in dieser Spielversion nicht, wo das Spiel seine Transfers ablegt.",
+  "arrange.underWay": () => "Für den Spieler ist bereits ein Wechsel vereinbart, oder ein Angebot ist noch nicht beantwortet.",
+  "arrange.noMemory": () =>
+    "Der Editor konnte dafür keinen Speicher im Spiel belegen: das System hat nicht erlaubt, dass er die eigenen " +
+    "Funktionen des Spiels für ihn ausführt.",
+  "arrange.made": () =>
+    "Das Spiel hat diesen Transfer bereits ausgeführt oder geändert, was das Vereinbaren geschrieben hat: Er lässt " +
+    "sich nicht rückgängig machen.",
   "sign.noModel": () =>
     "Der Verein hat in seiner 1. Mannschaft keinen Spieler mit einem gewöhnlichen Vertrag, nach dessen Vorbild der " +
     "neue Vertrag entstehen könnte.",
@@ -1647,6 +1655,7 @@ export const de: Strings = {
     swappedWith: (name) => `Getauscht gegen ${name}`,
     released: (name) => `Vertrag von ${name} aufgelöst`,
     fee: (amount) => `Ablöse ${amount}`,
+    arranged: (date) => `Das Spiel führt den Wechsel am ${date} aus`,
     optionRemoved: (amount) => `Kaufoption (${amount}) entfernt`,
     healed: (count) => (count === 1 ? "1 Verletzung geheilt" : `${format(count)} Verletzungen geheilt`),
     lifted: (count) => (count === 1 ? "1 Sperre aufgehoben" : `${format(count)} Sperren aufgehoben`),
@@ -1945,9 +1954,32 @@ export const de: Strings = {
     from: "Von",
     to: "Zu",
 
-    modeLabel: "Transfer oder Tausch",
-    modeMove: "Zu einem Verein transferieren",
+    modeLabel: "Transfer, jetzt verschieben oder Tausch",
+    modeMove: "Jetzt verschieben",
     modeSwap: "Gegen einen Spieler tauschen",
+    modeArrange: "Transfer",
+    arrangeNote:
+      "Das Spiel führt den Transfer an seinem nächsten Tag aus, wie bei seinen eigenen: Die Historie des Spielers " +
+      "behält die Spiele dieser Saison beim alten Verein, führt den neuen Verein mit der Ablöse auf, und das Spiel " +
+      "zahlt die Ablöse.",
+    moveNote:
+      "Der Editor verschiebt den Spieler sofort. In der Historie des Spiels erscheint das nicht: Diese Saison steht " +
+      "beim neuen Verein, ohne Ablöse.",
+    arrangeUnavailable:
+      "Diese Spielversion oder dieses System erlaubt dem Editor nicht, einen Transfer für das Spiel anzulegen: " +
+      "Jetzt verschieben verschiebt den Spieler sofort.",
+    arrangeChecking: "Transfer wird geprüft… beim ersten Mal dauert es einige Sekunden, die Transfers des Spiels zu finden.",
+    movesOn: (date) => `Das Spiel führt den Wechsel am ${date} aus`,
+    arrangeFee: (amount) => `Ablöse ${amount}, am Tag vom Spiel bezahlt`,
+    arrangeContract: (wage, expires) => `Vertrag: ${wage} pro Woche bis ${expires}`,
+    arrangeDoes: [
+      "Jetzt vereinbart: Das Spiel führt den Wechsel aus, sobald es seinen nächsten Tag erreicht",
+      "Die Historie behält die Spiele dieser Saison beim alten Verein und führt den neuen Verein mit der Ablöse auf",
+      "Das Spiel zahlt die Ablöse an diesem Tag, wie bei seinen eigenen Transfers",
+      "Vertrag beim neuen Verein ab diesem Tag; Gehalt und Vertragsende ändern sich nur, wenn Sie neue festlegen",
+      "Unter Änderungen aufgeführt; ein Rückgängig nimmt den Transfer bis zu diesem Tag zurück",
+    ],
+    arrangeButton: "Transfer vereinbaren",
 
     // Die Wahl des Vereins
     searchLabel: "Verein suchen, zu dem der Spieler wechselt",
@@ -2114,6 +2146,8 @@ export const de: Strings = {
 
     // Die Fußzeile
     hint: "Im Spiel ändert sich nichts, bis Sie auf Transferieren klicken.",
+    arrangeHint: "Im Spiel ändert sich nichts, bis Sie auf Transfer vereinbaren klicken.",
+    moveNowHint: "Im Spiel ändert sich nichts, bis Sie auf Jetzt verschieben klicken.",
     move: "Transferieren",
     moving: "Wird transferiert…",
     cancel: "Abbrechen",

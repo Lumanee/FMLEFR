@@ -10,19 +10,19 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fmlibre_core::{
-    ArraySource, Buyer, COHESION_RANGE, CaptainRole, CaptainSet, Change, ChangeRow, Clause, ClauseSet, ClubDetails,
-    ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes, DIRECTOR_OF_FOOTBALL,
-    EditError, Entity, EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field, FmDate, GAME_EXE,
-    GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind, LOAN_EXPIRES,
-    LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MANAGER, MoveError, MovePlan, MoveTerms, NameChange, NameKind, Nation,
-    NationalIndex, NationalSide, NationalTeamSummary, NationalUnavailable, NewContract, NewStaffContract, Operation,
-    Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary,
-    PrizeAmount, PrizeChange, PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet,
-    RetirementSet, Role, SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex,
-    Session, SessionError, Skipped, Sponsorship, SponsorshipReadError, SponsorshipUnavailable, SquadMember,
-    SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan,
-    StaffSummary, TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report, find_game, nations,
-    sort_players, sort_staff,
+    Arranged, ArrangedPlan, ArraySource, Buyer, COHESION_RANGE, CaptainRole, CaptainSet, Change, ChangeRow, Clause,
+    ClauseSet, ClubDetails, ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes,
+    DIRECTOR_OF_FOOTBALL, EditError, Entity, EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field,
+    FmDate, GAME_EXE, GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind,
+    LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MANAGER, MoveError, MovePlan, MoveTerms, NameChange,
+    NameKind, Nation, NationalIndex, NationalSide, NationalTeamSummary, NationalUnavailable, NewContract,
+    NewStaffContract, Operation, Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex,
+    PlayerOrder, PlayerSummary, PrizeAmount, PrizeChange, PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable,
+    ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest,
+    Scouted, SearchIndex, Session, SessionError, Skipped, Sponsorship, SponsorshipReadError, SponsorshipUnavailable,
+    SquadMember, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex,
+    StaffOrder, StaffPlan, StaffSummary, TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report,
+    find_game, nations, sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -1156,6 +1156,7 @@ impl Connection {
             writable: self.session.process.can_write(),
             known_build: self.session.known_build(),
             gender_known: self.session.layout.player.gender.is_some() && self.session.layout.staff.gender.is_some(),
+            arranges_transfers: self.session.arranges_transfers(),
             health: Health::clone(&self.session.health()),
             refrozen: None,
         }
@@ -1577,7 +1578,7 @@ impl Connection {
         let change = Change { entity: Entity::Staff, uid: done.member, field: field.to_owned(), old, new };
         let entry = self.entry(change, name, batch);
         self.push_log(LoggedChange {
-            moved: moved.then_some(MovedClubs { from, to, with: None, released: None, fee: None }),
+            moved: moved.then_some(MovedClubs { from, to, with: None, released: None, fee: None, arranged: None }),
             undo: Some(Undo::Staff(LoggedStaff { done, club, club_uid, job, contract_expires })),
             ..entry
         })
@@ -1600,6 +1601,7 @@ impl Connection {
     fn plan_move(&self, uid: u32, club: u32, terms: MoveTerms, release: Option<u32>) -> Result<MovePlan, Failure> {
         let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
         let to = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        self.refuse_while_arranged(&[Some(uid), release].into_iter().flatten().collect::<Vec<_>>())?;
         Ok(match release {
             Some(leaver) => {
                 let leaver = self.players.get(leaver).ok_or_else(|| not_found(Entity::Player, leaver))?;
@@ -1607,6 +1609,54 @@ impl Connection {
             }
             None => self.session.plan_club_move(player, to, terms, &self.human_clubs)?,
         })
+    }
+
+    /// Works out arranging the transfer of the player `uid` to the club `club` for the next day, for `fee` pounds, on
+    /// the contract `terms`, for the game to make on that day.
+    fn plan_arranged(&self, uid: u32, club: u32, terms: MoveTerms, fee: i64) -> Result<ArrangedPlan, Failure> {
+        let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
+        let to = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        Ok(self.session.plan_arranged_transfer(player, to, terms, fee, &self.human_clubs)?)
+    }
+
+    /// Refuses moving any of the players `uids` while a transfer this connection arranged for him waits for its day:
+    /// the game makes it on that day from the club he is at, so he stays there until then, or until it is undone.
+    fn refuse_while_arranged(&self, uids: &[u32]) -> Result<(), Failure> {
+        let today = self.session.game_date().map(|date| date.to_number());
+        let waiting = self.log.iter().any(|logged| {
+            !logged.earlier
+                && logged.undone_at.is_none()
+                && logged.change.entity == Entity::Player
+                && uids.contains(&logged.change.uid)
+                && logged
+                    .moved
+                    .as_ref()
+                    .and_then(|moved| moved.arranged)
+                    .is_some_and(|day| today.is_none_or(|today| today < day))
+        });
+        if waiting { Err(MoveError::DealUnderWay.into()) } else { Ok(()) }
+    }
+
+    /// Logs a transfer just arranged for the game to make, as a change of the player's `club` from one club UID to the
+    /// other on the day of the move. His list row stays as it is: he is still at his club until then.
+    fn log_arranged(&mut self, done: Arranged, plan: &ArrangedPlan) -> LoggedChange {
+        let moved = MovedClubs {
+            from: Some(self.club_name(plan.from_club)),
+            to: Some(self.club_name(plan.to_club)),
+            with: None,
+            released: None,
+            fee: (plan.fee > 0).then_some(plan.fee),
+            arranged: Some(plan.move_day.to_number()),
+        };
+        let change = Change {
+            entity: Entity::Player,
+            uid: plan.player,
+            field: "club".to_owned(),
+            old: i64::from(plan.from_club),
+            new: i64::from(plan.to_club),
+        };
+        let entry = self.entry(change, self.player_name(plan.player), None);
+        self.push_log(LoggedChange { moved: Some(moved), undo: Some(Undo::Arranged(done)), ..entry })
     }
 
     /// Works out making the loan of the player `uid` permanent on the contract `terms`.
@@ -1618,6 +1668,7 @@ impl Connection {
     /// Works out releasing the player `uid` from his club.
     fn plan_release(&self, uid: u32) -> Result<MovePlan, Failure> {
         let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
+        self.refuse_while_arranged(&[uid])?;
         Ok(self.session.plan_release(player, &self.human_clubs)?)
     }
 
@@ -1625,6 +1676,7 @@ impl Connection {
     fn plan_swap(&self, uid: u32, other: u32) -> Result<MovePlan, Failure> {
         let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
         let partner = self.players.get(other).ok_or_else(|| not_found(Entity::Player, other))?;
+        self.refuse_while_arranged(&[uid, other])?;
         Ok(self.session.plan_club_swap(player, partner, &self.human_clubs)?)
     }
 
@@ -1783,7 +1835,7 @@ impl Connection {
         };
         let entry = self.entry(change, name, None);
         self.push_log(LoggedChange {
-            moved: Some(MovedClubs { from, to: Some(to), with, released, fee }),
+            moved: Some(MovedClubs { from, to: Some(to), with, released, fee, arranged: None }),
             undo: Some(Undo::Move(before)),
             ..entry
         })
@@ -1806,8 +1858,14 @@ impl Connection {
             old: i64::from(done.from_club),
             new: 0,
         };
-        let moved =
-            MovedClubs { from: Some(self.club_name(done.from_club)), to: None, with: None, released: None, fee: None };
+        let moved = MovedClubs {
+            from: Some(self.club_name(done.from_club)),
+            to: None,
+            with: None,
+            released: None,
+            fee: None,
+            arranged: None,
+        };
         let entry = self.entry(change, self.player_name(done.player), None);
         self.push_log(LoggedChange {
             moved: Some(moved),
@@ -1871,6 +1929,15 @@ impl Connection {
                     });
                 }
             }
+            Some(Undo::Arranged(done)) => self.session.undo_arranged_transfer(&done).map_err(|err| match err {
+                // Once the day has come, the game has made the move, and what the editor wrote is the game's.
+                MoveError::Changed { .. } => Failure::new(
+                    "arrange.made",
+                    "The game has made this transfer already, or changed what arranging it wrote: it cannot be \
+                     undone.",
+                ),
+                err => err.into(),
+            })?,
             Some(Undo::Heal(healed)) => self.session.undo_heal(&healed)?,
             Some(Undo::Lift(lifted)) => self.session.undo_lift_bans(&lifted)?,
             Some(Undo::Cohesion(cohesion)) => self.session.undo_cohesion(&cohesion)?,
@@ -2227,6 +2294,8 @@ enum Undo {
     /// A player given another name: the person's pointer it wrote, which the undo writes back.
     Name(NameChange),
     Move(LoggedMove),
+    /// A transfer arranged for the game to make: what arranging it wrote, which the undo takes back until the day.
+    Arranged(Arranged),
     Heal(Healed),
     Lift(Lifted),
     Cohesion(CohesionSet),
@@ -2389,6 +2458,10 @@ struct MovedClubs {
     /// The fee the buying club paid the selling one, in pounds, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     fee: Option<i64>,
+    /// For a transfer arranged for the game to make: the day of the move, as a number like 20261019. The game pays the
+    /// fee and moves him on that day.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    arranged: Option<i64>,
 }
 
 /// A move as the log keeps it: the writes to undo, and what the list rows of the players it
@@ -2433,6 +2506,19 @@ struct MovePreview {
 struct ClubName {
     uid: u32,
     name: String,
+}
+
+/// A transfer the game is to make on the day of the move: the clubs, the fee and the contract he is to have.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArrangedPreview {
+    from: ClubName,
+    to: ClubName,
+    /// Pounds; the game pays it on the day.
+    fee: i64,
+    /// The day the game makes the move, as a number like 20261019.
+    move_day: i64,
+    contract: NewContract,
 }
 
 /// The filter of the list a mass edit applies to; only the one for its entity is used.
@@ -2658,6 +2744,9 @@ struct ConnectionInfo {
     known_build: bool,
     /// Whether the layout tells women from men, players and staff alike: the lists offer that filter only then.
     gender_known: bool,
+    /// Whether a transfer can be arranged for the game to make the next day: this version of the game's layout places
+    /// its transfers, and the editor can take blocks of the game's heap (Windows).
+    arranges_transfers: bool,
     /// What the checks the editor makes before it writes found on this game.
     health: Health,
     /// Only from `connect`: what it froze again of what was frozen in this save before, when there was any.
@@ -3893,6 +3982,56 @@ async fn move_player(
     .await?
 }
 
+/// Checks that the transfer of the player `uid` to the club `club` can be arranged for the game to make the next day,
+/// for `fee` pounds, on the contract `terms`, and says what it would be; the error says why it cannot. Nothing is
+/// written. Off the window's thread: the first time, finding the game's transfers takes a few seconds.
+#[tauri::command]
+async fn plan_arranged_transfer(
+    app: tauri::AppHandle,
+    uid: u32,
+    club: u32,
+    terms: MoveTerms,
+    fee: Option<i64>,
+) -> Result<ArrangedPreview, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<ArrangedPreview, Failure> {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        let plan = connection.plan_arranged(uid, club, terms, fee.unwrap_or(0))?;
+        let name = |uid: u32| ClubName { uid, name: connection.club_name(uid) };
+        Ok(ArrangedPreview {
+            from: name(plan.from_club),
+            to: name(plan.to_club),
+            fee: plan.fee,
+            move_day: plan.move_day.to_number(),
+            contract: plan.terms,
+        })
+    })
+    .await?
+}
+
+/// Arranges the transfer of the player `uid` to the club `club` for the game to make the next day, for `fee` pounds,
+/// on the contract `terms`, worked out again from the game as it is now, and logs it. The game moves him, writes the
+/// move into his history and pays the fee on that day; until then one undo takes it back. Off the window's thread.
+#[tauri::command]
+async fn arrange_transfer(
+    app: tauri::AppHandle,
+    uid: u32,
+    club: u32,
+    terms: MoveTerms,
+    fee: Option<i64>,
+) -> Result<LoggedChange, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<LoggedChange, Failure> {
+        let state = app.state::<AppState>();
+        let mut guard = state.0.lock()?;
+        let connection = guard.as_mut().ok_or_else(not_connected)?;
+        let plan = connection.plan_arranged(uid, club, terms, fee.unwrap_or(0))?;
+        let done = connection.session.apply_arranged_transfer(&plan)?;
+        Ok(connection.log_arranged(done, &plan))
+    })
+    .await?
+}
+
 /// Checks that the loan of the player `uid` can be made permanent on the contract `terms`, the club he is on loan to
 /// paying his own one `fee` pounds if given, and names the clubs; the error says why it cannot. Nothing is written.
 #[tauri::command]
@@ -5097,6 +5236,8 @@ pub fn run() {
             plan_club_move,
             room_makers,
             move_player,
+            plan_arranged_transfer,
+            arrange_transfer,
             plan_loan_permanent,
             make_loan_permanent,
             plan_release,
@@ -5332,6 +5473,7 @@ mod tests {
             with: None,
             released: None,
             fee: None,
+            arranged: None,
         });
         second.add(&HistoryLine::Change(Box::new(moved)));
         second.add(&line(&logged(2, "morale", 9, 20, Some(1)), "second"));

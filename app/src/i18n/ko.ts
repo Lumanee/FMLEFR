@@ -290,6 +290,12 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "게임이 스스로 새 계약 자리를 만들기 전까지는 계약을 더 넣을 자리가 없습니다. 게임에서 하루 진행한 뒤 다시 " +
     "시도하세요.",
+  "arrange.unknown": () => "이 게임 버전에서 게임이 이적 정보를 어디에 보관하는지 에디터가 찾지 못했습니다.",
+  "arrange.underWay": () => "선수에게 이미 합의된 이동이 있거나, 아직 응답하지 않은 제안이 있습니다.",
+  "arrange.noMemory": () =>
+    "에디터가 이를 위한 게임 메모리를 확보하지 못했습니다. 시스템이 게임 자체의 함수를 대신 실행하도록 허용하지 " +
+    "않았습니다.",
+  "arrange.made": () => "게임이 이미 이 이적을 진행했거나 예약 시 기록한 내용을 바꿔서 되돌릴 수 없습니다.",
   "sign.noModel": () => "이 구단 1군에는 새 계약의 본보기로 삼을 일반 계약 선수가 없습니다.",
   "sign.noDate": () => "새 계약의 시작일이 되는 게임 내 날짜를 에디터가 읽지 못했습니다.",
   "move.outOfRange": (p) =>
@@ -1551,6 +1557,7 @@ export const ko: Strings = {
     swappedWith: (name) => `${name}와(과) 맞교환`,
     released: (name) => `${name} 방출됨`,
     fee: (amount) => `이적료 ${amount}`,
+    arranged: (date) => `게임이 ${date}에 이동을 진행합니다`,
     optionRemoved: (amount) => `완전 영입 옵션(${amount}) 제거됨`,
     healed: (count) => `부상 ${format(count)}건 치료`,
     lifted: (count) => `출장 정지 ${format(count)}건 해제`,
@@ -1826,9 +1833,31 @@ export const ko: Strings = {
     from: "출발",
     to: "도착",
 
-    modeLabel: "이적 또는 맞교환",
-    modeMove: "구단으로 이적",
+    modeLabel: "이적, 바로 이동 또는 맞교환",
+    modeMove: "바로 이동",
     modeSwap: "선수와 맞교환",
+    modeArrange: "이적",
+    arrangeNote:
+      "게임이 자체 이적과 똑같이 다음 날 이적을 진행합니다. 선수 이력에는 이번 시즌 경기가 이전 구단 소속으로 남고, " +
+      "새 구단이 이적료와 함께 기록되며, 이적료는 게임이 지불합니다.",
+    moveNote:
+      "에디터가 선수를 즉시 이동시킵니다. 게임의 이력에는 기록되지 않습니다. 이번 시즌은 새 구단 소속으로 표시되고 " +
+      "이적료는 없습니다.",
+    arrangeUnavailable:
+      "이 게임 버전이나 이 시스템에서는 에디터가 게임이 진행할 이적을 예약할 수 없습니다. '바로 이동'은 선수를 " +
+      "즉시 이동시킵니다.",
+    arrangeChecking: "이적을 확인하는 중… 처음에는 게임의 이적 정보를 찾는 데 몇 초 걸립니다.",
+    movesOn: (date) => `게임이 ${date}에 이동을 진행합니다`,
+    arrangeFee: (amount) => `이적료 ${amount}, 당일 게임이 지불`,
+    arrangeContract: (wage, expires) => `계약: 주급 ${wage}, ${expires}까지`,
+    arrangeDoes: [
+      "지금 예약됩니다. 게임 안에서 다음 날이 되면 게임이 이동을 진행합니다",
+      "이력에는 이번 시즌 경기가 이전 구단 소속으로 남고, 새 구단이 이적료와 함께 기록됩니다",
+      "이적료는 게임 자체 이적과 마찬가지로 당일 게임이 지불합니다",
+      "그날부터 새 구단과 계약합니다. 주급과 계약 종료일은 새 값을 입력하지 않으면 그대로입니다",
+      "변경 내역에 기록되며, 당일까지는 되돌리기 한 번으로 취소할 수 있습니다",
+    ],
+    arrangeButton: "이적 예약",
 
     // Choosing the club
     searchLabel: "이적할 구단 검색",
@@ -1979,6 +2008,8 @@ export const ko: Strings = {
 
     // The foot
     hint: "'이적'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
+    arrangeHint: "'이적 예약'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
+    moveNowHint: "'바로 이동'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
     move: "이적",
     moving: "이적시키는 중…",
     cancel: "취소",
