@@ -300,7 +300,7 @@ const errors: ErrorTexts = {
   "arrange.unknown": () => "L'editor non trova dove il gioco tiene i suoi trasferimenti in questa versione del gioco.",
   "arrange.underWay": () => "Il giocatore ha già uno spostamento concordato, o un'offerta ancora senza risposta.",
   "arrange.noMemory": () =>
-    "L'editor non ha potuto prendere memoria nel gioco per questo: Windows non gli ha lasciato eseguire al suo posto " +
+    "L'editor non ha potuto prendere memoria nel gioco per questo: il sistema non gli ha lasciato eseguire al suo posto " +
     "le funzioni del gioco.",
   "arrange.made": () =>
     "Il gioco ha già fatto questo trasferimento, o ha cambiato ciò che la preparazione aveva scritto: non si può " +

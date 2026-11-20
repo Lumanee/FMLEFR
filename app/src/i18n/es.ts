@@ -272,7 +272,7 @@ const errors: ErrorTexts = {
   "arrange.unknown": () => "El editor no encuentra dónde guarda el juego sus traspasos en esta versión del juego.",
   "arrange.underWay": () => "El jugador ya tiene un movimiento acordado, o una oferta sin responder.",
   "arrange.noMemory": () =>
-    "El editor no pudo reservar memoria en el juego para esto: Windows no le dejó ejecutar por él las propias " +
+    "El editor no pudo reservar memoria en el juego para esto: el sistema no le dejó ejecutar por él las propias " +
     "funciones del juego.",
   "arrange.made": () =>
     "El juego ya ha hecho este traspaso, o ha cambiado lo que escribió prepararlo: no se puede deshacer.",

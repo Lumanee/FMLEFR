@@ -12,6 +12,14 @@
 //! keeps only the low 32 bits of what a thread returns, so the block is then found where its string is: at those 32
 //! bits in one of the game's regions of heap. It is zeroed before it is used. A block is given back with the runtime's
 //! `free`, run the same way. No code is written into the game.
+//!
+//! The Mac game brings its own allocator for blocks up to 4,096 bytes, in chunks it takes from `malloc`, and hands a
+//! larger one to the system's `free()`, which stops the game for a block `malloc` never gave out: the transfer
+//! manager's list of offers, for one. The editor takes its blocks there the same way, from the system's `strdup`
+//! (libsystem_c) run in the game on a thread of its own, which gives back the whole address, and gives them back with
+//! the system's `free`. A block of up to 4,096 bytes is taken as large as the game's allocator would give it (see
+//! [`crate::profile::HeapLayout::grown_block`]): the game lets such a block go into its own lists of free blocks, and
+//! hands it out again for anything of its class. Only on Apple silicon (see `fmlibre_mem`'s `call.rs`).
 
 use crate::session::Session;
 use crate::transfer::MoveError;
@@ -28,48 +36,67 @@ pub(crate) struct Runtime {
 }
 
 impl Session {
-    /// A block of `size` bytes (2 or more) of the game's heap, zeroed: taken by the game's C runtime (see the module's
-    /// notes).
-    #[cfg(windows)]
+    /// A block of at least `size` bytes (2 or more) of the game's heap, zeroed: taken by the game's C runtime (see the
+    /// module's notes).
     pub(crate) fn heap_block(&self, size: usize) -> Result<u64, MoveError> {
         let runtime = self.runtime().ok_or(MoveError::NoGameMemory)?;
+        let size = self.heap_block_size(size);
         if size < 2 {
             return Err(MoveError::NoGameMemory);
         }
         let text = marker(size);
         let at = self.own_block(text.len() as u64)?;
         self.process.write_bytes(at, &text)?;
-        let low = self.process.call(runtime.strdup, at)?;
-        if low == 0 {
-            return Err(MoveError::NoGameMemory);
-        }
-        let block = self.find_block(low, &text, at)?;
+        let block = self.strdup(runtime, &text, at)?;
         self.process.write_bytes(block, &vec![0; size])?;
         Ok(block)
     }
 
-    #[cfg(not(windows))]
-    pub(crate) fn heap_block(&self, _size: usize) -> Result<u64, MoveError> {
-        Err(MoveError::NoGameMemory)
-    }
-
     /// Gives `block`, taken with [`Session::heap_block`], back to the game's C runtime.
-    #[cfg(windows)]
     pub(crate) fn heap_free(&self, block: u64) -> Result<(), MoveError> {
         let runtime = self.runtime().ok_or(MoveError::NoGameMemory)?;
         self.process.call(runtime.free, block)?;
         Ok(())
     }
 
-    #[cfg(not(windows))]
-    pub(crate) fn heap_free(&self, _block: u64) -> Result<(), MoveError> {
-        Err(MoveError::NoGameMemory)
-    }
-
     /// Whether the editor can take blocks of the game's heap: the game's C runtime is loaded, and the editor may run
     /// its functions.
     pub fn takes_heap_blocks(&self) -> bool {
-        cfg!(windows) && self.runtime().is_some()
+        self.runtime().is_some()
+    }
+
+    /// How large a block taken for `size` bytes is: as large as asked on Windows.
+    #[cfg(windows)]
+    fn heap_block_size(&self, size: usize) -> usize {
+        size
+    }
+
+    /// How large a block taken for `size` bytes is: on the Mac, up to 4,096 bytes, as large as the game's own allocator
+    /// would give it (see the module's notes).
+    #[cfg(target_os = "macos")]
+    fn heap_block_size(&self, size: usize) -> usize {
+        self.layout.heap.grown_block(size as u64).map_or(size, |block| block as usize)
+    }
+
+    /// Runs `_strdup` on `text`, written at `at`, and gives back the block it took: found from the low 32 bits Windows
+    /// keeps of what it returned.
+    #[cfg(windows)]
+    fn strdup(&self, runtime: Runtime, text: &[u8], at: u64) -> Result<u64, MoveError> {
+        let low = self.process.call(runtime.strdup, at)?;
+        if low == 0 {
+            return Err(MoveError::NoGameMemory);
+        }
+        self.find_block(low, text, at)
+    }
+
+    /// Runs `strdup` on `text`, written at `at`, and gives back the block it took, once it holds the text.
+    #[cfg(target_os = "macos")]
+    fn strdup(&self, runtime: Runtime, text: &[u8], at: u64) -> Result<u64, MoveError> {
+        let block = self.process.call(runtime.strdup, at)?;
+        if block == 0 || self.process.read_bytes(block, text.len()).ok().as_deref() != Some(text) {
+            return Err(MoveError::NoGameMemory);
+        }
+        Ok(block)
     }
 
     /// Where the game's C runtime's `_strdup` and `free` are, found the first time they are needed.
@@ -87,9 +114,19 @@ impl Session {
         Some(Runtime { strdup: at("_strdup")?, free: at("free")? })
     }
 
-    #[cfg(not(windows))]
+    /// The system's `strdup` and `free` where the game has them, the same library as the editor's, and the editor can
+    /// run them there (see `fmlibre_mem`'s `call.rs`).
+    #[cfg(target_os = "macos")]
     fn find_runtime(&self) -> Option<Runtime> {
-        None
+        if !self.process.can_call() {
+            return None;
+        }
+        let found =
+            |library: &str, symbol: &std::ffi::CStr| self.process.system_function(library, symbol).ok().flatten();
+        Some(Runtime {
+            strdup: found("libsystem_c.dylib", c"strdup")?,
+            free: found("libsystem_malloc.dylib", c"free")?,
+        })
     }
 
     /// The block `_strdup` returned, from the low 32 bits Windows kept of it: the one place among the game's regions of
@@ -119,7 +156,6 @@ impl Session {
 
 /// A string of `size` bytes with its terminating zero, unlike any other: the editor's mark, a count and the time, which a
 /// short string cuts.
-#[cfg_attr(not(windows), allow(dead_code))]
 fn marker(size: usize) -> Vec<u8> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNT: AtomicU64 = AtomicU64::new(0);

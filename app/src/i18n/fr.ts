@@ -325,7 +325,7 @@ const errors: ErrorTexts = {
   "arrange.unknown": () => "L'éditeur ne trouve pas où le jeu garde ses transferts dans cette version du jeu.",
   "arrange.underWay": () => "Le joueur a déjà un déplacement convenu, ou une offre qui n'a pas encore de réponse.",
   "arrange.noMemory": () =>
-    "L'éditeur n'a pas pu réserver de mémoire dans le jeu pour cela\u00a0: Windows ne l'a pas laissé exécuter pour " +
+    "L'éditeur n'a pas pu réserver de mémoire dans le jeu pour cela\u00a0: le système ne l'a pas laissé exécuter pour " +
     "lui les fonctions propres au jeu.",
   "arrange.made": () =>
     "Le jeu a déjà effectué ce transfert, ou a modifié ce que sa préparation avait écrit\u00a0: il ne peut pas être " +

@@ -138,7 +138,7 @@ const errors: ErrorTexts = {
   "arrange.unknown": () => "Editor tidak menemukan tempat game menyimpan transfernya di versi game ini.",
   "arrange.underWay": () => "Pemain sudah punya perpindahan yang disepakati, atau tawaran yang belum dijawab.",
   "arrange.noMemory": () =>
-    "Editor tidak bisa mengambil memori di game untuk ini: Windows tidak mengizinkannya menjalankan fungsi game " +
+    "Editor tidak bisa mengambil memori di game untuk ini: sistem tidak mengizinkannya menjalankan fungsi game " +
     "sendiri untuknya.",
   "arrange.made": () =>
     "Game sudah melakukan transfer ini, atau mengubah apa yang ditulis saat mengaturnya: tidak bisa diurungkan.",

@@ -301,7 +301,7 @@ const errors: ErrorTexts = {
   "arrange.unknown": () => "Der Editor findet in dieser Spielversion nicht, wo das Spiel seine Transfers ablegt.",
   "arrange.underWay": () => "Für den Spieler ist bereits ein Wechsel vereinbart, oder ein Angebot ist noch nicht beantwortet.",
   "arrange.noMemory": () =>
-    "Der Editor konnte dafür keinen Speicher im Spiel belegen: Windows hat nicht erlaubt, dass er die eigenen " +
+    "Der Editor konnte dafür keinen Speicher im Spiel belegen: das System hat nicht erlaubt, dass er die eigenen " +
     "Funktionen des Spiels für ihn ausführt.",
   "arrange.made": () =>
     "Das Spiel hat diesen Transfer bereits ausgeführt oder geändert, was das Vereinbaren geschrieben hat: Er lässt " +

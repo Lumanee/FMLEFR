@@ -532,7 +532,7 @@ impl fmt::Display for MoveError {
             }
             MoveError::DealUnderWay => f.write_str("the player already has a move agreed, or an offer not yet answered"),
             MoveError::NoGameMemory => f.write_str(
-                "the editor could not take memory in the game for this: Windows did not let it run the game's own \
+                "the editor could not take memory in the game for this: the system did not let it run the game's own \
                  functions for it",
             ),
             MoveError::Locked(lock) => write!(f, "nothing was changed: {lock}"),

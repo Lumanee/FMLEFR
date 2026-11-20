@@ -252,6 +252,33 @@ by the marker (see `crates/fmlibre-core/src/heap.rs`); `free` gives one back. Ri
 full (the offers' held 5,178 of 5,178, the moves due 103 of 103), and a list the editor grows goes into such a block,
 half as large again, as the game grows its own.
 
+**The model's kind.** The bytes from `+0x84` on go with the kind of transfer: the offer's `+0x86` is 2 for a transfer
+with a fee, 8 for a free move at the end of a contract and 1 for most loans, as its entry's kind (`+0x41`) is 2, 7 or 1.
+So the model is a transfer with a fee, agreed or made, before an agreed free move, and the editor writes 2 there.
+
+### On the Mac
+
+Read on Steam build 26620374, Apple silicon, on the Arsenal save of 16 July 2027, which the game had just loaded:
+
+- One `TRANSFER_MANAGER`, laid out as on Windows: 8,411 offers at `+0x20` (8,411 of 8,411), the moves due at `+0x50`
+  (29 of 29), the flag at `+0x68`. The offers (`FULL_TRANSFER_OFFER`, 0xD0 bytes), the entries (0x48) and the moves due
+  (16 bytes) are laid out as on Windows: each of the 29 moves due names a player whose entry and offer have its
+  number, agreed (19) and waiting (2), Gonzalo Tapia's for 17 July among them.
+- The player's records sit in the person, 0x40 earlier than on Windows as his other fields there: offers' numbers at
+  `+0x2E0`, entries at `+0x2E8`. A record takes 24 bytes, the (begin, end, capacity) of its list, in a block of 24 of
+  the game's allocator: of 40,369 players, 4,598 have both, 3,833 of those 24 bytes apart.
+- The agreed offers with the flags `0x40` were all free moves at the end of a contract (`+0x86` 8, no fee), which is
+  why the model is chosen by its kind.
+- The game's own allocator serves the moves due, the entries, the records and the lists of up to 4,096 bytes (they sit
+  their class apart in `MALLOC_SMALL` regions, where malloc's blocks are 512 bytes at the least); the list of offers
+  (67,288 bytes) is malloc's, and goes to `free()` when the game grows it. The editor takes its blocks with the
+  system's `strdup` run in the game on a thread of its own (see `crates/fmlibre-mem/src/macos/call.rs`), each up to
+  4,096 bytes as large as the game's class for it, which the game hands out again once it lets the block go.
+
+The probe's `arrange 28108494 1736 --fee 60000000 --restore --hold 25` (Phil Foden from Manchester City to Real
+Madrid) wrote the offer (8,411, agreed, kind 2), the contract, the entry, the move due for 17 July and the flag, grew
+the list of offers into a block of 12,616 and the moves due into one of 43, both malloc's, and took it all back.
+
 ## Still to find
 
 - What the amount and the flags of the 48-byte records mean.

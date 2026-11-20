@@ -1442,6 +1442,23 @@ mod tests {
         assert!(windows.names.is_some());
         assert_eq!(mac.names, windows.names);
 
+        // The transfers are laid out alike, but for the player's records, which sit in the person, 0x40 earlier as
+        // his other fields there, and which take 24 bytes on the Mac.
+        let (w, m) = (windows.transfers.as_ref().expect("transfers"), mac.transfers.as_ref().expect("transfers"));
+        assert_eq!(
+            (m.player_offer_numbers, m.player_entries),
+            (w.player_offer_numbers - 0x40, w.player_entries - 0x40)
+        );
+        assert!(m.player_offer_numbers >= mac.player.person_block);
+        assert_eq!((w.record_size, m.record_size), (0x28, 0x18));
+        let shared = |t: &TransfersLayout| TransfersLayout {
+            player_offer_numbers: 0,
+            player_entries: 0,
+            record_size: 0,
+            ..t.clone()
+        };
+        assert_eq!(shared(m), shared(w));
+
         // The records the people point at are laid out alike. The kind of contract is left out of a layout until it
         // has been read on that system; where both have it, it sits at the same place.
         let without_kind = |c: &ContractLayout| ContractLayout { contract_type: None, ..c.clone() }.end();

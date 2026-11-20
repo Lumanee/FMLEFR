@@ -150,7 +150,7 @@ const errors: ErrorTexts = {
   "arrange.unknown": () => "Düzenleyici, oyunun bu sürümünde transferlerin nerede tutulduğunu bulamıyor.",
   "arrange.underWay": () => "Oyuncunun anlaşılmış bir transferi ya da henüz yanıtlanmamış bir teklifi var.",
   "arrange.noMemory": () =>
-    "Düzenleyici bunun için oyunda bellek alamadı: Windows, oyunun kendi işlevlerini düzenleyici için çalıştırmasına izin vermedi.",
+    "Düzenleyici bunun için oyunda bellek alamadı: Sistem, oyunun kendi işlevlerini düzenleyici için çalıştırmasına izin vermedi.",
   "arrange.made": () =>
     "Oyun bu transferi zaten yaptı ya da ayarlanırken yazılanları değiştirdi: geri alınamaz.",
   "sign.noModel": () =>
