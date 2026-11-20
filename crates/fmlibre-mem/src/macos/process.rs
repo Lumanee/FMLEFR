@@ -94,6 +94,9 @@ pub struct Process {
     writable: bool,
     /// Where the modules are mapped, and when that was read: a write never goes there.
     modules: Mutex<Option<(Instant, Vec<Range<u64>>)>>,
+    /// What running one of the process's functions needs in it, once found (see `call.rs`; Apple silicon only).
+    #[cfg_attr(not(target_arch = "aarch64"), allow(dead_code))]
+    pub(super) calls: Mutex<Option<super::call::Calls>>,
 }
 
 // A task port is a number in this process's port space; Mach calls on it are thread-safe.
@@ -117,7 +120,7 @@ impl Process {
     }
 
     fn open(pid: u32, writable: bool) -> Result<Self> {
-        Ok(Self { task: task_port(pid)?, pid, writable, modules: Mutex::new(None) })
+        Ok(Self { task: task_port(pid)?, pid, writable, modules: Mutex::new(None), calls: Mutex::new(None) })
     }
 
     pub fn pid(&self) -> u32 {
