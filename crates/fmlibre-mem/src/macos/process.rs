@@ -79,7 +79,12 @@ const MODULES_FRESH: Duration = Duration::from_secs(30);
 
 /// The tag of the memory the editor takes in the game (`VM_MEMORY_APPLICATION_SPECIFIC_1`), in the high byte of the
 /// flags of `mach_vm_allocate`.
-const EDITOR_MEMORY_TAG: i32 = 240;
+pub(super) const EDITOR_MEMORY_TAG: i32 = 240;
+
+/// The most bytes the editor hands the kernel to write at a time: less than a page, so that the kernel copies them into
+/// the pages the process has. Given whole pages, `mach_vm_write` puts pages of the editor's in their place instead: the
+/// process's region is split around them, and the kernel then reports its pieces as shared.
+const WRITE_PIECE: usize = 0x800;
 
 /// A process opened through its task port, for reading memory, and for writing it only when
 /// opened with [`Process::open_read_write`].
@@ -180,10 +185,10 @@ impl Process {
 
     /// Writes `data` at `addr`; fails unless every byte was written.
     ///
-    /// Only heap data can be written: the whole range must lie in one region of
-    /// private, writable and non-executable memory that no file backs, outside every
-    /// module. Anything else, such as a module's code or data, is refused before the
-    /// kernel is asked.
+    /// Only heap data can be written: the whole range must lie in private, writable and
+    /// non-executable memory that no file backs, outside every module. Anything else, such as a
+    /// module's code or data, is refused before the kernel is asked. The range may run over
+    /// several such regions in a row, as a block does in a region that something has split.
     pub fn write_bytes(&self, addr: u64, data: &[u8]) -> Result<()> {
         if !self.writable {
             return Err(Error::ReadOnly);
@@ -241,9 +246,13 @@ impl Process {
         }
         let len = data.len();
         let end = addr.checked_add(len as u64).ok_or(Error::NotWritable { addr, len })?;
-        match region_at(self, addr) {
-            Some(region) if region.holds_data() && end <= region.end() => {}
-            _ => return Err(Error::NotWritable { addr, len }),
+        // Each region of the range, one after the other with no gap, must hold data.
+        let mut at = addr;
+        while at < end {
+            match region_at(self, at) {
+                Some(region) if region.holds_data() => at = region.end(),
+                _ => return Err(Error::NotWritable { addr, len }),
+            }
         }
         // The kernel reports a module's data pages that the process has written to as the
         // process's own memory, so the modules' places decide.
@@ -253,13 +262,14 @@ impl Process {
         self.write_now(addr, data)
     }
 
-    /// Writes `data` at `addr`, once the caller has checked the place.
+    /// Writes `data` at `addr`, once the caller has checked the place, [`WRITE_PIECE`] bytes at a time.
     fn write_now(&self, addr: u64, data: &[u8]) -> Result<()> {
-        let len = data.len();
-        let count = u32::try_from(len).map_err(|_| Error::NotWritable { addr, len })?;
-        let code = unsafe { mach_vm_write(self.task, addr, data.as_ptr() as usize, count) };
-        if code != KERN_SUCCESS {
-            return Err(Error::Write { addr, len, code: code as u32 });
+        for (piece, at) in data.chunks(WRITE_PIECE).zip((addr..).step_by(WRITE_PIECE)) {
+            let len = piece.len();
+            let code = unsafe { mach_vm_write(self.task, at, piece.as_ptr() as usize, len as u32) };
+            if code != KERN_SUCCESS {
+                return Err(Error::Write { addr: at, len, code: code as u32 });
+            }
         }
         Ok(())
     }
@@ -348,6 +358,21 @@ mod tests {
         let read_only = Process::open_read(std::process::id()).expect("open this process");
         assert!(matches!(read_only.write_bytes(addr, &[1]), Err(Error::ReadOnly)));
         drop(heap);
+    }
+
+    #[test]
+    fn writes_whole_pages_into_the_pages_there() {
+        let process = Process::open_read_write(std::process::id()).expect("open this process");
+        let page = 0x4000u64;
+        let at = process.allocate(8 * page as usize).expect("allocate");
+        // Whole pages in the middle, then over their edges: the region stays one, and the process's own.
+        process.write_bytes(at + page, &vec![1; 3 * page as usize]).expect("write three pages");
+        process.write_bytes(at + page - 8, &[2; 16]).expect("write over an edge");
+        let region = region_at(&process, at + 2 * page).expect("its region");
+        assert_eq!((region.base, region.size), (at, 8 * page));
+        assert!(region.holds_data());
+        assert_eq!(process.read_bytes(at + page - 8, 24).expect("read back"), [[2u8; 16].as_slice(), &[1; 8]].concat());
+        assert_eq!(process.read_bytes(at + 4 * page - 8, 16).expect("read back"), [[1u8; 8], [0; 8]].concat());
     }
 
     #[test]
