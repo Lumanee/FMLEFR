@@ -39,10 +39,14 @@ use crate::transfer::{MAX_FEE, MoveError, MoveTerms, Patch, Patches, PointerList
 const MOST_OFFERS: u64 = 200_000;
 
 /// The flags of the agreed transfers the game makes most, and the states of an offer: still to be answered by the club
-/// (0) or by the player (8), agreed (19).
+/// (0) or by the player (8), agreed (19), made (20).
 const TRANSFER_FLAGS: u32 = 0x40;
 const AGREED: u8 = 19;
+const MADE: u8 = 20;
 const UNDER_WAY: [u8; 3] = [0, 8, 19];
+
+/// An offer's kind for a transfer with a fee (8 is a free move at the end of a contract, 1 most loans).
+const TRANSFER_OFFER: u8 = 2;
 
 /// How long an offer stands, in days, as the game's do.
 const OFFER_STANDS: i64 = 30;
@@ -140,8 +144,29 @@ fn offer_bytes(
     put(t.offer_lapses, &date(today.plus_days(OFFER_STANDS)));
     put(t.offer_move_day, &date(move_day));
     put(t.offer_state, &[AGREED]);
+    put(t.offer_kind, &[TRANSFER_OFFER]);
     put(t.offer_payment, &0u64.to_le_bytes());
     offer
+}
+
+/// How good a model one of the game's offers is for an arranged transfer, the higher the better, or None for one
+/// neither agreed nor made. What the editor does not write is the model's, the bytes from +0x84 on among it, and they
+/// go with the kind of the transfer: so first a transfer with a fee, not a free move at the end of a contract or a
+/// loan (on a Mac save of July 2027 the game's agreed transfers with the flags it gives most were all free ones), then
+/// one agreed rather than made, then one with those flags, then one paid at once.
+fn model_rank(t: &TransfersLayout, offer: &[u8]) -> Option<u8> {
+    let state = offer[t.offer_state as usize];
+    if state != AGREED && state != MADE {
+        return None;
+    }
+    let half = |at: u64| u32::from_le_bytes(offer[at as usize..at as usize + 4].try_into().expect("4 bytes"));
+    let paid_at_once = offer[t.offer_payment as usize..t.offer_payment as usize + 8].iter().all(|&b| b == 0);
+    Some(
+        8 * u8::from(offer[t.offer_kind as usize] == TRANSFER_OFFER)
+            + 4 * u8::from(state == AGREED)
+            + 2 * u8::from(half(t.offer_flags) == TRANSFER_FLAGS)
+            + u8::from(paid_at_once),
+    )
 }
 
 /// An entry's bytes: the contract, the offer's number, agreed and waiting.
@@ -243,16 +268,14 @@ impl Session {
             }
             number = number.max(half(t.offer_number));
             count = count.max(half(t.offer_count));
-            // One of the game's own agreed transfers, the kind it makes most, is the model.
-            if state == AGREED && (template.is_none() || half(t.offer_flags) == TRANSFER_FLAGS) {
-                let better =
-                    template.as_ref().is_none_or(|(_, flags, _): &(u64, u32, Vec<u8>)| *flags != TRANSFER_FLAGS);
-                if better {
-                    template = Some((offer, half(t.offer_flags), bytes.clone()));
-                }
+            // One of the game's own transfers is the model: the first of the best kind (see model_rank).
+            if let Some(rank) = model_rank(t, &bytes)
+                && template.as_ref().is_none_or(|(best, _, _): &(u8, u64, Vec<u8>)| rank > *best)
+            {
+                template = Some((rank, offer, bytes));
             }
         }
-        let (model_offer, _, template) = template.ok_or(MoveError::NoTransfers)?;
+        let (_, model_offer, template) = template.ok_or(MoveError::NoTransfers)?;
         let (number, count) = (number + 1, count + 1);
 
         let move_day = today.plus_days(1);
@@ -538,6 +561,7 @@ mod tests {
         assert_eq!(word(t.offer_seller), 0x3_0000_0030);
         assert_eq!((half(t.offer_fee), half(t.offer_number), half(t.offer_count)), (7_777_777, 5181, 6403));
         assert_eq!(offer[t.offer_state as usize], AGREED);
+        assert_eq!(offer[t.offer_kind as usize], TRANSFER_OFFER);
         assert_eq!(word(t.offer_payment), 0);
         let day =
             |at: u64| FmDate::from_raw((half(at) & 0xFFFF) as u16, (half(at) >> 16) as u16).map(FmDate::to_number);
@@ -546,6 +570,28 @@ mod tests {
         assert_eq!(day(t.offer_lapses), Some(20261115));
         // What the layout does not name is the model's.
         assert_eq!(offer[t.offer_size as usize - 1], 0xAA);
+    }
+
+    #[test]
+    fn a_transfer_with_a_fee_is_the_model_before_an_agreed_free_move() {
+        let t = layout();
+        let offer = |state: u8, kind: u8, flags: u32, payment: u64| {
+            let mut bytes = vec![0u8; t.offer_size as usize];
+            bytes[t.offer_state as usize] = state;
+            bytes[t.offer_kind as usize] = kind;
+            bytes[t.offer_flags as usize..t.offer_flags as usize + 4].copy_from_slice(&flags.to_le_bytes());
+            bytes[t.offer_payment as usize..t.offer_payment as usize + 8].copy_from_slice(&payment.to_le_bytes());
+            model_rank(&t, &bytes)
+        };
+        // As on the Mac save of July 2027: the agreed transfers with the flags the game gives most are free moves.
+        let free_agreed = offer(AGREED, 8, TRANSFER_FLAGS, 0);
+        let fee_made = offer(MADE, TRANSFER_OFFER, TRANSFER_FLAGS, 0);
+        let fee_agreed = offer(AGREED, TRANSFER_OFFER, 0x1000_0040, 0);
+        assert!(fee_made > free_agreed);
+        assert!(fee_agreed > fee_made);
+        assert!(offer(AGREED, TRANSFER_OFFER, TRANSFER_FLAGS, 0) > fee_agreed);
+        assert!(offer(AGREED, TRANSFER_OFFER, TRANSFER_FLAGS, 0x7b_5eb0_4d08) < offer(AGREED, 2, TRANSFER_FLAGS, 0));
+        assert_eq!(offer(8, TRANSFER_OFFER, TRANSFER_FLAGS, 0), None);
     }
 
     #[test]

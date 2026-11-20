@@ -120,6 +120,9 @@ pub struct TransfersLayout {
     pub offer_move_day: u64,
     pub offer_later: u64,
     pub offer_state: u64,
+    /// u8: the kind of the transfer: 2 one with a fee (the kind its entry has too), 8 a free move at the end of a
+    /// contract (entries of kind 7), 1 most loans.
+    pub offer_kind: u64,
     pub offer_payment: u64,
     /// An entry of a contract not yet in force: its size and fields.
     pub entry_size: u64,

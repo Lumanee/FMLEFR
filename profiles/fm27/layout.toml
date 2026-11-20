@@ -666,6 +666,7 @@ offer_lapses = 0x78       # date it lapses, 30 days on
 offer_move_day = 0x7C     # date of the move
 offer_later = 0x80        # date, unset
 offer_state = 0x8D        # u8: 19 agreed and waiting for its day, 20 made
+offer_kind = 0x86         # u8: 2 a transfer with a fee, 8 a free move at the end of a contract, 1 most loans (read on the Mac)
 offer_payment = 0xA8      # pointer to how the fee is paid; null pays it at once
 entry_size = 0x48
 entry_one = 0x00          # u32 1
