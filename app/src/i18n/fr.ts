@@ -3241,6 +3241,10 @@ export const fr: Strings = {
           text: "Dans l'onglet Effectif d'un club, un seul clic soigne, inspire et régénère toute l'équipe et porte sa cohésion et sa tactique au maximum. Équipe au plus bas, après une question, fait l'inverse. Un seul Annuler défait l'un comme l'autre, et les actions une par une sont dans Plus d'actions.",
         },
         {
+          title: "Caractéristiques du groupe.",
+          text: "Dans l'onglet Effectif d'un club, Caractéristiques du groupe donne à tous les joueurs de l'équipe les caractéristiques que vous choisissez, ou les leur retire, et laisse les autres telles quelles. Un seul Annuler revient en arrière.",
+        },
+        {
           title: "Transférer tout le staff.",
           text: "L'onglet Staff d'un club transfère tout son staff vers un autre club en une fois, chacun au même poste, et un seul Annuler les fait tous revenir.",
         },

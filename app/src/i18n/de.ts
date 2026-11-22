@@ -3218,6 +3218,10 @@ export const de: Strings = {
           text: "Unter „Kader“ eines Vereins heilt, motiviert und regeneriert ein Klick die ganze Mannschaft und bringt Teambuilding und Taktik ganz nach oben; „Mannschaft in Tiefstform“ bewirkt nach einer Rückfrage das Gegenteil. Ein einziges „Rückgängig“ nimmt beides zurück, und die einzelnen Aktionen stehen unter „Weitere Aktionen“.",
         },
         {
+          title: "Eigenschaften für Kader.",
+          text: "Unter „Kader“ eines Vereins gibt „Eigenschaften für Kader“ allen Spielern der Mannschaft die Spielereigenschaften, die Sie wählen, oder nimmt sie ihnen, und lässt ihre übrigen Eigenschaften, wie sie sind. Ein einziges „Rückgängig“ nimmt es zurück.",
+        },
+        {
           title: "Alle Mitarbeiter transferieren.",
           text: "Unter „Mitarbeiter“ eines Vereins wechseln alle Mitarbeiter auf einmal zu einem anderen Verein, jeder in derselben Aufgabe, und ein einziges „Rückgängig“ holt alle zurück.",
         },

@@ -3048,6 +3048,10 @@ export const tr: Strings = {
           text: "Bir kulübün Kadro sekmesinde tek tuş bütün takımı iyileştiriyor, moralini yükseltiyor, dinlendiriyor, uyumunu ve taktiğini en üste çıkarıyor; Takımı en kötü hâline getir ise bir soru sorduktan sonra tersini yapıyor. İkisini de tek bir Geri al geri alıyor; tek tek işlemler Diğer işlemler menüsünde.",
         },
         {
+          title: "Kadro özellikleri.",
+          text: "Bir kulübün Kadro sekmesindeki Kadro özellikleri, seçtiğin özellikleri takımdaki her oyuncuya ekliyor ya da onlardan kaldırıyor; oyuncuların diğer özelliklerine dokunmuyor. Tek bir Geri al hepsini geri alıyor.",
+        },
+        {
           title: "Tüm personeli taşı.",
           text: "Bir kulübün Personel sekmesi bütün personeli tek seferde başka bir kulübe, herkesi aynı görevinde taşıyor; tek bir Geri al hepsini geri getiriyor.",
         },
