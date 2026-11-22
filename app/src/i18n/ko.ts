@@ -1490,6 +1490,13 @@ export const ko: Strings = {
     failed: "업데이트를 확인할 수 없습니다.",
   },
 
+  star: {
+    title: "FMLibreEditor가 마음에 드시나요?",
+    text: "GitHub 스타는 더 많은 플레이어에게 알려지고 더 빠르게 발전하는 데 도움이 됩니다.",
+    star: "GitHub에서 스타 주기",
+    dismiss: "닫기",
+  },
+
   edit: {
     unknownNation: "알 수 없는 국가",
     unknownCity: "알 수 없는 도시",

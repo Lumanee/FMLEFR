@@ -1551,6 +1551,13 @@ export const it: Strings = {
     failed: "Non è stato possibile controllare gli aggiornamenti.",
   },
 
+  star: {
+    title: "Ti piace FMLibreEditor?",
+    text: "Una stella su GitHub lo aiuta a raggiungere più giocatori e a crescere più in fretta.",
+    star: "Metti una stella su GitHub",
+    dismiss: "No, grazie",
+  },
+
   edit: {
     unknownNation: "Nazione sconosciuta",
     unknownCity: "Città sconosciuta",

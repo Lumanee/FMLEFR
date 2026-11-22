@@ -1473,6 +1473,13 @@ export const tr: Strings = {
     failed: "Güncellemeler denetlenemedi.",
   },
 
+  star: {
+    title: "FMLibreEditor'ı beğendiniz mi?",
+    text: "GitHub'da bir yıldız, daha çok oyuncuya ulaşmasına ve daha hızlı gelişmesine yardımcı olur.",
+    star: "GitHub'da yıldız ver",
+    dismiss: "Kapat",
+  },
+
   edit: {
     unknownNation: "Bilinmeyen ülke",
     unknownCity: "Bilinmeyen şehir",

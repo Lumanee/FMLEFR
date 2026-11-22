@@ -34,6 +34,7 @@ import { ScoutingBrowser } from "./ScoutingBrowser";
 import { MyClub } from "./MyClub";
 import { matches, SHORTCUTS, viewShortcut, withShortcut } from "./shortcuts";
 import { StaffBrowser } from "./StaffBrowser";
+import { StarRequest, useStarRequest } from "./StarRequest";
 import { readTeams, TeamsSwitch, type Teams } from "./TeamsSwitch";
 import type {
   BridgeInfo,
@@ -145,6 +146,8 @@ function App() {
   const update = useUpdateCheck();
   // What this version brings: told once after an update, and again from the foot of the window or the palette.
   const whatsNew = useWhatsNew(update.current);
+  // The note that asks for a star on GitHub, once: it waits for a connection, and for an update or what's new to be told.
+  const starRequest = useStarRequest(connection !== null && update.notice === null && whatsNew.shown === null);
   // Whether Check for updates was pressed: only then does the foot of the window say what was found.
   const [askedUpdate, setAskedUpdate] = useState(false);
   // Whether the game has loaded a save, or gone back to its main menu, since the data was read.
@@ -534,6 +537,7 @@ function App() {
         {connection && saveChanged && <SaveChangedNotice busy={busy !== null} onReload={reload} />}
         {connection && refrozen && <FrozenNotice refrozen={refrozen} onDismiss={() => setRefrozen(null)} />}
         {error && <div className="banner">{error}</div>}
+        {starRequest.shown && <StarRequest onClose={starRequest.close} />}
 
         {connection ? (
           // All the lists stay mounted, so each keeps its search and selection while another is shown.

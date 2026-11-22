@@ -1610,6 +1610,13 @@ export const zhCN: Strings = {
     failed: "无法检查更新。",
   },
 
+  star: {
+    title: "喜欢 FMLibreEditor 吗？",
+    text: "在 GitHub 上点个星标，能让更多玩家看到它，也能让它发展得更快。",
+    star: "去 GitHub 点星标",
+    dismiss: "不用了",
+  },
+
   /** Editing a person or a club: the Edit button, the inputs, and the footer under the profile. */
   edit: {
     /** A nation field's value whose name the app has not read: one no one in the lists belongs to. */

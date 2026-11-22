@@ -1607,6 +1607,13 @@ export const fr: Strings = {
     failed: "Impossible de rechercher des mises à jour.",
   },
 
+  star: {
+    title: "Vous aimez FMLibreEditor\u00a0?",
+    text: "Une étoile sur GitHub l'aide à toucher plus de joueurs et à progresser plus vite.",
+    star: "Mettre une étoile sur GitHub",
+    dismiss: "Non merci",
+  },
+
   edit: {
     unknownNation: "Pays inconnu",
     unknownCity: "Ville inconnue",

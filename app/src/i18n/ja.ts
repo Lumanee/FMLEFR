@@ -1457,6 +1457,13 @@ export const ja: Strings = {
     failed: "アップデートを確認できませんでした。",
   },
 
+  star: {
+    title: "FMLibreEditor を気に入っていただけましたか？",
+    text: "GitHub でスターを付けていただくと、より多くのプレイヤーに届き、開発も速く進みます。",
+    star: "GitHub でスターを付ける",
+    dismiss: "閉じる",
+  },
+
   edit: {
     unknownNation: "不明な国",
     unknownCity: "不明な都市",

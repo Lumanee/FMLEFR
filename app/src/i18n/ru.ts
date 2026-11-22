@@ -1500,6 +1500,13 @@ export const ru: Strings = {
     failed: "Не удалось проверить обновления.",
   },
 
+  star: {
+    title: "Нравится FMLibreEditor?",
+    text: "Звезда на GitHub помогает ему найти больше игроков и развиваться быстрее.",
+    star: "Поставить звезду на GitHub",
+    dismiss: "Нет, спасибо",
+  },
+
   edit: {
     unknownNation: "Неизвестная страна",
     unknownCity: "Неизвестный город",

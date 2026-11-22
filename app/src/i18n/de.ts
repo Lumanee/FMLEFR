@@ -1592,6 +1592,13 @@ export const de: Strings = {
     failed: "Die Suche nach Updates ist fehlgeschlagen.",
   },
 
+  star: {
+    title: "Gefällt Ihnen FMLibreEditor?",
+    text: "Ein Stern auf GitHub hilft, mehr Spieler zu erreichen und schneller voranzukommen.",
+    star: "Stern auf GitHub geben",
+    dismiss: "Nein, danke",
+  },
+
   edit: {
     unknownNation: "Unbekanntes Land",
     unknownCity: "Unbekannte Stadt",
