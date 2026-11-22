@@ -26,6 +26,7 @@ const MOST_VERSIONS = 3;
 
 /** The people each version thanks, by their names on GitHub. */
 const THANKS: Record<string, string[]> = {
+  "0.5.4": ["pdalu", "RMA-MUN", "yinxuan-h", "Double-South", "NathanAP", "RootTourist"],
   "0.5.3": ["pdalu", "Blak-Ish", "RootTourist", "Reckbeg", "TTTSHOK"],
   "0.5.2": ["pdalu", "Ragebulls", "pirocky", "keyboard1011-dev"],
 };

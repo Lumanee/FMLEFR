@@ -3212,6 +3212,32 @@ export const fr: Strings = {
     link: "Nouveautés",
     command: "Nouveautés de cette version",
     versions: {
+      "0.5.4": [
+        {
+          title: "Les transferts dans l'historique du joueur.",
+          text: "Transfert, désormais le premier choix quand vous déplacez un joueur, prépare le transfert pour le lendemain dans le jeu. Le jeu le réalise comme l'un des siens, paie l'indemnité et inscrit le transfert dans l'historique de sa carrière, où les matchs de cette saison avec son ancien club gardent leur propre ligne. Déplacer maintenant le déplace toujours sur-le-champ.",
+        },
+        {
+          title: "Équipe au maximum, et au plus bas.",
+          text: "Dans l'onglet Effectif d'un club, un seul clic soigne, inspire et régénère toute l'équipe et porte sa cohésion et sa tactique au maximum. Équipe au plus bas, après une question, fait l'inverse. Un seul Annuler défait l'un comme l'autre, et les actions une par une sont dans Plus d'actions.",
+        },
+        {
+          title: "Transférer tout le staff.",
+          text: "L'onglet Staff d'un club transfère tout son staff vers un autre club en une fois, chacun au même poste, et un seul Annuler les fait tous revenir.",
+        },
+        {
+          title: "Sélections.",
+          text: "L'effectif de l'équipe A d'une sélection gagne Tout soigner, Inspirer l'équipe et Tout régénérer, et son tableau montre l'énergie, la forme physique et le moral.",
+        },
+        {
+          title: "Contrats de sponsoring.",
+          text: "Les finances d'un club listent ses contrats de sponsoring, en lecture seule, avec ce que chacun paie par saison et au total, sa durée et ce que change une relégation. Pour l'instant sous Game Pass 0.9.2524.0.",
+        },
+        {
+          title: "Correction.",
+          text: "Dans certaines carrières, la vérification du staff échouait alors que le staff était bien lu. Le staff restait alors en lecture seule, et soigner, Cohésion maximale et Tactique au maximum étaient refusés. Elle passe désormais.",
+        },
+      ],
       "0.5.3": [
         {
           title: "La mise à jour de FM27 du 17 novembre.",

@@ -3019,6 +3019,32 @@ export const tr: Strings = {
     link: "Yenilikler",
     command: "Bu sürümdeki yenilikler",
     versions: {
+      "0.5.4": [
+        {
+          title: "Transferler oyuncunun geçmişinde.",
+          text: "Bir oyuncuyu taşırken artık ilk seçenek olan Transfer, transferi oyunun ertesi gününe ayarlıyor. Oyun onu kendi transferlerinden biri gibi yapıyor: bonservis bedelini ödüyor ve transferi oyuncunun kariyer geçmişine işliyor; bu sezon eski kulübünde oynadığı maçlar ayrı bir satırda kalıyor. Şimdi taşı ise oyuncuyu eskisi gibi anında taşıyor.",
+        },
+        {
+          title: "Takımı en iyi ve en kötü hâline getir.",
+          text: "Bir kulübün Kadro sekmesinde tek tuş bütün takımı iyileştiriyor, moralini yükseltiyor, dinlendiriyor, uyumunu ve taktiğini en üste çıkarıyor; Takımı en kötü hâline getir ise bir soru sorduktan sonra tersini yapıyor. İkisini de tek bir Geri al geri alıyor; tek tek işlemler Diğer işlemler menüsünde.",
+        },
+        {
+          title: "Tüm personeli taşı.",
+          text: "Bir kulübün Personel sekmesi bütün personeli tek seferde başka bir kulübe, herkesi aynı görevinde taşıyor; tek bir Geri al hepsini geri getiriyor.",
+        },
+        {
+          title: "Milli takımlar.",
+          text: "Milli takımın A kadrosuna Hepsini iyileştir, Hepsine moral ver ve Hepsini dinlendir geldi; kadro tablosu enerjiyi, maç kondisyonunu ve morali gösteriyor.",
+        },
+        {
+          title: "Sponsorluk anlaşmaları.",
+          text: "Bir kulübün finansları sponsorluk anlaşmalarını salt okunur olarak listeliyor: her birinin sezon başına ve toplamda ne ödediği, süresi ve küme düşmede neyin değiştiği. Şimdilik Game Pass 0.9.2524.0'da.",
+        },
+        {
+          title: "Düzeltme.",
+          text: "Bazı kariyerlerde personel doğru okunduğu hâlde personel denetimi başarısız oluyor; personel salt okunur kalıyor, iyileştirme, Uyumu tamamla ve Taktiği tamamla reddediliyordu. Artık geçiyor.",
+        },
+      ],
       "0.5.3": [
         {
           title: "FM27'nin 17 Kasım güncellemesi.",

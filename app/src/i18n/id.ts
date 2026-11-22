@@ -2945,6 +2945,32 @@ export const id: Strings = {
     link: "Yang baru",
     command: "Yang baru di versi ini",
     versions: {
+      "0.5.4": [
+        {
+          title: "Transfer di riwayat pemain.",
+          text: "Transfer, kini pilihan pertama saat kamu memindahkan pemain, mengatur kepindahan untuk hari berikutnya di game. Game menjalankannya seperti transfernya sendiri: membayar biaya transfer dan mencatat kepindahan itu di riwayat kariernya, dengan pertandingan musim ini di klub lamanya tetap di baris tersendiri. Pindah sekarang tetap memindahkannya saat itu juga.",
+        },
+        {
+          title: "Tim dalam kondisi prima, dan terburuk.",
+          text: "Di tab Skuad sebuah klub, satu klik menyembuhkan, menginspirasi, dan menyegarkan seluruh tim serta membawa kekompakan dan taktiknya ke puncak; Tim dalam kondisi terburuk, setelah sebuah pertanyaan, melakukan kebalikannya. Satu Urungkan membatalkan keduanya, dan tindakan satu per satu ada di Tindakan lain.",
+        },
+        {
+          title: "Pindahkan semua staf.",
+          text: "Tab Staf sebuah klub memindahkan seluruh stafnya ke klub lain sekaligus, masing-masing di jabatan yang sama, dan satu Urungkan mengembalikan mereka semua.",
+        },
+        {
+          title: "Tim nasional.",
+          text: "Skuad senior tim nasional kini punya Sembuhkan semua, Inspirasi semua, dan Segarkan semua, dan tabelnya menampilkan energi, ketajaman bertanding, dan moral.",
+        },
+        {
+          title: "Kesepakatan sponsor.",
+          text: "Keuangan sebuah klub menampilkan kesepakatan sponsornya, hanya untuk dibaca: berapa yang dibayar masing-masing per musim dan secara total, masa berlakunya, dan apa yang berubah jika terdegradasi. Sejauh ini di Game Pass 0.9.2524.0.",
+        },
+        {
+          title: "Perbaikan.",
+          text: "Di beberapa karier, pemeriksaan staf gagal padahal staf terbaca dengan benar, sehingga staf hanya bisa dibaca dan penyembuhan, Kekompakan maksimal, serta Maksimalkan taktik ditolak. Sekarang lolos.",
+        },
+      ],
       "0.5.3": [
         {
           title: "Pembaruan FM27 tanggal 17 November.",

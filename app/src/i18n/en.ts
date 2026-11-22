@@ -3501,6 +3501,32 @@ export const en = {
      * the dialog shows it in English. A release adds its version here (see docs/DEVELOPING.md).
      */
     versions: {
+      "0.5.4": [
+        {
+          title: "Transfers in the player's history.",
+          text: "Transfer, now the first choice when you move a player, arranges the move for the game's next day. The game makes it as one of its own: it pays the fee and keeps the move in his career history, with this season's matches at his old club in a row of their own. Move now still moves him at once.",
+        },
+        {
+          title: "Team at its best, and Destroy.",
+          text: "In a club's Squad tab, one press heals, inspires and refreshes the whole team and takes its cohesion and tactic to the top; Destroy, after a question, does the opposite. One Undo takes either back, and the single actions are under More actions.",
+        },
+        {
+          title: "Move all staff.",
+          text: "A club's Staff tab moves its whole staff to another club at once, each in the same job, and one Undo brings them all back.",
+        },
+        {
+          title: "National teams.",
+          text: "A national team's senior squad gets Heal all, Inspire all and Refresh all, and its table shows energy, sharpness and morale.",
+        },
+        {
+          title: "Sponsorship deals.",
+          text: "A club's finances list its sponsorship deals, read only: what each pays per season and in all, its term, and what a relegation changes. On Game Pass 0.9.2524.0 so far.",
+        },
+        {
+          title: "Fix.",
+          text: "On some careers the staff check failed although the staff read right, which left staff read-only and refused healing, Max cohesion and Max tactics. It now passes.",
+        },
+      ],
       "0.5.3": [
         {
           title: "FM27's update of 17 November.",
