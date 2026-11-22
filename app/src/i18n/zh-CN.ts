@@ -2507,6 +2507,23 @@ export const zhCN: Strings = {
    * A club's squad: the tab of the club profile that lists the players of each of its teams, with the actions on a
    * whole team and the captains.
    */
+  batchTraits: {
+    title: "批量球队习惯设置",
+    addMode: "+ 添加至球队",
+    removeMode: "- 从球队中移除",
+    addHint: "将所选习惯添加到球队中尚未掌握该习惯的球员。现有习惯将予以保留。",
+    removeHint: "从掌握所选习惯的球员中将其移除。其余习惯保持不变。",
+    noneSelected: "该模式下未选择任何习惯",
+    selectedCount: (count: number) => `已选择 ${format(count)} 项`,
+    deselectAll: "全部取消",
+    oppositeModeNote: "已在另一模式中选择",
+    applyNote: (players: number) => `将应用至 ${format(players)} 名球员 · 支持一键撤销`,
+    emptySquad: (players: number) => `共有 ${format(players)} 名球员的阵容`,
+    cancel: "取消",
+    apply: "应用",
+    applying: "正在应用…",
+  },
+
   squad: {
     // The switch between the club's teams
     /** The name of the switch for assistive technology. */
@@ -2562,6 +2579,8 @@ export const zhCN: Strings = {
     tacticsUntrained: (count: number) => `${format(count)} 名球员没有训练（例如受伤），其训练记录保持不变`,
     refreshAll: "恢复全队状态",
     refreshAllTitle: "将全队体能和比赛状态恢复至 100%，并彻底消除疲劳（疲劳度 -500）",
+    batchTraits: "批量设置球员习惯",
+    batchTraitsTitle: "为该球队中的球员批量添加或移除习惯动作",
     maxAll: "属性拉满",
     maxAllTitle:
       "将全队所有球员的属性设为最高值 20；受伤倾向和肮脏动作设为最低值 1",

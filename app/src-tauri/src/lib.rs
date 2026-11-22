@@ -5158,6 +5158,58 @@ fn act_on_players(
     Ok(connection.write_planned(Entity::Player, plan.planned, batch))
 }
 
+/// Adds and/or removes traits for all players in a team of a club.
+/// Traits in `add_traits` are set to 1 (if not already 1).
+/// Traits in `remove_traits` are set to 0 (if not already 0).
+#[tauri::command]
+fn batch_traits_team(
+    state: State<'_, AppState>,
+    club: u32,
+    team: usize,
+    add_traits: Vec<u8>,
+    remove_traits: Vec<u8>,
+) -> Result<MassReport, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    if let Some(lock) = connection.session.structure_lock() {
+        return Err(MoveError::Locked(lock).into());
+    }
+    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?.clone();
+    let members = connection
+        .session
+        .club_teams(&summary, &connection.players)?
+        .into_iter()
+        .find(|found| found.index == team)
+        .ok_or(MoveError::NoTeam { index: team })?
+        .players;
+
+    let targets: Vec<(Target, String)> = members
+        .iter()
+        .filter_map(|member| connection.players.get(member.uid))
+        .map(|player| (player.target(), player.name.clone()))
+        .collect();
+
+    let mut operations = Vec::new();
+    for bit in add_traits {
+        let field_key = format!("trait.{bit}");
+        let field = connection.session.field(Entity::Player, &field_key)?;
+        operations.push((field, Operation::Set { value: 1 }));
+    }
+    for bit in remove_traits {
+        let field_key = format!("trait.{bit}");
+        let field = connection.session.field(Entity::Player, &field_key)?;
+        operations.push((field, Operation::Set { value: 0 }));
+    }
+
+    if operations.is_empty() {
+        return Ok(MassReport { batch: connection.fresh_id(), applied: 0, failed: Vec::new() });
+    }
+
+    let plan = connection.session.plan_mass_edit(&targets, &operations)?;
+    let batch = connection.fresh_id();
+    Ok(connection.write_planned(Entity::Player, plan.planned, batch))
+}
+
 /// Sets every attribute of the player `uid` to its best, as Max attributes does for a team: 20, and 1 for injury
 /// proneness and dirtiness. The changes are logged as one batch, which `undo_batch` undoes.
 #[tauri::command]
@@ -5440,6 +5492,7 @@ pub fn run() {
             set_captain,
             team_action,
             national_team_action,
+            batch_traits_team,
             max_attributes,
             graphics_info,
             self_update::can_self_update,

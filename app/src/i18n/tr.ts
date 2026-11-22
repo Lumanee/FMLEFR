@@ -2218,6 +2218,23 @@ export const tr: Strings = {
     cancel: "İptal",
   },
 
+  batchTraits: {
+    title: "Takım özellikleri",
+    addMode: "+ Kadroya ekle",
+    removeMode: "- Kadrodan kaldır",
+    addHint: "Seçilen özellikleri bu takımda henüz sahip olmayan oyunculara ekler. Mevcut özellikler korunur.",
+    removeHint: "Seçilen özellikleri bu takımda sahip olan oyunculardan kaldırır. Diğer özelliklere dokunulmaz.",
+    noneSelected: "Bu modda özellik seçilmedi",
+    selectedCount: (count: number) => `${format(count)} özellik seçildi`,
+    deselectAll: "Seçimi temizle",
+    oppositeModeNote: "Diğer modda seçildi",
+    applyNote: (players: number) => `${format(players)} oyuncuya uygulanacak · 1 tıkla geri alınabilir`,
+    emptySquad: (players: number) => `${format(players)} oyunculu kadro`,
+    cancel: "İptal",
+    apply: "Uygula",
+    applying: "Uygulanıyor…",
+  },
+
   squad: {
     // The switch between the club's teams
     teamsLabel: "Takım",
@@ -2262,6 +2279,8 @@ export const tr: Strings = {
       `${format(count)} oyuncu antrenman yapmıyor (örneğin sakat olduğu için): antrenman geçmişi olduğu gibi kalıyor`,
     refreshAll: "Hepsini dinlendir",
     refreshAllTitle: "Bu takımdaki her oyuncunun enerjisini ve maç kondisyonunu %100'e ayarla, onları tamamen dinlendir (yorgunluk -500)",
+    batchTraits: "Kadro özellikleri",
+    batchTraitsTitle: "Bu takımdaki oyuncular için tercih edilen hareketleri ekle veya kaldır",
     maxAll: "Özellikleri tamamla",
     maxAllTitle:
       "Bu takımdaki her oyuncunun bütün özelliklerini en iyiye çıkar: 20; sakatlık eğilimi ve sertlik için 1",

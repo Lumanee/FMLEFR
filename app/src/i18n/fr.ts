@@ -2367,6 +2367,23 @@ export const fr: Strings = {
     cancel: "Annuler",
   },
 
+  batchTraits: {
+    title: "Caractéristiques de l'équipe",
+    addMode: "+ Ajouter à l'équipe",
+    removeMode: "- Retirer de l'équipe",
+    addHint: "Applique les caractéristiques sélectionnées aux joueurs de cette équipe qui ne les ont pas. Les caractéristiques existantes sont conservées.",
+    removeHint: "Retire les caractéristiques sélectionnées aux joueurs de cette équipe qui les possèdent. Les autres caractéristiques restent inchangées.",
+    noneSelected: "Aucune caractéristique sélectionnée dans ce mode",
+    selectedCount: (count: number) => (count === 1 ? "1 caractéristique sélectionnée" : `${format(count)} caractéristiques sélectionnées`),
+    deselectAll: "Tout désélectionner",
+    oppositeModeNote: "Sélectionnée dans l'autre mode",
+    applyNote: (players: number) => `S'applique à ${format(players)} joueurs · Peut être annulé en 1 clic`,
+    emptySquad: (players: number) => `Effectif de ${format(players)} joueurs`,
+    cancel: "Annuler",
+    apply: "Appliquer",
+    applying: "Application en cours…",
+  },
+
   squad: {
     teamsLabel: "Équipe",
     teams: {
@@ -2425,6 +2442,8 @@ export const fr: Strings = {
     refreshAllTitle:
       "Porter l'énergie et la forme physique de chaque joueur de cette équipe à 100\u00a0%, et le reposer complètement " +
       "(fatigue -500)",
+    batchTraits: "Caractéristiques du groupe",
+    batchTraitsTitle: "Ajouter ou retirer des gestes préférés pour les joueurs de cette équipe",
     maxAll: "Attributs au maximum",
     maxAllTitle:
       "Porter chaque attribut de chaque joueur de cette équipe à son meilleur niveau\u00a0: 20, et 1 pour la tendance à " +

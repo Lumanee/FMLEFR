@@ -2579,6 +2579,24 @@ export const en = {
     cancel: "Cancel",
   },
 
+  /** Batch traits: the dialog of a club's Squad tab that adds or removes traits for every player of a team. */
+  batchTraits: {
+    title: "Batch team traits",
+    addMode: "+ Add to squad",
+    removeMode: "- Remove from squad",
+    addHint: "Applies selected traits to players in this team who don't have them. Existing traits are preserved.",
+    removeHint: "Removes selected traits from players in this team who have them. Other traits are left untouched.",
+    noneSelected: "No traits selected in this mode",
+    selectedCount: (count: number) => (count === 1 ? "1 trait selected" : `${format(count)} traits selected`),
+    deselectAll: "Deselect all",
+    oppositeModeNote: "Selected in opposite mode",
+    applyNote: (players: number) => `Applies to ${format(players)} players · Can be undone in 1 click`,
+    emptySquad: (players: number) => `Squad of ${format(players)} players`,
+    cancel: "Cancel",
+    apply: "Apply",
+    applying: "Applying…",
+  },
+
   /**
    * A club's squad: the tab of the club profile that lists the players of each of its teams, with the actions on a
    * whole team and the captains.
@@ -2650,6 +2668,8 @@ export const en = {
         : `${format(count)} players do not train (as when injured): their history of training stays as it is`,
     refreshAll: "Refresh all",
     refreshAllTitle: "Set the energy and match sharpness of every player in this team to 100%, and rest them fully (jadedness -500)",
+    batchTraits: "Batch traits",
+    batchTraitsTitle: "Add or remove preferred moves for players in this team",
     maxAll: "Max attributes",
     maxAllTitle:
       "Set every attribute of every player in this team to its best: 20, and 1 for injury proneness and dirtiness",

@@ -2298,6 +2298,23 @@ export const it: Strings = {
     cancel: "Annulla",
   },
 
+  batchTraits: {
+    title: "Caratteristiche della squadra",
+    addMode: "+ Aggiungi alla rosa",
+    removeMode: "- Rimuovi dalla rosa",
+    addHint: "Applica le caratteristiche selezionate ai giocatori della squadra che non le hanno. Le caratteristiche esistenti rimangono invariate.",
+    removeHint: "Rimuove le caratteristiche selezionate dai giocatori della squadra che le hanno. Le altre caratteristiche non vengono toccate.",
+    noneSelected: "Nessuna caratteristica selezionata in questa modalità",
+    selectedCount: (count: number) => (count === 1 ? "1 caratteristica selezionata" : `${format(count)} caratteristiche selezionate`),
+    deselectAll: "Deseleziona tutto",
+    oppositeModeNote: "Selezionata nell'altra modalità",
+    applyNote: (players: number) => `Si applica a ${format(players)} giocatori · Si può annullare con 1 clic`,
+    emptySquad: (players: number) => `Rosa di ${format(players)} giocatori`,
+    cancel: "Annulla",
+    apply: "Applica",
+    applying: "Applicazione in corso…",
+  },
+
   squad: {
     teamsLabel: "Squadra",
     teams: {
@@ -2350,6 +2367,8 @@ export const it: Strings = {
     refreshAllTitle:
       "Porta al 100% energia e forma partita di ogni giocatore di questa squadra e lo fa riposare del tutto " +
       "(stanchezza -500)",
+    batchTraits: "Caratteristiche della rosa",
+    batchTraitsTitle: "Aggiungi o rimuovi movimenti preferiti per i giocatori di questa squadra",
     maxAll: "Attributi al massimo",
     maxAllTitle:
       "Porta ogni attributo di ogni giocatore di questa squadra al suo meglio: 20, e 1 per propensione agli infortuni " +

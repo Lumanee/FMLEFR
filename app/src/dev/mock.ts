@@ -2999,6 +2999,26 @@ function nationalTeamAction(uid: number, action: TeamAction): MassReport {
   return actOnPlayers(nationalProfile(uid, 0).squad.players, action);
 }
 
+/** `batch_traits_team`: adds or removes preferred moves for players in a fixture team. */
+function batchTraitsTeam(
+  clubUid: number,
+  index: number,
+  addTraits: number[],
+  removeTraits: number[],
+): MassReport {
+  const team = fixtureTeam(clubUid, index);
+  const batch = nextMassId++;
+  const report: MassReport = { batch, applied: 0, failed: [] };
+  const values: [string, number][] = [
+    ...addTraits.map((bit): [string, number] => [`trait.${bit}`, 1]),
+    ...removeTraits.map((bit): [string, number] => [`trait.${bit}`, 0]),
+  ];
+  for (const player of team.players) {
+    setValues(player, values, report);
+  }
+  return report;
+}
+
 /** The action on every one of `players`, logged as one batch like a mass edit. */
 function actOnPlayers(players: readonly SquadPlayer[], action: TeamAction, batch = nextMassId++): MassReport {
   const team = { players };
@@ -4424,6 +4444,13 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return setCaptain(Number(args?.club), Number(args?.team), args?.role as CaptainRole, Number(args?.uid)) as T;
     case "team_action":
       return teamAction(Number(args?.club), Number(args?.team), args?.action as TeamAction) as T;
+    case "batch_traits_team":
+      return batchTraitsTeam(
+        Number(args?.club),
+        Number(args?.team),
+        (args?.addTraits as number[]) ?? [],
+        (args?.removeTraits as number[]) ?? [],
+      ) as T;
     case "national_team_action":
       return nationalTeamAction(Number(args?.uid), args?.action as TeamAction) as T;
     case "swap_players":

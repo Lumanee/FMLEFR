@@ -2148,6 +2148,23 @@ export const id: Strings = {
     cancel: "Batal",
   },
 
+  batchTraits: {
+    title: "Karakteristik tim",
+    addMode: "+ Tambah ke skuad",
+    removeMode: "- Hapus dari skuad",
+    addHint: "Menerapkan karakteristik yang dipilih ke pemain tim ini yang belum memilikinya. Karakteristik yang ada tetap dipertahankan.",
+    removeHint: "Menghapus karakteristik yang dipilih dari pemain tim ini yang memilikinya. Karakteristik lain tidak disentuh.",
+    noneSelected: "Tidak ada karakteristik yang dipilih dalam mode ini",
+    selectedCount: (count: number) => `${format(count)} karakteristik dipilih`,
+    deselectAll: "Hapus semua pilihan",
+    oppositeModeNote: "Dipilih dalam mode sebaliknya",
+    applyNote: (players: number) => `Berlaku untuk ${format(players)} pemain · Dapat dibatalkan dalam 1 klik`,
+    emptySquad: (players: number) => `Skuad berisi ${format(players)} pemain`,
+    cancel: "Batal",
+    apply: "Terapkan",
+    applying: "Menerapkan…",
+  },
+
   squad: {
     teamsLabel: "Tim",
     teams: {
@@ -2191,6 +2208,8 @@ export const id: Strings = {
     refreshAll: "Segarkan semua",
     refreshAllTitle:
       "Atur energi dan ketajaman bertanding setiap pemain di tim ini ke 100%, dan istirahatkan sepenuhnya (keletihan -500)",
+    batchTraits: "Karakteristik skuad",
+    batchTraitsTitle: "Tambah atau hapus gerakan favorit pemain di tim ini",
     maxAll: "Maksimalkan atribut",
     maxAllTitle:
       "Atur setiap atribut setiap pemain di tim ini ke nilai terbaiknya: 20, dan 1 untuk kerentanan cedera dan kekasaran",

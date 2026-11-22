@@ -2268,6 +2268,23 @@ export const es: Strings = {
     cancel: "Cancelar",
   },
 
+  batchTraits: {
+    title: "Características del equipo",
+    addMode: "+ Añadir a la plantilla",
+    removeMode: "- Quitar de la plantilla",
+    addHint: "Aplica las características marcadas a los jugadores del equipo que no las tengan. Las características existentes no se tocan.",
+    removeHint: "Quita las características marcadas a los jugadores del equipo que las tengan. Las demás características no se tocan.",
+    noneSelected: "Ninguna característica seleccionada en este modo",
+    selectedCount: (count: number) => `${format(count)} seleccionada${count === 1 ? "" : "s"}`,
+    deselectAll: "Desmarcar todo",
+    oppositeModeNote: "Marcada en el otro modo",
+    applyNote: (players: number) => `Se aplicará a ${format(players)} jugadores · Se puede deshacer con 1 clic`,
+    emptySquad: (players: number) => `Plantilla de ${format(players)} jugadores`,
+    cancel: "Cancelar",
+    apply: "Aplicar",
+    applying: "Aplicando…",
+  },
+
   squad: {
     teamsLabel: "Equipo",
     teams: {
@@ -2323,6 +2340,8 @@ export const es: Strings = {
     refreshAllTitle:
       "Poner la energía y el ritmo de competición de todos los jugadores de este equipo al 100 % y dejarlos " +
       "totalmente descansados (fatiga -500)",
+    batchTraits: "Características del lote",
+    batchTraitsTitle: "Añade o quita características a los jugadores de este equipo",
     maxAll: "Atributos al máximo",
     maxAllTitle:
       "Poner cada atributo de cada jugador de este equipo en su mejor valor: 20, y 1 para la propensión a lesiones y " +
