@@ -114,6 +114,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (tr.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Bu takımda sakat oyuncu yok.",
+  "team.noCohesion": () =>
+    "Editör bu takımın uyumunu okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da oyuncuların hiçbirinin " +
+    "kulüple uyumu yok.",
+  "team.noTactics": () =>
+    "Editör bu takımın taktiğini ne kadar bildiğini okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da " +
+    "takım senin seçtiğin bir taktiği oynamıyor.",
   "edit.unknownField": (p) => `Burada “${p.field}” adında düzenlenebilir bir alan yok.`,
   "edit.outOfRange": (p) => `${field(p.field)} için ${p.value} geçersiz: ${p.min} ile ${p.max} arasında olmalı.`,
   "edit.notADate": (p) => `${p.value}, ${field(p.field)} için geçerli bir tarih değil.`,
@@ -2251,13 +2258,14 @@ export const tr: Strings = {
     maxAll: "Özellikleri tamamla",
     maxAllTitle:
       "Bu takımdaki her oyuncunun bütün özelliklerini en iyiye çıkar: 20; sakatlık eğilimi ve sertlik için 1",
-    atItsBest: "Team at its best",
+    atItsBest: "Takımı en iyi hâline getir",
     atItsBestTitle:
-      "Heal all, Inspire all, Refresh all, Max cohesion and Max tactics in one press, which one Undo takes back. " +
-      "Attributes and bans stay as they are. A step that cannot run, such as Heal all while nobody is injured, is " +
-      "skipped, and the result says so. The areas of the tactic fall again as the training ages, after some six weeks, " +
-      "and another tactic needs another press. The game shows the changes once it moves on: press Continue in the game",
-    atItsBestSkipped: (step, reason) => `${step} skipped: ${reason}`,
+      "Tek tıklamayla şunları yapar: “Hepsini iyileştir”, “Hepsine moral ver”, “Hepsini dinlendir”, “Uyumu tamamla” " +
+      "ve “Taktiği tamamla”. Tek bir “Geri al” hepsini geri alır. Özellikler ve cezalar olduğu gibi kalır. " +
+      "Yapılamayan bir adım, örneğin kimse sakat değilken “Hepsini iyileştir”, atlanır ve sonuçta belirtilir. " +
+      "Antrenman eskidikçe, yaklaşık altı hafta sonra taktiğin alanları yeniden düşer; başka bir taktik için yeniden " +
+      "basmak gerekir. Oyun değişiklikleri bir kez ilerleyince gösterir: oyunda Devam'a basın",
+    atItsBestSkipped: (step, reason) => `“${step}” atlandı: ${reason}`,
     hint:
       "İşlemler listedeki her oyuncuyu kapsar, kiralık gönderilenler de dahil. " +
       "Geri alma işlemi Değişiklikler bölümünde de yapılabilir.",

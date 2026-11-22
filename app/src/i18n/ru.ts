@@ -137,6 +137,13 @@ const STAFF_DEPARTMENTS: Partial<Record<string, string>> = {
 };
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "В этой команде никто не травмирован.",
+  "team.noCohesion": () =>
+    "Редактор не может прочитать сыгранность этой команды: эта версия игры не проверена для этого или ни у одного из " +
+    "её игроков нет записи для клуба.",
+  "team.noTactics": () =>
+    "Редактор не может прочитать, насколько эта команда знает свою тактику: эта версия игры не проверена для этого, " +
+    "или команда играет не ту тактику, которую выбираете вы.",
   "guard.unknownBuild": () =>
     "FMLibreEditor не проверялся с этой версией игры, поэтому ничего в неё не записывает. Кнопка «Всё равно " +
     "редактировать» в уведомлении вверху включает редактирование.",
@@ -2226,13 +2233,15 @@ export const ru: Strings = {
     maxAll: "Максимум атрибутов",
     maxAllTitle:
       "Поднять все атрибуты всех игроков этой команды до максимума: 20, и 1 для склонности к травмам и грубости",
-    atItsBest: "Team at its best",
+    atItsBest: "Команда в лучшей форме",
     atItsBestTitle:
-      "Heal all, Inspire all, Refresh all, Max cohesion and Max tactics in one press, which one Undo takes back. " +
-      "Attributes and bans stay as they are. A step that cannot run, such as Heal all while nobody is injured, is " +
-      "skipped, and the result says so. The areas of the tactic fall again as the training ages, after some six weeks, " +
-      "and another tactic needs another press. The game shows the changes once it moves on: press Continue in the game",
-    atItsBestSkipped: (step, reason) => `${step} skipped: ${reason}`,
+      "«Вылечить всех», «Воодушевить всех», «Освежить всех», «Максимум сыгранности» и «Максимум тактики» одним " +
+      "нажатием; одно нажатие «Отменить» возвращает всё. Атрибуты и дисквалификации остаются как есть. Шаг, который " +
+      "нельзя выполнить, например «Вылечить всех», когда никто не травмирован, пропускается, и результат об этом " +
+      "сообщает. По мере того как тренировки стареют, примерно через шесть недель, области тактики снова снижаются, " +
+      "а для другой тактики нужно нажать ещё раз. Игра покажет изменения, когда пойдёт дальше: нажмите «Продолжить» " +
+      "в игре",
+    atItsBestSkipped: (step, reason) => `Пропущен шаг «${step}»: ${reason}`,
     hint: "Действия затрагивают всех игроков списка, включая находящихся в аренде. Отмена есть и в разделе «Изменения».",
 
     freezeLabel: "Заморозить всю команду",
