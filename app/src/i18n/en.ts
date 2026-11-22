@@ -2579,10 +2579,7 @@ export const en = {
     cancel: "Cancel",
   },
 
-  /**
-   * A club's squad: the tab of the club profile that lists the players of each of its teams, with the actions on a
-   * whole team and the captains.
-   */
+  /** Batch traits: the dialog of a club's Squad tab that adds or removes traits for every player of a team. */
   batchTraits: {
     title: "Batch team traits",
     addMode: "+ Add to squad",
@@ -2600,6 +2597,10 @@ export const en = {
     applying: "Applying…",
   },
 
+  /**
+   * A club's squad: the tab of the club profile that lists the players of each of its teams, with the actions on a
+   * whole team and the captains.
+   */
   squad: {
     // The switch between the club's teams
     /** The name of the switch for assistive technology. */

@@ -145,7 +145,7 @@ export function BatchTraitsDialog({ team, busy, onApply, onClose }: BatchTraitsD
                 padding: "6px 14px",
                 fontWeight: mode === "remove" ? 700 : 500,
                 background: mode === "remove" ? "var(--danger)" : "var(--field)",
-                color: mode === "remove" ? "#fff" : "var(--text)",
+                color: mode === "remove" ? "var(--on-danger)" : "var(--text)",
                 borderColor: mode === "remove" ? "var(--danger)" : "var(--border-strong)",
                 cursor: "pointer",
               }}
@@ -163,7 +163,7 @@ export function BatchTraitsDialog({ team, busy, onApply, onClose }: BatchTraitsD
 
           {/* Toolbar */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 0" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--muted)" }}>
               {currentSet.size === 0 ? text.noneSelected : text.selectedCount(currentSet.size)}
             </span>
             {currentSet.size > 0 && (

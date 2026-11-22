@@ -219,6 +219,10 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
   const [destroying, setDestroying] = useState<ClubTeam | null>(null);
   const destroyButton = useRef<HTMLButtonElement>(null);
   const wasDestroying = useRef(false);
+  // Whether the Batch traits dialog is up, and its button, which takes focus back.
+  const [batchTraitsOpen, setBatchTraitsOpen] = useState(false);
+  const batchTraitsButton = useRef<HTMLButtonElement>(null);
+  const wasBatchTraitsOpen = useRef(false);
   // The team that is shown, by its place in the club's list.
   const [teamIndex, setTeamIndex] = useState(0);
   const [order, setOrder] = useState(DEFAULT_ORDER);
@@ -231,7 +235,6 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
   const refocus = useRef(false);
   // The player whose profile is up over the squad, and the name that opened it.
   const [shown, setShown] = useState<SquadPlayer | null>(null);
-  const [batchTraitsOpen, setBatchTraitsOpen] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
   const wasShown = useRef(false);
 
@@ -270,6 +273,14 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
     }
     wasDestroying.current = destroying !== null;
   }, [destroying]);
+
+  // And so does the Batch traits dialog, to its button, whether it applied or was closed.
+  useEffect(() => {
+    if (wasBatchTraitsOpen.current && !batchTraitsOpen) {
+      batchTraitsButton.current?.focus();
+    }
+    wasBatchTraitsOpen.current = batchTraitsOpen;
+  }, [batchTraitsOpen]);
 
   // A write can take the button that had focus out of play: Heal all once nobody is injured, Undo once it is done.
   // Focus then goes to the line under the buttons, so that someone using the keyboard stays in the tab.
@@ -457,6 +468,7 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
               onDestroy={() => setDestroying(team)}
               destroyRef={destroyButton}
               onBatchTraits={() => setBatchTraitsOpen(true)}
+              batchTraitsRef={batchTraitsButton}
             />
             <p className="note squad-hint">{text.hint}</p>
           </div>
@@ -626,6 +638,8 @@ interface TeamActionsProps {
   destroyRef: Ref<HTMLButtonElement>;
   /** Opens the batch traits dialog for the shown team. */
   onBatchTraits: () => void;
+  /** The Batch traits button, which takes focus back once its dialog is closed. */
+  batchTraitsRef: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -635,7 +649,16 @@ interface TeamActionsProps {
  * cohesion until somebody's cohesion can be read and Max tactics until somebody's familiarity with the tactic can;
  * every one waits while the game cannot be written to, and says why.
  */
-function TeamActions({ team, editable, busy, onAction, onDestroy, destroyRef, onBatchTraits }: TeamActionsProps) {
+function TeamActions({
+  team,
+  editable,
+  busy,
+  onAction,
+  onDestroy,
+  destroyRef,
+  onBatchTraits,
+  batchTraitsRef,
+}: TeamActionsProps) {
   const { readOnlyNote } = useContext(EditorContext);
   const injured = team.players.filter((player) => player.injuries > 0).length;
   const banned = team.players.filter((player) => player.bans > 0).length;
@@ -673,6 +696,7 @@ function TeamActions({ team, editable, busy, onAction, onDestroy, destroyRef, on
       />
       <TeamActionMenu actions={singles} editable={editable} busy={busy} onPick={onAction} />
       <ActionButton
+        ref={batchTraitsRef}
         dialog
         label={text.batchTraits}
         title={hover(text.batchTraitsTitle, empty ? text.empty : null)}
