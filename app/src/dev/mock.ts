@@ -2828,11 +2828,13 @@ function clubSquads(clubUid: number): ClubTeam[] {
       concerned.set(mate, (concerned.get(mate) ?? 0) + 1);
     }
   }
+  const humanClub = staff.some((member) => member.isHuman && member.clubUid === clubUid);
   return fixtureTeams(clubUid).map((team, index) => ({
     index,
     kind: team.kind,
     ageLimit: team.ageLimit,
     ...captainsOf(clubUid, index, team.uids),
+    humanClub,
     players: team.uids.map((uid): SquadPlayer => {
       const row = players.find((p) => p.uid === uid)!;
       const d = details(row);
@@ -2951,18 +2953,35 @@ function undoCaptain(entry: LoggedChange): void {
   captainsSet.set(undo.key, undo.before);
 }
 
+/** What Team at its best and Destroy do, in order. */
+const TEAM_STEPS: Partial<Record<TeamAction, readonly TeamAction[]>> = {
+  atItsBest: ["heal", "inspire", "refresh", "maxCohesion", "maxTactics"],
+  destroy: ["demoralize", "exhaust", "minCohesion", "minTactics"],
+};
+
 /** `team_action`: the action on every player of the fixture team, logged as one batch like a mass edit. */
 function teamAction(clubUid: number, index: number, action: TeamAction): TeamReport {
-  const players = fixtureTeam(clubUid, index).players;
-  if (action !== "atItsBest") {
+  const team = fixtureTeam(clubUid, index);
+  const players = team.players;
+  const steps = TEAM_STEPS[action];
+  // As the real command finds it: only a team whose tactic a human picks has one the editor reads.
+  const noTactics = () => failure("team.noTactics", "the editor cannot read how well the team knows its tactic");
+  if (!steps) {
+    if (action === "minTactics" && !team.humanClub) {
+      return { batch: nextMassId++, applied: 0, failed: [], skipped: [] };
+    }
     return { ...actOnPlayers(players, action), skipped: [] };
   }
-  // Team at its best: each step under one batch, the steps that cannot run left out and named.
+  // Team at its best and Destroy: each step under one batch, the steps that cannot run left out and named.
   const batch = nextMassId++;
   const report: TeamReport = { batch, applied: 0, failed: [], skipped: [] };
-  for (const step of ["heal", "inspire", "refresh", "maxCohesion", "maxTactics"] as const) {
+  for (const step of steps) {
     if (step === "heal" && !players.some((player) => player.injuries > 0)) {
       report.skipped.push({ action: step, reason: failure("team.nobodyInjured", "nobody in the team is injured") });
+      continue;
+    }
+    if (step === "minTactics" && !team.humanClub) {
+      report.skipped.push({ action: step, reason: noTactics() });
       continue;
     }
     const done = actOnPlayers(players, step, batch);
@@ -2998,14 +3017,15 @@ function actOnPlayers(players: readonly SquadPlayer[], action: TeamAction, batch
     }
     return report;
   }
-  if (action === "maxCohesion") {
-    // Those with an entry for the club, and not at the top already.
+  if (action === "maxCohesion" || action === "minCohesion") {
+    // Those with an entry for the club, and not there already: Destroy's 1 makes nobody's better.
+    const value = action === "maxCohesion" ? 100 : 1;
     for (const player of team.players) {
       const old = cohesionOf(player.uid);
-      if (old === null || old === 100) {
+      if (old === null || (value === 100 ? old >= value : old <= value)) {
         continue;
       }
-      cohesionSet.set(player.uid, 100);
+      cohesionSet.set(player.uid, value);
       changes.push({
         id: changes.length + 1,
         at: Date.now(),
@@ -3014,13 +3034,65 @@ function actOnPlayers(players: readonly SquadPlayer[], action: TeamAction, batch
         uid: player.uid,
         field: "cohesion",
         old,
-        new: 100,
+        new: value,
         undoneAt: null,
         earlier: false,
         undoable: true,
         batch,
       });
       report.applied++;
+    }
+    return report;
+  }
+  if (action === "minTactics") {
+    // Every player who plays here: 10 for each option of his record and nothing for his shapes or his training reads 4.
+    for (const player of team.players.filter((p) => p.playsHere)) {
+      const old = tacticsOf(player.uid);
+      if (old <= 4) {
+        continue;
+      }
+      tacticsSet.set(player.uid, 4);
+      changes.push({
+        id: changes.length + 1,
+        at: Date.now(),
+        name: player.name,
+        entity: "player",
+        uid: player.uid,
+        field: "tactics",
+        old,
+        new: 4,
+        undoneAt: null,
+        earlier: false,
+        undoable: true,
+        batch,
+      });
+      report.applied++;
+    }
+    return report;
+  }
+  if (action === "demoralize" || action === "exhaust") {
+    // Each value at Destroy's, where it is better than that now: a lower one (or a higher jadedness) stays.
+    const worst: [string, number, "atMost" | "atLeast"][] =
+      action === "demoralize"
+        ? [
+            ["morale", 1, "atMost"],
+            ["contract.happiness", -100, "atMost"],
+            ["contract.playing_time_happiness", -100, "atMost"],
+          ]
+        : [
+            ["condition", 0, "atMost"],
+            ["match_sharpness", 3_500, "atMost"],
+            ["jadedness", 1_000, "atLeast"],
+          ];
+    for (const player of team.players) {
+      const now = currentValues("player", player.uid);
+      const values = worst
+        .filter(([field, value, way]) => {
+          const old = now[field];
+          return old !== undefined && (way === "atMost" ? old > value : old < value);
+        })
+        .map(([field, value]): [string, number] => [field, value]);
+      setValues(player, values, report);
     }
     return report;
   }
@@ -3406,7 +3478,15 @@ function nationalProfile(uid: number, kind: number | null): NationalProfile {
   return {
     team: { ...team, players: ofNation.length },
     teams,
-    squad: { index: shown.index, kind: shown.kind, ageLimit, captain: null, viceCaptain: null, players: squad },
+    squad: {
+      index: shown.index,
+      kind: shown.kind,
+      ageLimit,
+      captain: null,
+      viceCaptain: null,
+      humanClub: false,
+      players: squad,
+    },
   };
 }
 

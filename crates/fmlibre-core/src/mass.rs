@@ -28,6 +28,10 @@ pub enum Operation {
     /// February in a year that has none. Only for dates, at most [`MOST_YEARS`] either way; a date it would take out
     /// of the field's range is left as it is.
     AddYears { years: i64 },
+    /// Lower it to `value`, and leave one that is lower already as it is.
+    AtMost { value: i64 },
+    /// Raise it to `value`, and leave one that is higher already as it is.
+    AtLeast { value: i64 },
 }
 
 impl Operation {
@@ -38,7 +42,9 @@ impl Operation {
             _ if !field.mass => {
                 Err(EditError::Unsupported { field: field.key.clone(), reason: "it is changed one person at a time" })
             }
-            Operation::Set { value } if !field.takes(value) => {
+            Operation::Set { value } | Operation::AtMost { value } | Operation::AtLeast { value }
+                if !field.takes(value) =>
+            {
                 Err(EditError::OutOfRange { field: field.key.clone(), value, min: field.min, max: field.max })
             }
             Operation::Add { .. } | Operation::Scale { .. } if field.kind == Kind::Date => {
@@ -70,6 +76,8 @@ impl Operation {
             Operation::AddYears { years } => {
                 FmDate::from_number(old).and_then(|date| date.plus_years(years)).map_or(old, FmDate::to_number)
             }
+            Operation::AtMost { value } => old.min(value),
+            Operation::AtLeast { value } => old.max(value),
         }
     }
 }
@@ -201,6 +209,22 @@ mod tests {
         let budget = field(Entity::Club, "finance.transfer_budget");
         assert_eq!(Operation::Scale { percent: 200 }.apply(&budget, 24_250_000), 48_500_000);
         assert_eq!(Operation::Set { value: 1_000_000 }.apply(&budget, 24_250_000), 1_000_000);
+    }
+
+    #[test]
+    fn at_most_and_at_least_never_go_the_other_way() {
+        let sharpness = field(Entity::Player, "match_sharpness");
+        assert_eq!(Operation::AtMost { value: 3_500 }.apply(&sharpness, 9_200), 3_500);
+        // A youth intake below what the editor writes keeps his.
+        assert_eq!(Operation::AtMost { value: 3_500 }.apply(&sharpness, 2_100), 2_100);
+        let jadedness = field(Entity::Player, "jadedness");
+        assert_eq!(Operation::AtLeast { value: 1_000 }.apply(&jadedness, -500), 1_000);
+        assert_eq!(Operation::AtLeast { value: 1_000 }.apply(&jadedness, 1_400), 1_400);
+        // The value must be one the field takes, as for Set.
+        assert!(Operation::AtMost { value: 3_500 }.check(&sharpness).is_ok());
+        assert!(Operation::AtMost { value: 0 }.check(&sharpness).is_err());
+        assert!(Operation::AtLeast { value: 1_000 }.check(&jadedness).is_ok());
+        assert!(Operation::AtLeast { value: 2_000 }.check(&jadedness).is_err());
     }
 
     #[test]

@@ -1064,6 +1064,8 @@ export interface ClubTeam {
   /** UIDs of the captain and the vice-captain; null when the team has none. */
   captain: number | null;
   viceCaptain: number | null;
+  /** Whether a manager of the user's runs the club: Destroy's question then says it is the user's own. */
+  humanClub: boolean;
   players: SquadPlayer[];
 }
 
@@ -1114,7 +1116,9 @@ export type CaptainRole = "captain" | "viceCaptain";
  * "liftBans" lifts every ban, "inspire" sets morale to 20, "refresh" sets energy and match sharpness to 100%,
  * "maxCohesion" sets cohesion with the club to 100 for those who have one, "maxTactics" has the players know the
  * tactic the team plays at its best, and "atItsBest" does Heal all, Inspire all, Refresh all, Max cohesion and Max
- * tactics in that order, as one batch.
+ * tactics in that order, as one batch. "destroy" does the other way, as one batch too and never making a value better:
+ * "demoralize" (morale 1, happiness and happiness with playing time -100), "exhaust" (energy 0%, match sharpness 35%,
+ * jadedness 1000), "minCohesion" (cohesion 1) and "minTactics" (the tactic known at its least, where a human picks it).
  */
 export type TeamAction =
   | "heal"
@@ -1124,7 +1128,12 @@ export type TeamAction =
   | "maxAttributes"
   | "maxCohesion"
   | "maxTactics"
-  | "atItsBest";
+  | "atItsBest"
+  | "demoralize"
+  | "exhaust"
+  | "minCohesion"
+  | "minTactics"
+  | "destroy";
 
 /** The actions a national team's senior team has: Heal all, Inspire all and Refresh all. */
 export type NationalTeamAction = Extract<TeamAction, "heal" | "inspire" | "refresh">;

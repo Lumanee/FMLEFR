@@ -2335,6 +2335,33 @@ export const es: Strings = {
       "áreas de la táctica vuelven a bajar a medida que el entrenamiento envejece, al cabo de unas seis semanas, y " +
       "otra táctica necesita otra pulsación. El juego muestra los cambios cuando avanza: pulsa Continuar en el juego",
     atItsBestSkipped: (step, reason) => `Se omitió «${step}»: ${reason}`,
+    destroy: "Equipo por los suelos",
+    destroyTitle:
+      "Llevar a cada jugador de este equipo a lo peor: moral y felicidad, energía, ritmo de competición y fatiga, " +
+      "cohesión con el club y, si eliges tú la táctica del equipo, cuánto la conoce. Ningún valor mejora; los " +
+      "atributos, las lesiones y las sanciones se quedan como están. Pregunta antes, y un solo «Deshacer» lo revierte todo",
+    destroySteps: {
+      demoralize: "Moral y felicidad",
+      exhaust: "Energía y ritmo",
+      minCohesion: "Cohesión",
+      minTactics: "Táctica",
+    },
+    moreActions: "Más acciones",
+    moreActionsTitle: "Las acciones sobre todo el equipo, una a una",
+    destroyDialog: {
+      title: "¿Dejar el equipo por los suelos?",
+      doesHeading: "Para cada jugador de la lista, también los cedidos",
+      does: [
+        "Moral a 1, la más baja; felicidad y felicidad con los minutos a -100",
+        "Energía al 0 %, ritmo de competición al 35 % y fatiga a 1000",
+        "Cohesión con el club a 1, para quienes la tienen",
+        "Cuánto conoce la táctica, al mínimo, si eliges tú la táctica del equipo",
+      ],
+      keeps: "Ningún valor mejora. Los atributos, las lesiones y las sanciones se quedan como están.",
+      ownClub: "Es un equipo de tu propio club.",
+      hint: "Un solo «Deshacer» lo revierte todo, antes de que el juego avance.",
+      cancel: "Cancelar",
+    },
     hint:
       "Las acciones abarcan a todos los jugadores de la lista, también a los cedidos. Se pueden deshacer también " +
       "en Cambios.",

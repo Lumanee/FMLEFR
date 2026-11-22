@@ -2203,6 +2203,34 @@ export const id: Strings = {
       "enam minggu, dan taktik lain perlu ditekan sekali lagi. Game menampilkan perubahan setelah waktu berjalan: " +
       "tekan Lanjutkan di game",
     atItsBestSkipped: (step, reason) => `“${step}” dilewati: ${reason}`,
+    destroy: "Tim dalam kondisi terburuk",
+    destroyTitle:
+      "Buat setiap pemain di tim ini dalam kondisi terburuknya: moral dan kebahagiaan, energi, ketajaman bertanding " +
+      "dan keletihan, kekompakan dengan klub, serta pemahaman taktik jika Anda yang memilih taktik tim. Tidak ada " +
+      "nilai yang dibuat lebih baik; atribut, cedera, dan larangan bermain tetap. Ditanyakan dulu, dan satu " +
+      "“Urungkan” membatalkan semuanya",
+    destroySteps: {
+      demoralize: "Moral dan kebahagiaan",
+      exhaust: "Energi dan ketajaman",
+      minCohesion: "Kekompakan",
+      minTactics: "Taktik",
+    },
+    moreActions: "Tindakan lain",
+    moreActionsTitle: "Tindakan untuk seluruh tim, satu per satu",
+    destroyDialog: {
+      title: "Buat tim dalam kondisi terburuk?",
+      doesHeading: "Untuk setiap pemain di daftar, termasuk yang sedang dipinjamkan",
+      does: [
+        "Moral ke 1, yang terendah; kebahagiaan dan kebahagiaan waktu bermain ke -100",
+        "Energi ke 0%, ketajaman bertanding ke 35%, dan keletihan ke 1000",
+        "Kekompakan dengan klub ke 1, bagi yang memilikinya",
+        "Pemahaman taktik ke yang terendah, jika Anda yang memilih taktik tim",
+      ],
+      keeps: "Tidak ada nilai yang dibuat lebih baik. Atribut, cedera, dan larangan bermain tetap seperti semula.",
+      ownClub: "Ini tim dari klub Anda sendiri.",
+      hint: "Satu “Urungkan” membatalkan semuanya, sebelum game berjalan.",
+      cancel: "Batal",
+    },
     hint: "Tindakan ini mencakup setiap pemain di daftar, termasuk yang sedang dipinjamkan. Urungkan juga ada di tampilan Perubahan.",
 
     freezeLabel: "Bekukan seluruh tim",
