@@ -1829,6 +1829,31 @@ mod tests {
         }
     }
 
+    /// The Epic build of an update is the Steam build's code under another fingerprint: on 27.1.0 every place the probe
+    /// found on Epic is where Steam build 26620374 keeps it. So an Epic profile keeps all that the profile of the Steam
+    /// build on Windows with the same arrays keeps, and what is added to that one later has to be added to it too.
+    #[test]
+    fn epic_profiles_keep_what_their_steam_twin_keeps() {
+        let profiles: Vec<BuildProfile> = built_in_profiles().collect();
+        let windows = |profile: &BuildProfile| matches!(profile.plugin, PluginFingerprint::Pe { .. });
+        let epics: Vec<&BuildProfile> =
+            profiles.iter().filter(|profile| profile.storefront == Storefront::Epic).collect();
+        assert!(!epics.is_empty(), "an Epic profile");
+        for epic in epics {
+            let twin = profiles
+                .iter()
+                .find(|other| other.storefront == Storefront::Steam && windows(other) && other.arrays == epic.arrays)
+                .unwrap_or_else(|| panic!("{}: no Steam build on Windows keeps the arrays where it does", epic.name));
+            let as_twin = BuildProfile {
+                name: twin.name.clone(),
+                storefront: twin.storefront,
+                plugin: twin.plugin,
+                ..epic.clone()
+            };
+            assert_eq!(&as_twin, twin, "{} keeps otherwise than {}", epic.name, twin.name);
+        }
+    }
+
     /// The app shows the prize money only on the builds it was read and checked on (#123): no others until someone has.
     #[test]
     fn prize_money_is_shown_only_on_the_builds_it_was_checked_on() {
@@ -1887,7 +1912,10 @@ mod tests {
                 .map(|profile| profile.name)
                 .collect()
         };
-        assert_eq!(moved(true), ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374"]);
+        assert_eq!(
+            moved(true),
+            ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374", "FM27 (Epic Games Store)"]
+        );
         assert_eq!(
             moved(false),
             ["FM27 Steam build 26620374 (macOS, Intel)", "FM27 Steam build 26620374 (macOS, Apple silicon)"]
