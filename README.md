@@ -33,15 +33,18 @@ signed: [Code signing policy](#code-signing-policy).
 - See and change the prize money a club's league pays this season, by final position and per
   win, draw and loss, in the club's finances: for every club in that league, until the game sets
   the next season up with its own amounts. So far on the versions of the game it was checked on:
-  Steam builds 26340721 and 26577676 on Windows, Steam builds 26340721 and 26385295 on Apple
-  silicon Macs, and Game Pass 0.9.2409.0 and 0.9.2435.0; the others say why there is nothing yet.
+  Steam builds 26340721, 26577676 and 26620374 on Windows, Steam builds 26340721, 26385295 and
+  26620374 on Apple silicon Macs, and Game Pass 0.9.2409.0, 0.9.2435.0 and 0.9.2524.0; the others
+  say why there is nothing yet.
 - See a club's sponsorship deals in its finances, read only: each deal by the name the game gives its
-  kind, what it pays per season and in all, its term, and what a relegation changes. Shown on Steam
-  build 26340721 on Windows and 26385295 on Apple silicon Macs; the others say why there is nothing yet.
+  kind, what it pays per season and in all, its term, and what a relegation changes. Shown on Game
+  Pass 0.9.2524.0, Steam build 26340721 on Windows and 26385295 on Apple silicon Macs; the others say
+  why there is nothing yet.
 - See each nation's men's and women's national team in the Clubs tab (its **National teams**
-  switch), the players the game lists for its senior team and its reputation, which can be edited.
-  So far on Windows (Game Pass 0.9.2435.0 and Steam build 26577676) and on Steam for macOS, build
-  26385295 on Apple silicon; the other versions of the game say why there are none yet.
+  switch), the players the game lists for its senior team and its reputation, which can be edited,
+  and heal, inspire or refresh its senior team's squad. So far on Windows (Game Pass 0.9.2435.0 and
+  0.9.2524.0, Steam builds 26577676 and 26620374) and on Steam for macOS, builds 26385295 and
+  26620374 on Apple silicon; the other versions of the game say why there are none yet.
 - Opens on **My club**: the club you manage, its money, who needs a look (the injured, the
   banned, low morale, the tired, unrest, contracts about to end) and the actions on the whole
   team one click away. With no club of your own, pick one to follow.
@@ -53,7 +56,9 @@ signed: [Code signing policy](#code-signing-policy).
 - Extend a player's or a member of staff's contract by five years in one click; the mass edit adds
   years to many contracts at once.
 - Heal injuries, lift bans, remove unhappiness, prevent retirement, raise morale and fitness,
-  max out attributes, set captains, for one player or a whole team.
+  max out attributes, set captains, for one player or a whole team. **Team at its best** heals,
+  inspires and refreshes a whole team and takes its cohesion and tactic to the top in one press,
+  and **Destroy**, after a question, does the other way round; one Undo takes either back.
 - Freeze a player's attributes, energy and match sharpness, a whole team's from its squad
   tab, or a club's money: while the app runs, they do not go down, and the app freezes them
   again when you connect to that save another time.
@@ -62,8 +67,8 @@ signed: [Code signing policy](#code-signing-policy).
 - Rename a player: first, last, common and full name. The game keeps names in its saves, so a
   new name stays once you save.
 - Transfer, swap or release players, sign free agents, and move staff between clubs in their
-  own job or another (doctors, analysts and directors of football too), or sign staff who have
-  no club.
+  own job or another (doctors, analysts and directors of football too), one by one or a club's
+  whole staff at once, or sign staff who have no club.
 - Arrange a transfer for the game to make on its next day (Windows, and Macs with Apple
   silicon): the game moves the player, pays the fee, and keeps the move in his career history,
   with this season's matches at his old club, as it does for its own transfers.

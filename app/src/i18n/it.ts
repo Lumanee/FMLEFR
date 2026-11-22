@@ -3117,6 +3117,32 @@ export const it: Strings = {
     link: "Novità",
     command: "Novità di questa versione",
     versions: {
+      "0.5.4": [
+        {
+          title: "I trasferimenti nella carriera del giocatore.",
+          text: "Trasferimento, ora la prima scelta quando sposti un giocatore, prepara il trasferimento per il giorno dopo nel gioco. Il gioco lo esegue come uno dei suoi: paga il costo del cartellino e registra il trasferimento nella storia della sua carriera, con le partite di questa stagione nella vecchia società in una riga a parte. Sposta subito lo sposta ancora all'istante.",
+        },
+        {
+          title: "Squadra al top, e a pezzi.",
+          text: "Nella scheda Rosa di una società, un solo clic guarisce, motiva e rigenera tutta la squadra e porta affiatamento e tattica al massimo; Squadra a pezzi, dopo una domanda, fa il contrario. Un solo Ripristina annulla l'una o l'altra, e le singole azioni sono in Altre azioni.",
+        },
+        {
+          title: "Trasferisci tutto lo staff.",
+          text: "La scheda Staff di una società trasferisce tutto il suo staff a un'altra società in una volta, ognuno nello stesso ruolo, e un solo Ripristina li riporta tutti indietro.",
+        },
+        {
+          title: "Nazionali.",
+          text: "La rosa della prima squadra di una nazionale ha Guarisci tutti, Motiva tutti e Rigenera tutti, e la sua tabella mostra energia, forma partita e morale.",
+        },
+        {
+          title: "Sponsorizzazioni.",
+          text: "Le finanze di una società elencano le sue sponsorizzazioni, in sola lettura: quanto paga ciascuna a stagione e in totale, la durata e cosa cambia con una retrocessione. Per ora su Game Pass 0.9.2524.0.",
+        },
+        {
+          title: "Correzione.",
+          text: "In alcune carriere il controllo dello staff falliva anche se lo staff era letto bene, lasciandolo in sola lettura e rifiutando guarigioni, Massimo affiatamento e Tattica al massimo. Ora passa.",
+        },
+      ],
       "0.5.3": [
         {
           title: "L'aggiornamento di FM27 del 17 novembre.",

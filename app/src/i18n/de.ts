@@ -3189,6 +3189,32 @@ export const de: Strings = {
     link: "Neuigkeiten",
     command: "Neu in dieser Version",
     versions: {
+      "0.5.4": [
+        {
+          title: "Transfers im Karriereverlauf.",
+          text: "„Transfer“, jetzt die erste Wahl, wenn Sie einen Spieler verschieben, vereinbart den Wechsel für den nächsten Tag im Spiel. Das Spiel führt ihn wie einen eigenen aus: Es zahlt die Ablöse und trägt den Wechsel in den Karriereverlauf des Spielers ein, wobei die Spiele dieser Saison beim alten Verein eine eigene Zeile behalten. „Jetzt verschieben“ verschiebt ihn weiterhin sofort.",
+        },
+        {
+          title: "Mannschaft in Bestform und in Tiefstform.",
+          text: "Unter „Kader“ eines Vereins heilt, motiviert und regeneriert ein Klick die ganze Mannschaft und bringt Teambuilding und Taktik ganz nach oben; „Mannschaft in Tiefstform“ bewirkt nach einer Rückfrage das Gegenteil. Ein einziges „Rückgängig“ nimmt beides zurück, und die einzelnen Aktionen stehen unter „Weitere Aktionen“.",
+        },
+        {
+          title: "Alle Mitarbeiter transferieren.",
+          text: "Unter „Mitarbeiter“ eines Vereins wechseln alle Mitarbeiter auf einmal zu einem anderen Verein, jeder in derselben Aufgabe, und ein einziges „Rückgängig“ holt alle zurück.",
+        },
+        {
+          title: "Nationalteams.",
+          text: "Der A-Kader einer Nationalmannschaft bekommt „Alle heilen“, „Alle motivieren“ und „Alle regenerieren“, und seine Tabelle zeigt Energie, Spielpraxis und Moral.",
+        },
+        {
+          title: "Sponsorenverträge.",
+          text: "Die Finanzen eines Vereins listen seine Sponsorenverträge auf, nur zum Lesen: was jeder pro Saison und insgesamt zahlt, seine Laufzeit und was ein Abstieg ändert. Bisher unter Game Pass 0.9.2524.0.",
+        },
+        {
+          title: "Korrektur.",
+          text: "In manchen Karrieren scheiterten die Mitarbeiter an der Prüfung, die der Editor vor dem Schreiben macht, obwohl sie richtig gelesen wurden. Sie blieben dann schreibgeschützt, und Heilen, „Teambuilding maximieren“ und „Taktik maximieren“ wurden abgelehnt. Jetzt besteht die Prüfung.",
+        },
+      ],
       "0.5.3": [
         {
           title: "FM27-Update vom 17. November.",

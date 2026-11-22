@@ -3098,6 +3098,32 @@ export const es: Strings = {
     link: "Novedades",
     command: "Novedades de esta versión",
     versions: {
+      "0.5.4": [
+        {
+          title: "Traspasos en el historial del jugador.",
+          text: "Traspaso, ahora la primera opción al mover a un jugador, deja el traspaso preparado para el día siguiente del juego. El juego lo hace como uno de los suyos: paga el importe y anota el traspaso en el historial de su carrera, con los partidos de esta temporada en su antiguo club en una fila aparte. Mover ahora sigue moviéndolo al instante.",
+        },
+        {
+          title: "Equipo al máximo, y por los suelos.",
+          text: "En la pestaña Plantilla de un club, un solo clic cura, motiva y recupera a todo el equipo y lleva su cohesión y su táctica al máximo; Equipo por los suelos, tras una pregunta, hace lo contrario. Un solo Deshacer revierte cualquiera de los dos, y las acciones sueltas están en Más acciones.",
+        },
+        {
+          title: "Traspasar a todo el personal.",
+          text: "La pestaña Personal de un club traspasa a todo su personal a otro club de una vez, cada uno en el mismo puesto, y un solo Deshacer los trae a todos de vuelta.",
+        },
+        {
+          title: "Selecciones.",
+          text: "La plantilla absoluta de una selección tiene Curar a todos, Motivar a todos y Recuperar a todos, y su tabla muestra la energía, el ritmo de competición y la moral.",
+        },
+        {
+          title: "Patrocinios.",
+          text: "Las finanzas de un club muestran sus patrocinios, solo para consultar: lo que paga cada uno por temporada y en total, su duración y lo que cambia con un descenso. Por ahora en Game Pass 0.9.2524.0.",
+        },
+        {
+          title: "Corrección.",
+          text: "En algunas partidas la comprobación del personal fallaba aunque el personal se leía bien, lo que lo dejaba en solo lectura e impedía curar, Máxima cohesión y Táctica al máximo. Ahora pasa.",
+        },
+      ],
       "0.5.3": [
         {
           title: "La actualización de FM27 del 17 de noviembre.",
