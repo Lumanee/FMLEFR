@@ -59,6 +59,7 @@ signed: [Code signing policy](#code-signing-policy).
   max out attributes, set captains, for one player or a whole team. **Team at its best** heals,
   inspires and refreshes a whole team and takes its cohesion and tactic to the top in one press,
   and **Destroy**, after a question, does the other way round; one Undo takes either back.
+  **Batch traits** gives every player of a team the traits you pick, or takes them away.
 - Freeze a player's attributes, energy and match sharpness, a whole team's from its squad
   tab, or a club's money: while the app runs, they do not go down, and the app freezes them
   again when you connect to that save another time.

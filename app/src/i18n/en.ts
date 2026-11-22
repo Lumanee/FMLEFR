@@ -3531,6 +3531,10 @@ export const en = {
           text: "In a club's Squad tab, one press heals, inspires and refreshes the whole team and takes its cohesion and tactic to the top; Destroy, after a question, does the opposite. One Undo takes either back, and the single actions are under More actions.",
         },
         {
+          title: "Batch traits.",
+          text: "In a club's Squad tab, Batch traits gives every player of the team the traits you pick, or takes them away, and leaves the rest of their traits as they are. One Undo takes it back.",
+        },
+        {
           title: "Move all staff.",
           text: "A club's Staff tab moves its whole staff to another club at once, each in the same job, and one Undo brings them all back.",
         },

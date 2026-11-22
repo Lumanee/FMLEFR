@@ -3146,6 +3146,10 @@ export const it: Strings = {
           text: "Nella scheda Rosa di una società, un solo clic guarisce, motiva e rigenera tutta la squadra e porta affiatamento e tattica al massimo; Squadra a pezzi, dopo una domanda, fa il contrario. Un solo Ripristina annulla l'una o l'altra, e le singole azioni sono in Altre azioni.",
         },
         {
+          title: "Caratteristiche della rosa.",
+          text: "Nella scheda Rosa di una società, Caratteristiche della rosa dà a tutti i giocatori della squadra le caratteristiche che scegli, o gliele toglie, e lascia le altre come sono. Un solo Ripristina lo annulla.",
+        },
+        {
           title: "Trasferisci tutto lo staff.",
           text: "La scheda Staff di una società trasferisce tutto il suo staff a un'altra società in una volta, ognuno nello stesso ruolo, e un solo Ripristina li riporta tutti indietro.",
         },

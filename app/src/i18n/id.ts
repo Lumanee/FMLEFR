@@ -2974,6 +2974,10 @@ export const id: Strings = {
           text: "Di tab Skuad sebuah klub, satu klik menyembuhkan, menginspirasi, dan menyegarkan seluruh tim serta membawa kekompakan dan taktiknya ke puncak; Tim dalam kondisi terburuk, setelah sebuah pertanyaan, melakukan kebalikannya. Satu Urungkan membatalkan keduanya, dan tindakan satu per satu ada di Tindakan lain.",
         },
         {
+          title: "Karakteristik skuad.",
+          text: "Di tab Skuad sebuah klub, Karakteristik skuad memberi semua pemain tim sifat yang kamu pilih, atau menghapusnya, dan membiarkan sifat lainnya apa adanya. Satu Urungkan membatalkannya.",
+        },
+        {
           title: "Pindahkan semua staf.",
           text: "Tab Staf sebuah klub memindahkan seluruh stafnya ke klub lain sekaligus, masing-masing di jabatan yang sama, dan satu Urungkan mengembalikan mereka semua.",
         },

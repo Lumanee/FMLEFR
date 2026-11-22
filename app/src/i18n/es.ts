@@ -3127,6 +3127,10 @@ export const es: Strings = {
           text: "En la pestaña Plantilla de un club, un solo clic cura, motiva y recupera a todo el equipo y lleva su cohesión y su táctica al máximo; Equipo por los suelos, tras una pregunta, hace lo contrario. Un solo Deshacer revierte cualquiera de los dos, y las acciones sueltas están en Más acciones.",
         },
         {
+          title: "Características del lote.",
+          text: "En la pestaña Plantilla de un club, Características del lote da a todos los jugadores del equipo las características que elijas, o se las quita, y deja las demás como están. Un solo Deshacer lo revierte.",
+        },
+        {
           title: "Traspasar a todo el personal.",
           text: "La pestaña Personal de un club traspasa a todo su personal a otro club de una vez, cada uno en el mismo puesto, y un solo Deshacer los trae a todos de vuelta.",
         },
