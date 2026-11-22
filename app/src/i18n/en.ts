@@ -3532,7 +3532,7 @@ export const en = {
         },
         {
           title: "Batch traits.",
-          text: "In a club's Squad tab, Batch traits gives every player of the team the traits you pick, or takes them away, and leaves the rest of their traits as they are. One Undo takes it back.",
+          text: "Under More actions in a club's Squad tab, Batch traits gives every player of the team the traits you pick, or takes them away, and leaves the rest of their traits as they are. One Undo takes it back.",
         },
         {
           title: "Move all staff.",

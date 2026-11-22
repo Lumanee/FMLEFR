@@ -1,8 +1,9 @@
 // The More actions menu of a squad: the actions on the whole team one at a time, Heal all to Max tactics, which Team at
-// its best does together. The tab's controls sit in a box that scrolls, which would cut a menu off at its edge, so the
-// menu is drawn over the window, under its button (above it where the window has no room below).
+// its best does together, and Batch traits, which opens its dialog. The tab's controls sit in a box that scrolls, which
+// would cut a menu off at its edge, so the menu is drawn over the window, under its button (above it where the window
+// has no room below).
 
-import { useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type Ref } from "react";
 import { createPortal } from "react-dom";
 import { squadText as text } from "./labels";
 import type { TeamAction } from "./types";
@@ -18,14 +19,19 @@ interface Anchor {
   bottom: number;
 }
 
+/** What an item of the menu does: one of the actions on the team, or Batch traits, which opens its dialog. */
+export type MenuItemAction = TeamAction | "batchTraits";
+
 /** One action of the menu, as its button in the row would have shown it. */
 export interface MenuAction {
-  action: TeamAction;
+  action: MenuItemAction;
   label: string;
   /** Hover text: what it does, or why it waits. */
   title: string;
   /** Whether there is nothing it can do now: the item is dimmed, and says why. */
   waiting: boolean;
+  /** Whether it opens a dialog first rather than writing at once. */
+  dialog?: boolean;
 }
 
 interface TeamActionMenuProps {
@@ -34,16 +40,31 @@ interface TeamActionMenuProps {
   editable: boolean;
   /** Whether a write is under way: the menu waits for it. */
   busy: boolean;
-  onPick: (action: TeamAction) => void;
+  onPick: (action: MenuItemAction) => void;
+  /** The More actions button, which takes focus back once a dialog one of its items opened is closed. */
+  buttonRef?: Ref<HTMLButtonElement>;
 }
 
 /** The More actions button and, once it is pressed, its menu. */
-export function TeamActionMenu({ actions, editable, busy, onPick }: TeamActionMenuProps) {
+export function TeamActionMenu({ actions, editable, busy, onPick, buttonRef }: TeamActionMenuProps) {
   const { readOnlyNote } = useContext(EditorContext);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
-  const button = useRef<HTMLButtonElement>(null);
+  const button = useRef<HTMLButtonElement | null>(null);
   const menu = useRef<HTMLDivElement>(null);
   const open = anchor !== null;
+
+  // The button is the menu's own, and the squad's too where it asks for it.
+  const setButton = useCallback(
+    (node: HTMLButtonElement | null) => {
+      button.current = node;
+      if (typeof buttonRef === "function") {
+        buttonRef(node);
+      } else if (buttonRef) {
+        buttonRef.current = node;
+      }
+    },
+    [buttonRef],
+  );
 
   const show = () => {
     const box = button.current?.getBoundingClientRect();
@@ -152,7 +173,7 @@ export function TeamActionMenu({ actions, editable, busy, onPick }: TeamActionMe
   return (
     <>
       <button
-        ref={button}
+        ref={setButton}
         type="button"
         className="squad-action squad-more"
         aria-haspopup="menu"
@@ -198,6 +219,7 @@ export function TeamActionMenu({ actions, editable, busy, onPick }: TeamActionMe
                 tabIndex={-1}
                 // Dimmed, not disabled: the keys still reach it, and its hover text says why it waits.
                 aria-disabled={item.waiting || undefined}
+                aria-haspopup={item.dialog ? "dialog" : undefined}
                 title={item.title}
                 onClick={() => pick(item)}
               >

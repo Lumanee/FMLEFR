@@ -37,7 +37,7 @@ import { percentText } from "./MedicalGroup";
 import { PlayerDialog } from "./PlayerProfile";
 import type { Loaded, PanelIds } from "./ProfileParts";
 import { SortHeader } from "./SortHeader";
-import { TeamActionMenu, type MenuAction } from "./TeamActionMenu";
+import { TeamActionMenu, type MenuAction, type MenuItemAction } from "./TeamActionMenu";
 import type {
   BatchUndo,
   CaptainRole,
@@ -219,7 +219,7 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
   const [destroying, setDestroying] = useState<ClubTeam | null>(null);
   const destroyButton = useRef<HTMLButtonElement>(null);
   const wasDestroying = useRef(false);
-  // Whether the Batch traits dialog is up, and its button, which takes focus back.
+  // Whether the Batch traits dialog is up, and the More actions button whose menu opens it, which takes focus back.
   const [batchTraitsOpen, setBatchTraitsOpen] = useState(false);
   const batchTraitsButton = useRef<HTMLButtonElement>(null);
   const wasBatchTraitsOpen = useRef(false);
@@ -274,7 +274,7 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
     wasDestroying.current = destroying !== null;
   }, [destroying]);
 
-  // And so does the Batch traits dialog, to its button, whether it applied or was closed.
+  // And so does the Batch traits dialog, to More actions, whether it applied or was closed.
   useEffect(() => {
     if (wasBatchTraitsOpen.current && !batchTraitsOpen) {
       batchTraitsButton.current?.focus();
@@ -638,16 +638,17 @@ interface TeamActionsProps {
   destroyRef: Ref<HTMLButtonElement>;
   /** Opens the batch traits dialog for the shown team. */
   onBatchTraits: () => void;
-  /** The Batch traits button, which takes focus back once its dialog is closed. */
+  /** The More actions button, whose menu opens Batch traits, which takes focus back once its dialog is closed. */
   batchTraitsRef: Ref<HTMLButtonElement>;
 }
 
 /**
  * Team at its best (Heal all, Inspire all, Refresh all, Max cohesion and Max tactics in one go), the More actions menu
- * with each action on its own (those five, Lift bans and Max attributes), Batch traits, and Destroy in red, for the
- * shown team. Heal all and Lift bans say how many players are injured or banned and wait until somebody is, Max
- * cohesion until somebody's cohesion can be read and Max tactics until somebody's familiarity with the tactic can;
- * every one waits while the game cannot be written to, and says why.
+ * with each action on its own (those five, Lift bans and Max attributes) and Batch traits, which opens its dialog, and
+ * Destroy in red, for the shown team: three buttons, which fit one line in every language. Heal all and Lift bans say
+ * how many players are injured or banned and wait until somebody is, Max cohesion until somebody's cohesion can be read
+ * and Max tactics until somebody's familiarity with the tactic can; every one waits while the game cannot be written
+ * to, and says why.
  */
 function TeamActions({
   team,
@@ -669,7 +670,7 @@ function TeamActions({
   const empty = team.players.length === 0;
   // What a button's hover text says: why it waits, or else what it does.
   const hover = (does: string, waiting: string | null) => (!editable ? readOnlyNote : (waiting ?? does));
-  const single = (action: TeamAction, label: string, does: string, waiting: string | null): MenuAction => ({
+  const single = (action: MenuItemAction, label: string, does: string, waiting: string | null): MenuAction => ({
     action,
     label,
     title: hover(does, waiting),
@@ -683,6 +684,7 @@ function TeamActions({
     single("maxAttributes", text.maxAll, text.maxAllTitle, empty ? text.empty : null),
     single("maxCohesion", text.maxCohesion, text.maxCohesionTitle, cohesive === 0 ? text.cohesionNone : null),
     single("maxTactics", text.maxTactics, text.maxTacticsTitle, tactical === 0 ? text.tacticsNone : null),
+    { ...single("batchTraits", text.batchTraits, text.batchTraitsTitle, empty ? text.empty : null), dialog: true },
   ];
 
   return (
@@ -694,15 +696,12 @@ function TeamActions({
         busy={busy}
         onPress={() => onAction("atItsBest")}
       />
-      <TeamActionMenu actions={singles} editable={editable} busy={busy} onPick={onAction} />
-      <ActionButton
-        ref={batchTraitsRef}
-        dialog
-        label={text.batchTraits}
-        title={hover(text.batchTraitsTitle, empty ? text.empty : null)}
-        waiting={!editable || empty}
+      <TeamActionMenu
+        actions={singles}
+        editable={editable}
         busy={busy}
-        onPress={onBatchTraits}
+        onPick={(action) => (action === "batchTraits" ? onBatchTraits() : onAction(action))}
+        buttonRef={batchTraitsRef}
       />
       <ActionButton
         ref={destroyRef}

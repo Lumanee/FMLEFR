@@ -3147,7 +3147,7 @@ export const it: Strings = {
         },
         {
           title: "Caratteristiche della rosa.",
-          text: "Nella scheda Rosa di una società, Caratteristiche della rosa dà a tutti i giocatori della squadra le caratteristiche che scegli, o gliele toglie, e lascia le altre come sono. Un solo Ripristina lo annulla.",
+          text: "Nella scheda Rosa di una società, sotto Altre azioni, Caratteristiche della rosa dà a tutti i giocatori della squadra le caratteristiche che scegli, o gliele toglie, e lascia le altre come sono. Un solo Ripristina lo annulla.",
         },
         {
           title: "Trasferisci tutto lo staff.",

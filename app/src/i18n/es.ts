@@ -3128,7 +3128,7 @@ export const es: Strings = {
         },
         {
           title: "Características del lote.",
-          text: "En la pestaña Plantilla de un club, Características del lote da a todos los jugadores del equipo las características que elijas, o se las quita, y deja las demás como están. Un solo Deshacer lo revierte.",
+          text: "En la pestaña Plantilla de un club, dentro de Más acciones, Características del lote da a todos los jugadores del equipo las características que elijas, o se las quita, y deja las demás como están. Un solo Deshacer lo revierte.",
         },
         {
           title: "Traspasar a todo el personal.",

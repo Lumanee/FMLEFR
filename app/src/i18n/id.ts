@@ -2975,7 +2975,7 @@ export const id: Strings = {
         },
         {
           title: "Karakteristik skuad.",
-          text: "Di tab Skuad sebuah klub, Karakteristik skuad memberi semua pemain tim sifat yang kamu pilih, atau menghapusnya, dan membiarkan sifat lainnya apa adanya. Satu Urungkan membatalkannya.",
+          text: "Di tab Skuad sebuah klub, di menu Tindakan lain, Karakteristik skuad memberi semua pemain tim sifat yang kamu pilih, atau menghapusnya, dan membiarkan sifat lainnya apa adanya. Satu Urungkan membatalkannya.",
         },
         {
           title: "Pindahkan semua staf.",

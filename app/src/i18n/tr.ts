@@ -3049,7 +3049,7 @@ export const tr: Strings = {
         },
         {
           title: "Kadro özellikleri.",
-          text: "Bir kulübün Kadro sekmesindeki Kadro özellikleri, seçtiğin özellikleri takımdaki her oyuncuya ekliyor ya da onlardan kaldırıyor; oyuncuların diğer özelliklerine dokunmuyor. Tek bir Geri al hepsini geri alıyor.",
+          text: "Bir kulübün Kadro sekmesinde, Diğer işlemler menüsündeki Kadro özellikleri, seçtiğin özellikleri takımdaki her oyuncuya ekliyor ya da onlardan kaldırıyor; oyuncuların diğer özelliklerine dokunmuyor. Tek bir Geri al hepsini geri alıyor.",
         },
         {
           title: "Tüm personeli taşı.",
