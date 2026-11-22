@@ -223,6 +223,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (es.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Nadie en este equipo está lesionado.",
+  "team.noCohesion": () =>
+    "El editor no puede leer la cohesión de este equipo: esta versión del juego no se ha comprobado, o ninguno de " +
+    "sus jugadores tiene cohesión con el club.",
+  "team.noTactics": () =>
+    "El editor no puede leer cuánto conoce este equipo su táctica: esta versión del juego no se ha comprobado, o el " +
+    "equipo no juega una táctica que elijas tú.",
   "guard.unknownBuild": () =>
     "FMLibreEditor no se ha probado con esta versión del juego, así que no escribe en ella. «Editar de todos modos», " +
     "en el aviso de arriba, activa la edición.",
@@ -269,6 +276,13 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "El juego no tiene sitio para otro contrato hasta que haga uno él mismo, como hace al pasar los días: avanza un " +
     "día en el juego y vuelve a intentarlo.",
+  "arrange.unknown": () => "El editor no encuentra dónde guarda el juego sus traspasos en esta versión del juego.",
+  "arrange.underWay": () => "El jugador ya tiene un movimiento acordado, o una oferta sin responder.",
+  "arrange.noMemory": () =>
+    "El editor no pudo reservar memoria en el juego para esto: el sistema no le dejó ejecutar por él las propias " +
+    "funciones del juego.",
+  "arrange.made": () =>
+    "El juego ya ha hecho este traspaso, o ha cambiado lo que escribió prepararlo: no se puede deshacer.",
   "sign.noModel": () =>
     "El club no tiene en su primer equipo ningún jugador con un contrato corriente en el que basar el nuevo.",
   "sign.noDate": () => "El editor no puede leer la fecha del juego, que es cuando empieza el nuevo contrato.",
@@ -1493,6 +1507,13 @@ export const es: Strings = {
     failed: "No se ha podido comprobar si hay actualizaciones.",
   },
 
+  star: {
+    title: "¿Te gusta FMLibreEditor?",
+    text: "Una estrella en GitHub le ayuda a llegar a más jugadores y a crecer más rápido.",
+    star: "Dar una estrella en GitHub",
+    dismiss: "No, gracias",
+  },
+
   edit: {
     unknownNation: "País desconocido",
     unknownCity: "Ciudad desconocida",
@@ -1568,6 +1589,7 @@ export const es: Strings = {
     swappedWith: (name) => `Intercambiado por ${name}`,
     released: (name) => `Contrato rescindido: ${name}`,
     fee: (amount) => `Traspaso: ${amount}`,
+    arranged: (date) => `El juego hace el movimiento el ${date}`,
     optionRemoved: (amount) => `Opción de compra (${amount}) eliminada`,
     healed: (count) => (count === 1 ? "1 lesión curada" : `${format(count)} lesiones curadas`),
     lifted: (count) => (count === 1 ? "1 sanción levantada" : `${format(count)} sanciones levantadas`),
@@ -1871,9 +1893,31 @@ export const es: Strings = {
     from: "Origen",
     to: "Destino",
 
-    modeLabel: "Traspaso o intercambio",
-    modeMove: "Traspasar a un club",
+    modeLabel: "Traspaso, mover ahora o intercambio",
+    modeMove: "Mover ahora",
     modeSwap: "Intercambiar por un jugador",
+    modeArrange: "Traspaso",
+    arrangeNote:
+      "El juego hace el traspaso en su siguiente día, como hace los suyos: su historial conserva los partidos de esta " +
+      "temporada con su antiguo club, anota el nuevo club con el precio, y el juego paga el precio.",
+    moveNote:
+      "El editor lo mueve al instante. El historial del juego no lo recoge: esta temporada aparece con el nuevo club, " +
+      "sin precio.",
+    arrangeUnavailable:
+      "Esta versión del juego, o este sistema, no deja que el editor prepare un traspaso para que lo haga el juego: " +
+      "Mover ahora lo mueve al instante.",
+    arrangeChecking: "Comprobando el traspaso… la primera vez, encontrar los traspasos del juego tarda unos segundos.",
+    movesOn: (date) => `El juego hace el movimiento el ${date}`,
+    arrangeFee: (amount) => `Precio ${amount}, que paga el juego ese día`,
+    arrangeContract: (wage, expires) => `Contrato: ${wage} a la semana hasta el ${expires}`,
+    arrangeDoes: [
+      "Acordado ahora: el juego hace el movimiento cuando llega a su siguiente día",
+      "Su historial conserva los partidos de esta temporada con su antiguo club y anota el nuevo club con el precio",
+      "El juego paga el precio ese día, como paga sus propios traspasos",
+      "Contrato con el nuevo club desde ese día; el salario y el fin de contrato solo cambian si fijas otros nuevos",
+      "Aparece en Cambios, donde un solo Deshacer lo anula hasta ese día",
+    ],
+    arrangeButton: "Preparar traspaso",
 
     // El club
     searchLabel: "Buscar el club al que traspasar",
@@ -2030,6 +2074,8 @@ export const es: Strings = {
 
     // El pie
     hint: "Nada cambia en el juego hasta que pulsas Traspasar.",
+    arrangeHint: "Nada cambia en el juego hasta que pulsas Preparar traspaso.",
+    moveNowHint: "Nada cambia en el juego hasta que pulsas Mover ahora.",
     move: "Traspasar",
     moving: "Traspasando…",
     cancel: "Cancelar",
@@ -2281,6 +2327,14 @@ export const es: Strings = {
     maxAllTitle:
       "Poner cada atributo de cada jugador de este equipo en su mejor valor: 20, y 1 para la propensión a lesiones y " +
       "el juego sucio",
+    atItsBest: "Equipo al máximo",
+    atItsBestTitle:
+      "«Curar a todos», «Motivar a todos», «Recuperar a todos», «Máxima cohesión» y «Táctica al máximo» con una sola " +
+      "pulsación, que un solo «Deshacer» revierte. Los atributos y las sanciones se quedan como están. Un paso que " +
+      "no se puede dar, como «Curar a todos» cuando nadie está lesionado, se omite, y el resultado lo indica. Las " +
+      "áreas de la táctica vuelven a bajar a medida que el entrenamiento envejece, al cabo de unas seis semanas, y " +
+      "otra táctica necesita otra pulsación. El juego muestra los cambios cuando avanza: pulsa Continuar en el juego",
+    atItsBestSkipped: (step, reason) => `Se omitió «${step}»: ${reason}`,
     hint:
       "Las acciones abarcan a todos los jugadores de la lista, también a los cedidos. Se pueden deshacer también " +
       "en Cambios.",

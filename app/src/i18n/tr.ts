@@ -114,6 +114,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (tr.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Bu takımda sakat oyuncu yok.",
+  "team.noCohesion": () =>
+    "Editör bu takımın uyumunu okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da oyuncuların hiçbirinin " +
+    "kulüple uyumu yok.",
+  "team.noTactics": () =>
+    "Editör bu takımın taktiğini ne kadar bildiğini okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da " +
+    "takım senin seçtiğin bir taktiği oynamıyor.",
   "edit.unknownField": (p) => `Burada “${p.field}” adında düzenlenebilir bir alan yok.`,
   "edit.outOfRange": (p) => `${field(p.field)} için ${p.value} geçersiz: ${p.min} ile ${p.max} arasında olmalı.`,
   "edit.notADate": (p) => `${p.value}, ${field(p.field)} için geçerli bir tarih değil.`,
@@ -147,6 +154,12 @@ const errors: ErrorTexts = {
     "Düzenleyici, oyunun bu sürümünde sözleşmeleri nerede tuttuğunu bulamıyor; bu yüzden serbest oyuncuya sözleşme veremiyor.",
   "sign.poolFull": () =>
     "Oyunun başka bir sözleşmeye yeri yok; yer, oyun günler geçtikçe kendi sözleşmelerini yaptıkça açılır. Oyunda bir gün ilerleyip tekrar deneyin.",
+  "arrange.unknown": () => "Düzenleyici, oyunun bu sürümünde transferlerin nerede tutulduğunu bulamıyor.",
+  "arrange.underWay": () => "Oyuncunun anlaşılmış bir transferi ya da henüz yanıtlanmamış bir teklifi var.",
+  "arrange.noMemory": () =>
+    "Düzenleyici bunun için oyunda bellek alamadı: Sistem, oyunun kendi işlevlerini düzenleyici için çalıştırmasına izin vermedi.",
+  "arrange.made": () =>
+    "Oyun bu transferi zaten yaptı ya da ayarlanırken yazılanları değiştirdi: geri alınamaz.",
   "sign.noModel": () =>
     "Kulübün A takımında yeni sözleşmeye örnek alınacak, olağan sözleşmeli bir oyuncu yok.",
   "sign.noDate": () => "Düzenleyici oyun içi tarihi okuyamıyor; yeni sözleşme o tarihte başlar.",
@@ -1460,6 +1473,13 @@ export const tr: Strings = {
     failed: "Güncellemeler denetlenemedi.",
   },
 
+  star: {
+    title: "FMLibreEditor'ı beğendiniz mi?",
+    text: "GitHub'da bir yıldız, daha çok oyuncuya ulaşmasına ve daha hızlı gelişmesine yardımcı olur.",
+    star: "GitHub'da yıldız ver",
+    dismiss: "Kapat",
+  },
+
   edit: {
     unknownNation: "Bilinmeyen ülke",
     unknownCity: "Bilinmeyen şehir",
@@ -1532,6 +1552,7 @@ export const tr: Strings = {
     swappedWith: (name) => `Takas: ${name}`,
     released: (name) => `${name} serbest bırakıldı`,
     fee: (amount) => `Bedel ${amount}`,
+    arranged: (date) => `Oyun transferi ${date} tarihinde yapar`,
     optionRemoved: (amount) => `Satın alma opsiyonu (${amount}) kaldırıldı`,
     healed: (count) => `${format(count)} sakatlık iyileştirildi`,
     lifted: (count) => `${format(count)} ceza kaldırıldı`,
@@ -1826,9 +1847,31 @@ export const tr: Strings = {
     to: "Yeni kulüp",
 
     // The switch at the top of the dialog
-    modeLabel: "Transfer veya takas",
-    modeMove: "Kulübe transfer et",
+    modeLabel: "Transfer, şimdi taşı veya takas",
+    modeMove: "Şimdi taşı",
     modeSwap: "Oyuncuyla takas et",
+    modeArrange: "Transfer",
+    arrangeNote:
+      "Transferi oyun, kendi transferleri gibi oyundaki ertesi gün yapar: oyuncunun geçmişinde bu sezonki maçları " +
+      "eski kulübünde kalır, yeni kulübü bonservis bedeliyle görünür ve bedeli oyun öder.",
+    moveNote:
+      "Düzenleyici oyuncuyu hemen taşır. Oyun bunu geçmişine transfer olarak yazmaz: bu sezon, maçlarıyla birlikte " +
+      "yeni kulübün altında ve bedelsiz görünür.",
+    arrangeUnavailable:
+      "Düzenleyici, oyunun bu sürümünde ya da bu sistemde oyunun yapacağı bir transfer ayarlayamıyor: Şimdi taşı, " +
+      "oyuncuyu hemen taşır.",
+    arrangeChecking: "Transfer kontrol ediliyor… İlk seferde oyunun transferlerini bulmak birkaç saniye sürer.",
+    movesOn: (date) => `Oyun transferi ${date} tarihinde yapar`,
+    arrangeFee: (amount) => `Bonservis bedeli ${amount}, o gün oyun tarafından ödenir`,
+    arrangeContract: (wage, expires) => `Sözleşme: haftalık ${wage}, ${expires} tarihine kadar`,
+    arrangeDoes: [
+      "Şimdi anlaşılır: oyun transferi, oyunda ertesi güne geçilince yapar",
+      "Oyuncunun geçmişinde bu sezonki maçları eski kulübünde kalır, yeni kulübü bonservis bedeliyle görünür",
+      "Bedeli oyun o gün öder, kendi transferlerinde olduğu gibi",
+      "O günden itibaren yeni kulüple sözleşme; maaş ve sözleşme bitişi, yeni değer girilmedikçe aynı kalır",
+      "Değişiklikler'de listelenir; o güne kadar tek bir geri alma transferi iptal eder",
+    ],
+    arrangeButton: "Transferi ayarla",
 
     // Choosing the club
     searchLabel: "Transfer edileceği kulübü ara",
@@ -1983,6 +2026,8 @@ export const tr: Strings = {
 
     // The foot
     hint: "Siz transfer etmeden oyunda hiçbir şey değişmez.",
+    arrangeHint: "Siz Transferi ayarla'ya basmadan oyunda hiçbir şey değişmez.",
+    moveNowHint: "Siz Şimdi taşı'ya basmadan oyunda hiçbir şey değişmez.",
     move: "Transfer et",
     moving: "Transfer ediliyor…",
     cancel: "İptal",
@@ -2220,6 +2265,14 @@ export const tr: Strings = {
     maxAll: "Özellikleri tamamla",
     maxAllTitle:
       "Bu takımdaki her oyuncunun bütün özelliklerini en iyiye çıkar: 20; sakatlık eğilimi ve sertlik için 1",
+    atItsBest: "Takımı en iyi hâline getir",
+    atItsBestTitle:
+      "Tek tıklamayla şunları yapar: “Hepsini iyileştir”, “Hepsine moral ver”, “Hepsini dinlendir”, “Uyumu tamamla” " +
+      "ve “Taktiği tamamla”. Tek bir “Geri al” hepsini geri alır. Özellikler ve cezalar olduğu gibi kalır. " +
+      "Yapılamayan bir adım, örneğin kimse sakat değilken “Hepsini iyileştir”, atlanır ve sonuçta belirtilir. " +
+      "Antrenman eskidikçe, yaklaşık altı hafta sonra taktiğin alanları yeniden düşer; başka bir taktik için yeniden " +
+      "basmak gerekir. Oyun değişiklikleri bir kez ilerleyince gösterir: oyunda Devam'a basın",
+    atItsBestSkipped: (step, reason) => `“${step}” atlandı: ${reason}`,
     hint:
       "İşlemler listedeki her oyuncuyu kapsar, kiralık gönderilenler de dahil. " +
       "Geri alma işlemi Değişiklikler bölümünde de yapılabilir.",

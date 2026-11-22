@@ -102,6 +102,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (id.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Tidak ada yang cedera di tim ini.",
+  "team.noCohesion": () =>
+    "Editor tidak dapat membaca kekompakan tim ini: versi game ini belum diperiksa untuk itu, atau tidak ada " +
+    "pemainnya yang memiliki kekompakan dengan klub.",
+  "team.noTactics": () =>
+    "Editor tidak dapat membaca seberapa baik tim ini memahami taktiknya: versi game ini belum diperiksa untuk itu, " +
+    "atau tim tidak memainkan taktik yang Anda pilih.",
   "edit.unknownField": (p) => `Tidak ada kolom “${p.field}” yang bisa diedit di sini.`,
   "edit.outOfRange": (p) => `${p.value} bukan nilai ${field(p.field)} yang valid: harus dari ${p.min} sampai ${p.max}.`,
   "edit.notADate": (p) => `${p.value} bukan tanggal yang valid untuk ${field(p.field)}.`,
@@ -135,6 +142,13 @@ const errors: ErrorTexts = {
     "Di versi game ini editor tidak bisa menemukan tempat game menyimpan kontrak, jadi tidak bisa memberi kontrak kepada agen bebas.",
   "sign.poolFull": () =>
     "Game tidak punya tempat untuk kontrak lain; tempat akan terbuka saat game membuat kontraknya sendiri seiring berjalannya hari. Lanjutkan satu hari di game lalu coba lagi.",
+  "arrange.unknown": () => "Editor tidak menemukan tempat game menyimpan transfernya di versi game ini.",
+  "arrange.underWay": () => "Pemain sudah punya perpindahan yang disepakati, atau tawaran yang belum dijawab.",
+  "arrange.noMemory": () =>
+    "Editor tidak bisa mengambil memori di game untuk ini: sistem tidak mengizinkannya menjalankan fungsi game " +
+    "sendiri untuknya.",
+  "arrange.made": () =>
+    "Game sudah melakukan transfer ini, atau mengubah apa yang ditulis saat mengaturnya: tidak bisa diurungkan.",
   "sign.noModel": () => "Tim senior klub tidak punya pemain dengan kontrak biasa untuk dijadikan contoh kontrak baru.",
   "sign.noDate": () => "Editor tidak bisa membaca tanggal dalam game; kontrak baru dimulai pada tanggal itu.",
   "move.outOfRange": (p) => `${p.value} bukan nilai ${field(p.field)} yang valid: harus dari ${p.min} sampai ${p.max}.`,
@@ -1424,6 +1438,13 @@ export const id: Strings = {
     failed: "Tidak bisa memeriksa pembaruan.",
   },
 
+  star: {
+    title: "Suka FMLibreEditor?",
+    text: "Bintang di GitHub membantunya menjangkau lebih banyak pemain dan berkembang lebih cepat.",
+    star: "Beri bintang di GitHub",
+    dismiss: "Tidak, terima kasih",
+  },
+
   edit: {
     unknownNation: "Negara tak dikenal",
     unknownCity: "Kota tak dikenal",
@@ -1492,6 +1513,7 @@ export const id: Strings = {
     swappedWith: (name: string) => `Ditukar dengan ${name}`,
     released: (name: string) => `${name} dilepas`,
     fee: (amount: string) => `Biaya ${amount}`,
+    arranged: (date: string) => `Game melakukan perpindahan pada ${date}`,
     optionRemoved: (amount: string) => `Opsi beli (${amount}) dihapus`,
     healed: (count: number) => `${format(count)} cedera disembuhkan`,
     lifted: (count: number) => `${format(count)} larangan bermain dicabut`,
@@ -1766,9 +1788,32 @@ export const id: Strings = {
     from: "Dari",
     to: "Ke",
 
-    modeLabel: "Transfer atau tukar",
-    modeMove: "Transfer ke klub",
+    modeLabel: "Transfer, pindah sekarang, atau tukar",
+    modeMove: "Pindah sekarang",
     modeSwap: "Tukar dengan pemain",
+    modeArrange: "Transfer",
+    arrangeNote:
+      "Game melakukan transfer pada hari berikutnya, seperti transfernya sendiri: riwayat pemain tetap mencatat " +
+      "pertandingan musim ini bersama klub lamanya, mencantumkan klub baru beserta biayanya, dan game yang " +
+      "membayar biayanya.",
+    moveNote:
+      "Editor memindahkannya seketika. Riwayat game tidak mencatatnya: musim ini tampil di bawah klub baru, tanpa " +
+      "biaya.",
+    arrangeUnavailable:
+      "Versi game ini, atau sistem ini, tidak membiarkan editor mengatur transfer untuk dilakukan game: Pindah " +
+      "sekarang memindahkannya seketika.",
+    arrangeChecking: "Memeriksa transfer… untuk pertama kali, mencari transfer game butuh beberapa detik.",
+    movesOn: (date: string) => `Game melakukan perpindahan pada ${date}`,
+    arrangeFee: (amount: string) => `Biaya ${amount}, dibayar game pada hari itu`,
+    arrangeContract: (wage: string, expires: string) => `Kontrak: ${wage} per minggu sampai ${expires}`,
+    arrangeDoes: [
+      "Diatur sekarang: game melakukan perpindahan saat game sampai di hari berikutnya",
+      "Riwayatnya tetap mencatat pertandingan musim ini bersama klub lama dan mencantumkan klub baru beserta biayanya",
+      "Game membayar biayanya pada hari itu, seperti untuk transfernya sendiri",
+      "Kontrak dengan klub baru mulai hari itu; gaji dan akhir kontrak hanya berubah jika kamu mengisi yang baru",
+      "Tercatat di Perubahan, tempat satu kali Urungkan membatalkannya sampai hari itu",
+    ],
+    arrangeButton: "Atur transfer",
 
     searchLabel: "Cari klub tujuan transfer",
     resultsLabel: "Klub yang ditemukan",
@@ -1915,6 +1960,8 @@ export const id: Strings = {
     signing: "Merekrut…",
 
     hint: "Tidak ada yang berubah di game sampai kamu menekan Transfer.",
+    arrangeHint: "Tidak ada yang berubah di game sampai kamu menekan Atur transfer.",
+    moveNowHint: "Tidak ada yang berubah di game sampai kamu menekan Pindah sekarang.",
     move: "Transfer",
     moving: "Mentransfer…",
     cancel: "Batal",
@@ -2147,6 +2194,15 @@ export const id: Strings = {
     maxAll: "Maksimalkan atribut",
     maxAllTitle:
       "Atur setiap atribut setiap pemain di tim ini ke nilai terbaiknya: 20, dan 1 untuk kerentanan cedera dan kekasaran",
+    atItsBest: "Tim dalam kondisi prima",
+    atItsBestTitle:
+      "“Sembuhkan semua”, “Inspirasi semua”, “Segarkan semua”, “Kekompakan maksimal”, dan “Maksimalkan taktik” " +
+      "sekaligus dalam satu tekan, dan satu “Urungkan” membatalkan semuanya. Atribut dan larangan bermain tetap " +
+      "seperti semula. Langkah yang tidak bisa dijalankan, misalnya “Sembuhkan semua” saat tidak ada yang cedera, " +
+      "dilewati, dan hasilnya menyebutkannya. Area taktik akan turun lagi seiring latihan menua, setelah sekitar " +
+      "enam minggu, dan taktik lain perlu ditekan sekali lagi. Game menampilkan perubahan setelah waktu berjalan: " +
+      "tekan Lanjutkan di game",
+    atItsBestSkipped: (step, reason) => `“${step}” dilewati: ${reason}`,
     hint: "Tindakan ini mencakup setiap pemain di daftar, termasuk yang sedang dipinjamkan. Urungkan juga ada di tampilan Perubahan.",
 
     freezeLabel: "Bekukan seluruh tim",

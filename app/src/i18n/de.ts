@@ -249,6 +249,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (de.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Niemand in dieser Mannschaft ist verletzt.",
+  "team.noCohesion": () =>
+    "Der Editor kann das Teambuilding dieser Mannschaft nicht lesen: Diese Version des Spiels wurde dafür nicht " +
+    "geprüft, oder keiner ihrer Spieler hat einen Eintrag für den Verein.",
+  "team.noTactics": () =>
+    "Der Editor kann nicht lesen, wie gut diese Mannschaft ihre Taktik kennt: Diese Version des Spiels wurde dafür " +
+    "nicht geprüft, oder die Mannschaft spielt keine Taktik, die Sie wählen.",
   "guard.unknownBuild": () =>
     "FMLibreEditor wurde mit dieser Version des Spiels nicht geprüft und schreibt daher nicht hinein. „Trotzdem " +
     "bearbeiten“ im Hinweis oben schaltet das Bearbeiten ein.",
@@ -298,6 +305,14 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "Das Spiel hat keinen Platz für einen weiteren Vertrag, bis es selbst einen anlegt, wie es im Lauf der Tage " +
     "geschieht: Fahren Sie im Spiel einen Tag fort und versuchen Sie es dann erneut.",
+  "arrange.unknown": () => "Der Editor findet in dieser Spielversion nicht, wo das Spiel seine Transfers ablegt.",
+  "arrange.underWay": () => "Für den Spieler ist bereits ein Wechsel vereinbart, oder ein Angebot ist noch nicht beantwortet.",
+  "arrange.noMemory": () =>
+    "Der Editor konnte dafür keinen Speicher im Spiel belegen: das System hat nicht erlaubt, dass er die eigenen " +
+    "Funktionen des Spiels für ihn ausführt.",
+  "arrange.made": () =>
+    "Das Spiel hat diesen Transfer bereits ausgeführt oder geändert, was das Vereinbaren geschrieben hat: Er lässt " +
+    "sich nicht rückgängig machen.",
   "sign.noModel": () =>
     "Der Verein hat in seiner 1. Mannschaft keinen Spieler mit einem gewöhnlichen Vertrag, nach dessen Vorbild der " +
     "neue Vertrag entstehen könnte.",
@@ -1577,6 +1592,13 @@ export const de: Strings = {
     failed: "Die Suche nach Updates ist fehlgeschlagen.",
   },
 
+  star: {
+    title: "Gefällt Ihnen FMLibreEditor?",
+    text: "Ein Stern auf GitHub hilft, mehr Spieler zu erreichen und schneller voranzukommen.",
+    star: "Stern auf GitHub geben",
+    dismiss: "Nein, danke",
+  },
+
   edit: {
     unknownNation: "Unbekanntes Land",
     unknownCity: "Unbekannte Stadt",
@@ -1647,6 +1669,7 @@ export const de: Strings = {
     swappedWith: (name) => `Getauscht gegen ${name}`,
     released: (name) => `Vertrag von ${name} aufgelöst`,
     fee: (amount) => `Ablöse ${amount}`,
+    arranged: (date) => `Das Spiel führt den Wechsel am ${date} aus`,
     optionRemoved: (amount) => `Kaufoption (${amount}) entfernt`,
     healed: (count) => (count === 1 ? "1 Verletzung geheilt" : `${format(count)} Verletzungen geheilt`),
     lifted: (count) => (count === 1 ? "1 Sperre aufgehoben" : `${format(count)} Sperren aufgehoben`),
@@ -1945,9 +1968,32 @@ export const de: Strings = {
     from: "Von",
     to: "Zu",
 
-    modeLabel: "Transfer oder Tausch",
-    modeMove: "Zu einem Verein transferieren",
+    modeLabel: "Transfer, jetzt verschieben oder Tausch",
+    modeMove: "Jetzt verschieben",
     modeSwap: "Gegen einen Spieler tauschen",
+    modeArrange: "Transfer",
+    arrangeNote:
+      "Das Spiel führt den Transfer an seinem nächsten Tag aus, wie bei seinen eigenen: Die Historie des Spielers " +
+      "behält die Spiele dieser Saison beim alten Verein, führt den neuen Verein mit der Ablöse auf, und das Spiel " +
+      "zahlt die Ablöse.",
+    moveNote:
+      "Der Editor verschiebt den Spieler sofort. In der Historie des Spiels erscheint das nicht: Diese Saison steht " +
+      "beim neuen Verein, ohne Ablöse.",
+    arrangeUnavailable:
+      "Diese Spielversion oder dieses System erlaubt dem Editor nicht, einen Transfer für das Spiel anzulegen: " +
+      "Jetzt verschieben verschiebt den Spieler sofort.",
+    arrangeChecking: "Transfer wird geprüft… beim ersten Mal dauert es einige Sekunden, die Transfers des Spiels zu finden.",
+    movesOn: (date) => `Das Spiel führt den Wechsel am ${date} aus`,
+    arrangeFee: (amount) => `Ablöse ${amount}, am Tag vom Spiel bezahlt`,
+    arrangeContract: (wage, expires) => `Vertrag: ${wage} pro Woche bis ${expires}`,
+    arrangeDoes: [
+      "Jetzt vereinbart: Das Spiel führt den Wechsel aus, sobald es seinen nächsten Tag erreicht",
+      "Die Historie behält die Spiele dieser Saison beim alten Verein und führt den neuen Verein mit der Ablöse auf",
+      "Das Spiel zahlt die Ablöse an diesem Tag, wie bei seinen eigenen Transfers",
+      "Vertrag beim neuen Verein ab diesem Tag; Gehalt und Vertragsende ändern sich nur, wenn Sie neue festlegen",
+      "Unter Änderungen aufgeführt; ein Rückgängig nimmt den Transfer bis zu diesem Tag zurück",
+    ],
+    arrangeButton: "Transfer vereinbaren",
 
     // Die Wahl des Vereins
     searchLabel: "Verein suchen, zu dem der Spieler wechselt",
@@ -2114,6 +2160,8 @@ export const de: Strings = {
 
     // Die Fußzeile
     hint: "Im Spiel ändert sich nichts, bis Sie auf Transferieren klicken.",
+    arrangeHint: "Im Spiel ändert sich nichts, bis Sie auf Transfer vereinbaren klicken.",
+    moveNowHint: "Im Spiel ändert sich nichts, bis Sie auf Jetzt verschieben klicken.",
     move: "Transferieren",
     moving: "Wird transferiert…",
     cancel: "Abbrechen",
@@ -2370,6 +2418,15 @@ export const de: Strings = {
     maxAllTitle:
       "Setzt jedes Attribut jedes Spielers dieser Mannschaft auf den besten Wert: 20, und 1 für " +
       "Verletzungsanfälligkeit und Unsportlichkeit",
+    atItsBest: "Mannschaft in Bestform",
+    atItsBestTitle:
+      "„Alle heilen“, „Alle motivieren“, „Alle regenerieren“, „Teambuilding maximieren“ und „Taktik maximieren“ mit " +
+      "einem Klick, den ein einziges „Rückgängig“ zurücknimmt. Attribute und Sperren bleiben, wie sie sind. Ein " +
+      "Schritt, der nicht ausgeführt werden kann, etwa „Alle heilen“, wenn niemand verletzt ist, wird übersprungen, " +
+      "und das Ergebnis nennt ihn. Die Bereiche der Taktik sinken wieder, wenn das Training altert, nach etwa sechs " +
+      "Wochen, und eine andere Taktik braucht einen weiteren Klick. Das Spiel zeigt die Änderungen, sobald es " +
+      "weiterläuft: Klicken Sie im Spiel auf Fortfahren",
+    atItsBestSkipped: (step, reason) => `„${step}“ übersprungen: ${reason}`,
     hint:
       "Die Aktionen betreffen jeden Spieler der Liste, auch die verliehenen. Rückgängig machen lässt sich auch in der " +
       "Ansicht Änderungen.",

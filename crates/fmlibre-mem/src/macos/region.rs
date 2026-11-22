@@ -43,9 +43,18 @@ impl Region {
         self.file_backed || self.submap
     }
 
-    /// Memory the process allocated for itself (heaps): no file backs it and no other process shares it.
+    /// Memory the process allocated for itself (heaps): no file backs it and no other process shares it. A region
+    /// malloc or the editor took counts as the process's own whatever sharing the kernel reports: once a region has
+    /// been split, as a write of whole pages splits it (see `process.rs`), the kernel reports its pieces as shared.
     pub fn is_private(&self) -> bool {
-        !self.is_image() && ![SM_SHARED, SM_TRUESHARED, SM_SHARED_ALIASED].contains(&self.share_mode)
+        !self.is_image()
+            && (self.is_heap() || ![SM_SHARED, SM_TRUESHARED, SM_SHARED_ALIASED].contains(&self.share_mode))
+    }
+
+    /// Whether malloc mapped the region for the process (`VM_MEMORY_MALLOC` and its kinds), or the editor did.
+    fn is_heap(&self) -> bool {
+        const MALLOC: [u32; 10] = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12];
+        MALLOC.contains(&self.user_tag) || self.user_tag == super::process::EDITOR_MEMORY_TAG as u32
     }
 
     /// Whether the editor may write here: heap data, writable and not executable.

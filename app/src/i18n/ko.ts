@@ -247,6 +247,9 @@ const TRAIT_NAMES_KO: readonly string[] = [
 ];
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "이 팀에는 부상 선수가 없습니다.",
+  "team.noCohesion": () => "이 팀의 결속력을 읽을 수 없습니다. 이 게임 버전에서 아직 확인되지 않았거나, 구단에 대한 결속력 항목이 있는 선수가 없습니다.",
+  "team.noTactics": () => "이 팀이 전술을 얼마나 익혔는지 읽을 수 없습니다. 이 게임 버전에서 아직 확인되지 않았거나, 팀이 직접 고른 전술을 쓰지 않습니다.",
   "guard.unknownBuild": () =>
     "FMLibreEditor는 이 게임 버전에서 아직 확인되지 않아 게임에 쓰지 않습니다. 위쪽 알림의 '그래도 편집'을 누르면 " +
     "편집할 수 있습니다.",
@@ -290,6 +293,12 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "게임이 스스로 새 계약 자리를 만들기 전까지는 계약을 더 넣을 자리가 없습니다. 게임에서 하루 진행한 뒤 다시 " +
     "시도하세요.",
+  "arrange.unknown": () => "이 게임 버전에서 게임이 이적 정보를 어디에 보관하는지 에디터가 찾지 못했습니다.",
+  "arrange.underWay": () => "선수에게 이미 합의된 이동이 있거나, 아직 응답하지 않은 제안이 있습니다.",
+  "arrange.noMemory": () =>
+    "에디터가 이를 위한 게임 메모리를 확보하지 못했습니다. 시스템이 게임 자체의 함수를 대신 실행하도록 허용하지 " +
+    "않았습니다.",
+  "arrange.made": () => "게임이 이미 이 이적을 진행했거나 예약 시 기록한 내용을 바꿔서 되돌릴 수 없습니다.",
   "sign.noModel": () => "이 구단 1군에는 새 계약의 본보기로 삼을 일반 계약 선수가 없습니다.",
   "sign.noDate": () => "새 계약의 시작일이 되는 게임 내 날짜를 에디터가 읽지 못했습니다.",
   "move.outOfRange": (p) =>
@@ -1481,6 +1490,13 @@ export const ko: Strings = {
     failed: "업데이트를 확인할 수 없습니다.",
   },
 
+  star: {
+    title: "FMLibreEditor가 마음에 드시나요?",
+    text: "GitHub 스타는 더 많은 플레이어에게 알려지고 더 빠르게 발전하는 데 도움이 됩니다.",
+    star: "GitHub에서 스타 주기",
+    dismiss: "닫기",
+  },
+
   edit: {
     unknownNation: "알 수 없는 국가",
     unknownCity: "알 수 없는 도시",
@@ -1551,6 +1567,7 @@ export const ko: Strings = {
     swappedWith: (name) => `${name}와(과) 맞교환`,
     released: (name) => `${name} 방출됨`,
     fee: (amount) => `이적료 ${amount}`,
+    arranged: (date) => `게임이 ${date}에 이동을 진행합니다`,
     optionRemoved: (amount) => `완전 영입 옵션(${amount}) 제거됨`,
     healed: (count) => `부상 ${format(count)}건 치료`,
     lifted: (count) => `출장 정지 ${format(count)}건 해제`,
@@ -1826,9 +1843,31 @@ export const ko: Strings = {
     from: "출발",
     to: "도착",
 
-    modeLabel: "이적 또는 맞교환",
-    modeMove: "구단으로 이적",
+    modeLabel: "이적, 바로 이동 또는 맞교환",
+    modeMove: "바로 이동",
     modeSwap: "선수와 맞교환",
+    modeArrange: "이적",
+    arrangeNote:
+      "게임이 자체 이적과 똑같이 다음 날 이적을 진행합니다. 선수 이력에는 이번 시즌 경기가 이전 구단 소속으로 남고, " +
+      "새 구단이 이적료와 함께 기록되며, 이적료는 게임이 지불합니다.",
+    moveNote:
+      "에디터가 선수를 즉시 이동시킵니다. 게임의 이력에는 기록되지 않습니다. 이번 시즌은 새 구단 소속으로 표시되고 " +
+      "이적료는 없습니다.",
+    arrangeUnavailable:
+      "이 게임 버전이나 이 시스템에서는 에디터가 게임이 진행할 이적을 예약할 수 없습니다. '바로 이동'은 선수를 " +
+      "즉시 이동시킵니다.",
+    arrangeChecking: "이적을 확인하는 중… 처음에는 게임의 이적 정보를 찾는 데 몇 초 걸립니다.",
+    movesOn: (date) => `게임이 ${date}에 이동을 진행합니다`,
+    arrangeFee: (amount) => `이적료 ${amount}, 당일 게임이 지불`,
+    arrangeContract: (wage, expires) => `계약: 주급 ${wage}, ${expires}까지`,
+    arrangeDoes: [
+      "지금 예약됩니다. 게임 안에서 다음 날이 되면 게임이 이동을 진행합니다",
+      "이력에는 이번 시즌 경기가 이전 구단 소속으로 남고, 새 구단이 이적료와 함께 기록됩니다",
+      "이적료는 게임 자체 이적과 마찬가지로 당일 게임이 지불합니다",
+      "그날부터 새 구단과 계약합니다. 주급과 계약 종료일은 새 값을 입력하지 않으면 그대로입니다",
+      "변경 내역에 기록되며, 당일까지는 되돌리기 한 번으로 취소할 수 있습니다",
+    ],
+    arrangeButton: "이적 예약",
 
     // Choosing the club
     searchLabel: "이적할 구단 검색",
@@ -1979,6 +2018,8 @@ export const ko: Strings = {
 
     // The foot
     hint: "'이적'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
+    arrangeHint: "'이적 예약'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
+    moveNowHint: "'바로 이동'을 누르기 전까지 게임은 아무것도 바뀌지 않습니다.",
     move: "이적",
     moving: "이적시키는 중…",
     cancel: "취소",
@@ -2213,6 +2254,12 @@ export const ko: Strings = {
     refreshAllTitle: "이 팀 모든 선수의 컨디션과 경기력을 100%로 설정하고 완전히 쉬게 합니다(피로도 -500)",
     maxAll: "능력치 최대",
     maxAllTitle: "이 팀 모든 선수의 모든 능력치를 최고로 만듭니다. 20으로, 부상 빈도와 더티 플레이는 1로 설정합니다",
+    atItsBest: "팀 최상 상태",
+    atItsBestTitle:
+      "'모두 치료', '모두 사기 진작', '모두 회복', '결속력 최대', '전술 최대'를 한 번에 실행하며, '되돌리기' 한 번으로 모두 취소할 수 있습니다. 능력치와 출장 정지는 그대로입니다. " +
+      "실행할 수 없는 단계(부상 선수가 없을 때의 '모두 치료' 등)는 건너뛰고 결과에 그 사실을 표시합니다. 전술 영역은 훈련이 오래되면 약 6주 뒤부터 다시 떨어지며, 다른 전술로 바꾸면 다시 " +
+      "눌러야 합니다. 게임이 진행된 뒤 화면에 반영됩니다. 게임에서 '진행하기'를 누르세요",
+    atItsBestSkipped: (step, reason) => `'${step}' 건너뜀: ${reason}`,
     hint: "작업은 목록의 모든 선수에게 적용되며, 임대를 떠난 선수도 포함됩니다. 변경 내역 화면에서도 되돌릴 수 있습니다.",
 
     // Freezing the whole team

@@ -25,6 +25,7 @@ import type {
   SquadPlayer,
   TeamAction,
   TeamFreeze,
+  TeamReport,
   FreezeKind,
   ClubDetails,
   ClubFilter,
@@ -77,6 +78,7 @@ import type {
   MassOperationKind,
   MassPreview,
   MassReport,
+  ArrangedPreview,
   ClubName,
   MovePreview,
   OpportunityRequest,
@@ -2269,6 +2271,24 @@ function roomMakers(clubUid: number): RoomMaker[] {
 }
 
 /**
+ * Refuses moving any of the players `uids` while a transfer arranged for him waits for its day, as the app does: the
+ * game makes it from the club he is at.
+ */
+function refuseWhileArranged(...uids: (number | undefined)[]) {
+  const waiting = changes.some(
+    (change) =>
+      change.entity === "player" &&
+      uids.includes(change.uid) &&
+      change.moved?.arranged !== undefined &&
+      change.undoneAt === null &&
+      numberFromDate(GAME_DATE) < change.moved.arranged,
+  );
+  if (waiting) {
+    throw failure("arrange.underWay", "the player already has a move agreed, or an offer not yet answered");
+  }
+}
+
+/**
  * `plan_club_move`: the checks of the real command that the fixtures can have, with its messages. With `release`,
  * that player of the club makes room: he must be one `room_makers` lists.
  */
@@ -2278,6 +2298,7 @@ function planMove(uid: number, clubUid: number, terms: MoveTerms, fee?: number, 
   if (!player) {
     throw notFound("player", uid);
   }
+  refuseWhileArranged(uid, release);
   if (!to) {
     throw notFound("club", clubUid);
   }
@@ -2476,6 +2497,72 @@ function movePlayer(uid: number, clubUid: number, terms: MoveTerms, fee?: number
   return { ...logged };
 }
 
+/**
+ * `plan_arranged_transfer`: the checks of a move that the fixtures can have (the terms, the clubs' kinds), and what the
+ * game would make on its next day: the contract is the terms given, or the player's own.
+ */
+function planArranged(uid: number, clubUid: number, terms: MoveTerms, fee?: number): ArrangedPreview {
+  const player = players.find((p) => p.uid === uid);
+  if (!player) {
+    throw notFound("player", uid);
+  }
+  if (player.clubUid === null) {
+    throw failure("move.freeAgent", "the player is a free agent, with no club to leave or swap");
+  }
+  const moved = planMove(uid, clubUid, terms, fee);
+  // His own contract, copied: the terms given change it.
+  const own = currentValues("player", uid);
+  const seasonEnds = GAME_DATE.month <= 6 ? GAME_DATE.year : GAME_DATE.year + 1;
+  return {
+    from: moved.from!,
+    to: moved.to,
+    fee: fee ?? 0,
+    moveDay: numberFromDate(addDays(GAME_DATE, 1)),
+    contract: {
+      wage: terms.wage ?? own["contract.wage"] ?? 0,
+      expires: terms.expires ?? own["contract.expires"] ?? (seasonEnds + 1) * 10_000 + 630,
+      squadStatus: own["contract.squad_status"] ?? 4,
+    },
+  };
+}
+
+/**
+ * `arrange_transfer`: logs the transfer as a change of the player's `club`, as a move is logged, but leaves him where
+ * he is: the game moves him on its next day.
+ */
+function arrangePlayer(uid: number, clubUid: number, terms: MoveTerms, fee?: number): LoggedChange {
+  const preview = planArranged(uid, clubUid, terms, fee);
+  const player = players.find((p) => p.uid === uid)!;
+  const id = changes.length + 1;
+  moveUndo.set(id, {
+    row: { club: player.club, clubUid: player.clubUid, contractExpires: player.contractExpires },
+    written: written.get(`player:${uid}`),
+    paid: [],
+  });
+  const logged: LoggedChange = {
+    id,
+    at: Date.now(),
+    name: player.name,
+    entity: "player",
+    uid,
+    field: "club",
+    old: preview.from.uid,
+    new: preview.to.uid,
+    undoneAt: null,
+    earlier: false,
+    undoable: true,
+    batch: null,
+    moved: {
+      from: preview.from.name,
+      to: preview.to.name,
+      ...(preview.fee > 0 && { fee: preview.fee }),
+      arranged: preview.moveDay,
+    },
+  };
+  changes.push(logged);
+  return { ...logged };
+}
+
 /** `plan_release`: the checks of the real command that the fixtures can have, with its messages; names his club. */
 function planRelease(uid: number): ClubName {
   const player = players.find((p) => p.uid === uid);
@@ -2485,6 +2572,7 @@ function planRelease(uid: number): ClubName {
   if (player.clubUid === null) {
     throw failure("move.freeAgent", "the player is a free agent, with no club to leave or swap");
   }
+  refuseWhileArranged(uid);
   const from = clubs.find((c) => c.uid === player.clubUid)!;
   return { uid: from.uid, name: from.name };
 }
@@ -2536,6 +2624,7 @@ function planSwap(uid: number, otherUid: number): ClubToClub {
   if (player.clubUid === other.clubUid) {
     throw failure("move.sameClub", "the player is at this club already");
   }
+  refuseWhileArranged(uid, otherUid);
   const from = clubs.find((c) => c.uid === player.clubUid)!;
   const to = clubs.find((c) => c.uid === other.clubUid)!;
   return { from: { uid: from.uid, name: from.name }, to: { uid: to.uid, name: to.name } };
@@ -2863,8 +2952,24 @@ function undoCaptain(entry: LoggedChange): void {
 }
 
 /** `team_action`: the action on every player of the fixture team, logged as one batch like a mass edit. */
-function teamAction(clubUid: number, index: number, action: TeamAction): MassReport {
-  return actOnPlayers(fixtureTeam(clubUid, index).players, action);
+function teamAction(clubUid: number, index: number, action: TeamAction): TeamReport {
+  const players = fixtureTeam(clubUid, index).players;
+  if (action !== "atItsBest") {
+    return { ...actOnPlayers(players, action), skipped: [] };
+  }
+  // Team at its best: each step under one batch, the steps that cannot run left out and named.
+  const batch = nextMassId++;
+  const report: TeamReport = { batch, applied: 0, failed: [], skipped: [] };
+  for (const step of ["heal", "inspire", "refresh", "maxCohesion", "maxTactics"] as const) {
+    if (step === "heal" && !players.some((player) => player.injuries > 0)) {
+      report.skipped.push({ action: step, reason: failure("team.nobodyInjured", "nobody in the team is injured") });
+      continue;
+    }
+    const done = actOnPlayers(players, step, batch);
+    report.applied += done.applied;
+    report.failed.push(...done.failed);
+  }
+  return report;
 }
 
 /** `national_team_action`: Heal all, Inspire all or Refresh all for the players the senior team lists. */
@@ -2876,9 +2981,8 @@ function nationalTeamAction(uid: number, action: TeamAction): MassReport {
 }
 
 /** The action on every one of `players`, logged as one batch like a mass edit. */
-function actOnPlayers(players: readonly SquadPlayer[], action: TeamAction): MassReport {
+function actOnPlayers(players: readonly SquadPlayer[], action: TeamAction, batch = nextMassId++): MassReport {
   const team = { players };
-  const batch = nextMassId++;
   const report: MassReport = { batch, applied: 0, failed: [] };
   if (action === "heal") {
     for (const player of team.players.filter((p) => p.injuries > 0)) {
@@ -3801,6 +3905,7 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
         knownBuild: !unknownBuild,
         // The fixtures know who is a woman, as a layout that places the gender flags does.
         genderKnown: true,
+        arrangesTransfers: true,
         health: mockHealth(),
       };
       mockConnection = info;
@@ -4108,6 +4213,14 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
     case "plan_club_move": {
       const terms = (args?.terms ?? {}) as MoveTerms;
       return planMove(Number(args?.uid), Number(args?.club), terms, args?.fee as number, args?.release as number) as T;
+    }
+    case "plan_arranged_transfer": {
+      const terms = (args?.terms ?? {}) as MoveTerms;
+      return planArranged(Number(args?.uid), Number(args?.club), terms, args?.fee as number) as T;
+    }
+    case "arrange_transfer": {
+      const terms = (args?.terms ?? {}) as MoveTerms;
+      return arrangePlayer(Number(args?.uid), Number(args?.club), terms, args?.fee as number) as T;
     }
     case "move_player": {
       const terms = (args?.terms ?? {}) as MoveTerms;

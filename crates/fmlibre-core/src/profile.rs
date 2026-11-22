@@ -80,6 +80,71 @@ pub struct Layout {
     /// The nations' national teams (see `national.rs`); only in the layouts they have been checked in.
     #[serde(default)]
     pub national: Option<NationalLayout>,
+    /// The game's transfers and a move agreed for a later day (see `arranged.rs`); only in the layouts they have been
+    /// checked in.
+    #[serde(default)]
+    pub transfers: Option<TransfersLayout>,
+}
+
+/// How the game keeps its transfers and a move agreed for a later day (see `arranged.rs` and
+/// docs/recon/fm27-transfers.md): the transfer manager, found by its class, holds the list of offers and the list of
+/// the moves due on a day; an agreed offer names the player and the clubs, the fee and the day of the move; the contract
+/// he is to have is held by an entry that the player's record of entries lists, as his record of offers lists the
+/// offer's number.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TransfersLayout {
+    /// The transfer manager's class, as written in C++, and in it: its list of offers, its list of the moves due on a
+    /// day, and the flag it raises while one is due.
+    pub manager_class: String,
+    pub offers: u64,
+    pub due: u64,
+    pub due_flag: u64,
+    /// An offer's class and size, and its fields.
+    pub offer_class: String,
+    pub offer_size: u64,
+    pub offer_one: u64,
+    pub offer_flags: u64,
+    pub offer_person: u64,
+    pub offer_buyer: u64,
+    pub offer_buyer_again: u64,
+    pub offer_seller: u64,
+    pub offer_fee: u64,
+    pub offer_number: u64,
+    pub offer_count: u64,
+    pub offer_unset: Vec<u64>,
+    pub offer_accepted: u64,
+    pub offer_moved: u64,
+    pub offer_made: u64,
+    pub offer_lapses: u64,
+    pub offer_move_day: u64,
+    pub offer_later: u64,
+    pub offer_state: u64,
+    /// u8: the kind of the transfer: 2 one with a fee (the kind its entry has too), 8 a free move at the end of a
+    /// contract (entries of kind 7), 1 most loans.
+    pub offer_kind: u64,
+    pub offer_payment: u64,
+    /// An entry of a contract not yet in force: its size and fields.
+    pub entry_size: u64,
+    pub entry_one: u64,
+    pub entry_contract: u64,
+    pub entry_number: u64,
+    pub entry_no_amount: u64,
+    pub entry_date: u64,
+    pub entry_state: u64,
+    pub entry_one_again: u64,
+    pub entry_agreed: u64,
+    pub entry_kind: u64,
+    /// A move due on a day: its size, and where it keeps the person block, the day and the offer's number.
+    pub due_size: u64,
+    pub due_person: u64,
+    pub due_day: u64,
+    pub due_number: u64,
+    /// In a player (shifted like the person block): pointers to his record of offers' numbers and to his record of
+    /// entries; and how large a record is.
+    pub player_offer_numbers: u64,
+    pub player_entries: u64,
+    pub record_size: u64,
 }
 
 /// How the game keeps a nation's national teams (see `national.rs`): each nation has two containers, one for its men's
@@ -1226,6 +1291,12 @@ fn parse<T: serde::de::DeserializeOwned>(text: &str) -> T {
     toml::from_str(text).expect("built-in profiles are checked by the unit tests")
 }
 
+/// The Windows object layout, as written, for the unit tests of other modules.
+#[cfg(test)]
+pub(crate) fn windows_layout() -> Layout {
+    parse(include_str!("../../../profiles/fm27/layout.toml"))
+}
+
 /// What `fmlibre-probe profile` writes in comments around the values of a build profile.
 #[derive(Debug, Clone, Default)]
 pub struct ProfileNotes {
@@ -1371,6 +1442,23 @@ mod tests {
         // The tables of names are reached and laid out alike.
         assert!(windows.names.is_some());
         assert_eq!(mac.names, windows.names);
+
+        // The transfers are laid out alike, but for the player's records, which sit in the person, 0x40 earlier as
+        // his other fields there, and which take 24 bytes on the Mac.
+        let (w, m) = (windows.transfers.as_ref().expect("transfers"), mac.transfers.as_ref().expect("transfers"));
+        assert_eq!(
+            (m.player_offer_numbers, m.player_entries),
+            (w.player_offer_numbers - 0x40, w.player_entries - 0x40)
+        );
+        assert!(m.player_offer_numbers >= mac.player.person_block);
+        assert_eq!((w.record_size, m.record_size), (0x28, 0x18));
+        let shared = |t: &TransfersLayout| TransfersLayout {
+            player_offer_numbers: 0,
+            player_entries: 0,
+            record_size: 0,
+            ..t.clone()
+        };
+        assert_eq!(shared(m), shared(w));
 
         // The records the people point at are laid out alike. The kind of contract is left out of a layout until it
         // has been read on that system; where both have it, it sits at the same place.

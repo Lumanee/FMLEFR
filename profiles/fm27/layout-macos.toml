@@ -555,3 +555,56 @@ container_nation = 0x170      # pointer back to its nation, at all 502
 nation_code = 0x28            # an FM string: "ITA"
 nation_men = 0x110
 nation_women = 0x118
+
+# The game's transfers, and a move agreed for a later day, laid out as on Windows (see layout.toml and
+# crates/fmlibre-core/src/arranged.rs) but for the player's records, which sit in the person, 0x40 earlier as his other
+# fields there, and the records themselves, which take 24 bytes. Read on Steam build 26620374, Apple silicon, on the
+# Arsenal save of 16 July 2027: one TRANSFER_MANAGER, its 8,411 offers (FULL_TRANSFER_OFFER, 0xD0 bytes) and its 29
+# moves due, each the player's person block, the day and the offer's number, as each of the 29 players' entries and
+# offers say. Gonzalo Tapia's due on 17 July: offer 1,873 agreed (19), his entry of it waiting (2) with the contract he
+# is to have, and his records at +0x2E0 (1,873) and +0x2E8 (the entry). Of 40,369 players, 4,598 have both records,
+# mostly 24 bytes apart in the game's blocks of 24, and 2,716 only one. The offer's kind (+0x86): every entry of a
+# transfer with a fee (kind 2) names an offer of kind 2, every free move at the end of a contract (kind 7) one of kind 8.
+[transfers]
+manager_class = "TRANSFER_MANAGER"
+offers = 0x20
+due = 0x50
+due_flag = 0x68
+offer_class = "FULL_TRANSFER_OFFER"
+offer_size = 0xD0
+offer_one = 0x08
+offer_flags = 0x30
+offer_person = 0x38
+offer_buyer = 0x40
+offer_buyer_again = 0x48
+offer_seller = 0x50
+offer_fee = 0x58
+offer_number = 0x5C
+offer_count = 0x60
+offer_unset = [0x64, 0x68]
+offer_accepted = 0x6C
+offer_moved = 0x70
+offer_made = 0x74
+offer_lapses = 0x78
+offer_move_day = 0x7C
+offer_later = 0x80
+offer_state = 0x8D
+offer_kind = 0x86
+offer_payment = 0xA8
+entry_size = 0x48
+entry_one = 0x00
+entry_contract = 0x10
+entry_number = 0x28
+entry_no_amount = 0x2C
+entry_date = 0x38
+entry_state = 0x3E
+entry_one_again = 0x3F
+entry_agreed = 0x40
+entry_kind = 0x41
+due_size = 0x10
+due_person = 0x00
+due_day = 0x08
+due_number = 0x0C
+player_offer_numbers = 0x2E0 # 0x320 on Windows
+player_entries = 0x2E8       # 0x328 on Windows
+record_size = 0x18           # (begin, end, capacity), in a block of 24 of the game's; 0x28 on Windows

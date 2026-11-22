@@ -1,9 +1,10 @@
 # FM27: how the game records transfers
 
-Notes towards a transfer with a fee that shows in the game's history. They were read from
-the Mac Steam build, on a save in July 2026 ("Tyrone Demarcus - Arsenal"), with the probe
-(`refs`, `find --as u32`, `holders`, `dump`, `column`). They are a start; nothing is written
-yet.
+Notes towards a transfer with a fee that shows in the game's history. The first sections were
+read from the Mac Steam build, on a save in July 2026 ("Tyrone Demarcus - Arsenal"), with the
+probe (`refs`, `find --as u32`, `holders`, `dump`, `column`). The editor now gets such a
+transfer by having the game make it: see [A transfer the game makes on a later
+day](#a-transfer-the-game-makes-on-a-later-day), read on Windows.
 
 ## A person's internal ID
 
@@ -198,12 +199,90 @@ slots filled, seven were empty, and one held a list whose end came before its be
 taken back; none held a Monza player yet. Adam Bakoune moved out of Monza to Juventus and back, with the probe and
 through the app's dialog: as no copy was the club's, none changed, and every object read as before.
 
+## A transfer the game makes on a later day
+
+Read on Windows, Game Pass 0.9.2524.0, on a West Ham save of October 2026, by watching the game make transfers that
+were agreed for the next day (Marc Guéhi, Erling Haaland and Antoine Semenyo, each between two clubs), comparing memory
+before and after the day each went through, and then by arranging such transfers from the editor (Ebere Eze and Mikel
+Merino from Arsenal to West Ham), which the game made on the day. The offsets are in `profiles/fm27/layout.toml`,
+`[transfers]`; the code is `crates/fmlibre-core/src/arranged.rs`.
+
+**What a move the editor makes leaves out.** The career screen shows each season a player had at a club as a row, with
+the fee he joined for. A move the editor makes at once leaves the season under way as one row, for the new club, with
+what he did at the old one, and no fee. When the game makes a transfer itself, it keeps the old club's row of the
+season with his matches, opens one for the new club with the fee, writes its own records of the move and pays the fee:
+Guéhi's screen showed Man City 2026/27 with his 6 matches and Hull City 2026/27 with €64M.
+
+**Where the shown fee is not.** The transfer manager (`TRANSFER_MANAGER`, found by its class) keeps a list of the
+transfers made, as pointers to records of 0x70 bytes (the buying team, the selling team, the date, the person's id, the
+fee in pounds three times, the manager who made it). The player keeps the fee and the day of his last move at `+0x244`
+and `+0x250`, his last club at `+0x390` and the day he left it at `+0x3A4`. The career screen reads none of these:
+Julian Weigl's fee set to other amounts in all four places, his history shown afresh after the game was started again,
+still read €6M. The screen's rows come from records the game writes as it makes the move, and keeps for the save in its
+archives; the editor leaves them to the game.
+
+**A transfer agreed for a later day** is, as the game keeps one:
+
+| What | Where |
+| --- | --- |
+| An offer (`FULL_TRANSFER_OFFER`, 0xD0 bytes, a slot of the game's pool of them) | in the manager's list of offers (`+0x20`) |
+| The contract the player is to have (`db::FULL_CONTRACT`), from the day of the move | named by the entry below |
+| An entry of 0x48 bytes: the contract, the offer's number, agreed and waiting (state 2) | in the player's record of entries (`+0x328`) |
+| The offer's number | in the player's record of offers' numbers (`+0x320`) |
+| The move due: the player's person block, the day, the offer's number (16 bytes) | in the manager's list of moves due (`+0x50`) |
+| A flag that a move is due | the manager's `+0x68` |
+
+- The offer is agreed (state 19 at `+0x8D`): the player's person block, the buying team twice, the selling team, the
+  fee, its number, the day it was made, the day it lapses (30 days on) and the day of the move. Its other bytes are
+  those of the game's own agreed transfers: of the 103 on the save, 40 had the flags `0x40` and the same bytes from
+  `+0x84` on.
+- Without the move due, the game shows the player as "Transfer arranged" and joining on 1 January 1900, and never makes
+  the move: the day it shows, and the day it acts on, are the move due's.
+- On the day, the game makes the move as its own: the offer becomes made (state 20) with its days set, the contract
+  becomes the player's running one, the move due is let go of and the flag dropped; the player's team, last fee and day,
+  last club and the day he left it are set, records and news written, the fee paid. Eze's screen then showed Arsenal
+  2026/27 with his matches and West Ham 2026/27 with the fee.
+
+**The game's heap.** The game lets go of the move due, and of the manager's lists when it grows them, with the C
+runtime's `free()`: the 8 bytes before such a block are Windows's own heap header (its last byte `0x80` while free,
+`0x88` to `0x94` while in use), and the game process has one heap, the process heap. The game's offers and contracts
+come from its pools; the records of a save are laid out by its loader. The editor takes heap blocks by running the
+runtime's `_strdup` in the game on a thread of its own, with a marker string of the size it needs, and finds the block
+by the marker (see `crates/fmlibre-core/src/heap.rs`); `free` gives one back. Right after a load the manager's lists are
+full (the offers' held 5,178 of 5,178, the moves due 103 of 103), and a list the editor grows goes into such a block,
+half as large again, as the game grows its own.
+
+**The model's kind.** The bytes from `+0x84` on go with the kind of transfer: the offer's `+0x86` is 2 for a transfer
+with a fee, 8 for a free move at the end of a contract and 1 for most loans, as its entry's kind (`+0x41`) is 2, 7 or 1.
+So the model is a transfer with a fee, agreed or made, before an agreed free move, and the editor writes 2 there.
+
+### On the Mac
+
+Read on Steam build 26620374, Apple silicon, on the Arsenal save of 16 July 2027, which the game had just loaded:
+
+- One `TRANSFER_MANAGER`, laid out as on Windows: 8,411 offers at `+0x20` (8,411 of 8,411), the moves due at `+0x50`
+  (29 of 29), the flag at `+0x68`. The offers (`FULL_TRANSFER_OFFER`, 0xD0 bytes), the entries (0x48) and the moves due
+  (16 bytes) are laid out as on Windows: each of the 29 moves due names a player whose entry and offer have its
+  number, agreed (19) and waiting (2), Gonzalo Tapia's for 17 July among them.
+- The player's records sit in the person, 0x40 earlier than on Windows as his other fields there: offers' numbers at
+  `+0x2E0`, entries at `+0x2E8`. A record takes 24 bytes, the (begin, end, capacity) of its list, in a block of 24 of
+  the game's allocator: of 40,369 players, 4,598 have both, 3,833 of those 24 bytes apart.
+- The agreed offers with the flags `0x40` were all free moves at the end of a contract (`+0x86` 8, no fee), which is
+  why the model is chosen by its kind.
+- The game's own allocator serves the moves due, the entries, the records and the lists of up to 4,096 bytes (they sit
+  their class apart in `MALLOC_SMALL` regions, where malloc's blocks are 512 bytes at the least); the list of offers
+  (67,288 bytes) is malloc's, and goes to `free()` when the game grows it. The editor takes its blocks with the
+  system's `strdup` run in the game on a thread of its own (see `crates/fmlibre-mem/src/macos/call.rs`), each up to
+  4,096 bytes as large as the game's class for it, which the game hands out again once it lets the block go.
+
+The probe's `arrange 28108494 1736 --fee 60000000 --restore --hold 25` (Phil Foden from Manchester City to Real
+Madrid) wrote the offer (8,411, agreed, kind 2), the contract, the entry, the move due for 17 July and the flag, grew
+the list of offers into a block of 12,616 and the moves due into one of 43, both malloc's, and took it all back.
+
 ## Still to find
 
-- Where the game keeps the fee it shows in a player's transfer history. The surest way: watch
-  memory while the game makes a transfer itself, before and after the day it goes through.
 - What the amount and the flags of the 48-byte records mean.
-- Who owns the records and the pointer array, and their capacities. Adding a transfer means
-  inserting a record in person order without allocating.
 - Where the transfer events' stream keeps its write position and its room.
-- Where agreed future transfers are kept: the agreed-deal objects above are a start.
+- The records the career screen reads: where the game keeps them while the season runs.
+- Loans and moves without a fee arranged for a later day (entry kinds 1 and 7), and a move from or to a club of a
+  human manager on another day than the next.

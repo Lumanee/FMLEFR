@@ -115,6 +115,11 @@ const checkName = (key: string | undefined) => {
 
 /** The commands' own English is kept where it names no field. */
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Nobody in this team is injured.",
+  "team.noCohesion": () =>
+    "The editor cannot read this team's cohesion: this version of the game has not been checked for it, or none of its players has an entry for the club.",
+  "team.noTactics": () =>
+    "The editor cannot read how well this team knows its tactic: this version of the game has not been checked for it, or the team does not play a tactic you pick.",
   "edit.unknownField": (p) => `There is no editable field “${p.field}” here.`,
   "edit.outOfRange": (p) => `${p.value} is not a valid ${field(p.field)}: it takes ${p.min} to ${p.max}.`,
   "edit.notADate": (p) => `${p.value} is not a date for ${field(p.field)}.`,
@@ -1623,6 +1628,16 @@ export const en = {
     failed: "Could not check for updates.",
   },
 
+  /** Once, after a few starts: the note in the top right corner that asks for a star on GitHub (see `StarRequest`). */
+  star: {
+    title: "Enjoying FMLibreEditor?",
+    text: "A star on GitHub helps it reach more players and grow faster.",
+    /** Opens the project's page on GitHub, where the star is; the note does not come back. */
+    star: "Star on GitHub",
+    /** Puts the note away for good. */
+    dismiss: "No thanks",
+  },
+
   /** Editing a person or a club: the Edit button, the inputs, and the footer under the profile. */
   edit: {
     /** A nation field's value whose name the app has not read: one no one in the lists belongs to. */
@@ -1728,6 +1743,8 @@ export const en = {
     released: (name: string) => `${name} released`,
     /** Under a transfer that had a fee: the amount, written out. */
     fee: (amount: string) => `Fee ${amount}`,
+    /** Under a transfer arranged for the game to make: the day it moves him (and pays the fee). */
+    arranged: (date: string) => `The game makes the move on ${date}`,
     /** Under a recall from loan that took the loan's option to buy away, which its undo writes back. */
     optionRemoved: (amount: string) => `Option to buy (${amount}) taken away`,
     /** What a heal changed, in the place of its values: `count` is how many injuries the player had. */
@@ -2087,11 +2104,43 @@ export const en = {
     from: "From",
     to: "To",
 
-    // The switch at the top of the dialog: a move to a club, or a swap with one of its players.
+    // The switch at the top of the dialog: a transfer the game makes the next day, a move to a club now, or a swap with
+    // one of its players.
     /** Its name for assistive technology. */
-    modeLabel: "Transfer or swap",
-    modeMove: "Transfer to a club",
+    modeLabel: "Transfer, move now or swap",
+    modeArrange: "Transfer",
+    modeMove: "Move now",
     modeSwap: "Swap with a player",
+    /** Under the switch: what each of the first two does, and why Transfer is missing where it is. */
+    arrangeNote:
+      "The game makes the transfer on its next day, as it makes its own: his history keeps this season's matches " +
+      "with his old club, lists the new club with the fee, and the game pays the fee.",
+    moveNote:
+      "The editor moves him at once. The game's history does not list it: this season shows under the new club, " +
+      "with no fee.",
+    arrangeUnavailable:
+      "This version of the game, or this system, does not let the editor arrange a transfer for the game to make: " +
+      "Move now moves him at once.",
+
+    // A transfer the game makes the next day
+    /** While the plan is worked out: the first time, finding the game's transfers takes a few seconds. */
+    arrangeChecking: "Checking the transfer… the first time, finding the game's transfers takes a few seconds.",
+    /** The day the game makes the move, in the plan. */
+    movesOn: (date: string) => `The game makes the move on ${date}`,
+    /** The fee in the plan: the game pays it on the day. */
+    arrangeFee: (amount: string) => `Fee ${amount}, paid by the game on the day`,
+    /** The contract in the plan: the wage per week and the end date, written out. */
+    arrangeContract: (wage: string, expires: string) => `Contract: ${wage} a week, until ${expires}`,
+    /** What arranging the transfer does, one line each, in the place of `does`. */
+    arrangeDoes: [
+      "Agreed now: the game makes the move when it reaches its next day",
+      "His history keeps this season's matches with his old club, and lists the new club with the fee",
+      "The game pays the fee on the day, as it pays for its own transfers",
+      "Contract with the new club from that day; wage and contract end change only if you set new ones",
+      "Listed under Changes, where one undo takes it back until the day",
+    ],
+    /** The button of the foot. */
+    arrangeButton: "Arrange transfer",
 
     // Choosing the club
     /** The name of the search box, and of the list of clubs under it, for assistive technology. */
@@ -2288,6 +2337,9 @@ export const en = {
     // The foot
     /** Nothing changes in the game until Transfer, or Swap. */
     hint: "Nothing changes in the game until you press Transfer.",
+    /** The same for a transfer arranged for the game, and for a player moved now. */
+    arrangeHint: "Nothing changes in the game until you press Arrange transfer.",
+    moveNowHint: "Nothing changes in the game until you press Move now.",
     move: "Transfer",
     moving: "Transferring…",
     cancel: "Cancel",
@@ -2601,6 +2653,14 @@ export const en = {
     maxAll: "Max attributes",
     maxAllTitle:
       "Set every attribute of every player in this team to its best: 20, and 1 for injury proneness and dirtiness",
+    atItsBest: "Team at its best",
+    atItsBestTitle:
+      "Heal all, Inspire all, Refresh all, Max cohesion and Max tactics in one press, which one Undo takes back. " +
+      "Attributes and bans stay as they are. A step that cannot run, such as Heal all while nobody is injured, is " +
+      "skipped, and the result says so. The areas of the tactic fall again as the training ages, after some six weeks, " +
+      "and another tactic needs another press. The game shows the changes once it moves on: press Continue in the game",
+    /** After Team at its best: a step it left out, by the name of its button, and why. */
+    atItsBestSkipped: (step: string, reason: string) => `${step} skipped: ${reason}`,
     /** Beside the buttons: whom they cover, and where undoing is. */
     hint: "The actions cover every player in the list, those out on loan too. Undo is in the Changes view as well.",
 

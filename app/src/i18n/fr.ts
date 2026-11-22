@@ -269,6 +269,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (fr.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Personne n'est blessé dans cette équipe.",
+  "team.noCohesion": () =>
+    "L'éditeur ne peut pas lire la cohésion de cette équipe\u00a0: cette version du jeu n'a pas été vérifiée pour " +
+    "cela, ou aucun de ses joueurs n'a d'entrée pour le club.",
+  "team.noTactics": () =>
+    "L'éditeur ne peut pas lire à quel point cette équipe connaît sa tactique\u00a0: cette version du jeu n'a pas " +
+    "été vérifiée pour cela, ou l'équipe ne joue pas une tactique que vous choisissez.",
   "guard.unknownBuild": () =>
     "FMLibreEditor n'a pas été vérifié avec cette version du jeu\u00a0; il n'y écrit donc pas. «\u00a0Modifier quand " +
     "même\u00a0», dans l'avis en haut, active la modification.",
@@ -322,6 +329,14 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "Le jeu n'a plus de place pour un autre contrat tant qu'il n'en crée pas un lui-même, comme il le fait au fil des " +
     "jours\u00a0: avancez d'un jour dans le jeu, puis réessayez.",
+  "arrange.unknown": () => "L'éditeur ne trouve pas où le jeu garde ses transferts dans cette version du jeu.",
+  "arrange.underWay": () => "Le joueur a déjà un déplacement convenu, ou une offre qui n'a pas encore de réponse.",
+  "arrange.noMemory": () =>
+    "L'éditeur n'a pas pu réserver de mémoire dans le jeu pour cela\u00a0: le système ne l'a pas laissé exécuter pour " +
+    "lui les fonctions propres au jeu.",
+  "arrange.made": () =>
+    "Le jeu a déjà effectué ce transfert, ou a modifié ce que sa préparation avait écrit\u00a0: il ne peut pas être " +
+    "annulé.",
   "sign.noModel": () =>
     "Le club n'a aucun joueur sous simple contrat avec son équipe première sur lequel calquer le nouveau contrat.",
   "sign.noDate": () => "L'éditeur ne parvient pas à lire la date du jeu, à laquelle commence le nouveau contrat.",
@@ -1592,6 +1607,13 @@ export const fr: Strings = {
     failed: "Impossible de rechercher des mises à jour.",
   },
 
+  star: {
+    title: "Vous aimez FMLibreEditor\u00a0?",
+    text: "Une étoile sur GitHub l'aide à toucher plus de joueurs et à progresser plus vite.",
+    star: "Mettre une étoile sur GitHub",
+    dismiss: "Non merci",
+  },
+
   edit: {
     unknownNation: "Pays inconnu",
     unknownCity: "Ville inconnue",
@@ -1662,6 +1684,7 @@ export const fr: Strings = {
     swappedWith: (name) => `Échange avec ${name}`,
     released: (name) => `Libération ${de(name)}`,
     fee: (amount) => `Montant\u00a0: ${amount}`,
+    arranged: (date) => `Le jeu effectue le déplacement le ${date}`,
     optionRemoved: (amount) => `Option d'achat (${amount}) supprimée`,
     healed: (count) => counted(count, "blessure soignée", "blessures soignées"),
     lifted: (count) => counted(count, "suspension levée", "suspensions levées"),
@@ -1958,9 +1981,32 @@ export const fr: Strings = {
     from: "De",
     to: "Vers",
 
-    modeLabel: "Transfert ou échange",
-    modeMove: "Transférer vers un club",
+    modeLabel: "Transfert, déplacer maintenant ou échange",
+    modeMove: "Déplacer maintenant",
     modeSwap: "Échanger avec un joueur",
+    modeArrange: "Transfert",
+    arrangeNote:
+      "Le jeu effectue le transfert à son prochain jour, comme il le fait pour les siens\u00a0: l'historique du " +
+      "joueur garde les matchs de cette saison avec son ancien club, indique le nouveau club avec le montant, et le " +
+      "jeu paie le montant.",
+    moveNote:
+      "L'éditeur le déplace aussitôt. L'historique du jeu ne l'indique pas\u00a0: cette saison apparaît sous le " +
+      "nouveau club, sans montant.",
+    arrangeUnavailable:
+      "Cette version du jeu, ou ce système, ne permet pas à l'éditeur de préparer un transfert que le jeu " +
+      "effectuera\u00a0: Déplacer maintenant le déplace aussitôt.",
+    arrangeChecking: "Vérification du transfert… la première fois, retrouver les transferts du jeu prend quelques secondes.",
+    movesOn: (date) => `Le jeu effectue le déplacement le ${date}`,
+    arrangeFee: (amount) => `Montant\u00a0: ${amount}, payé par le jeu ce jour-là`,
+    arrangeContract: (wage, expires) => `Contrat\u00a0: ${wage} par semaine jusqu'au ${expires}`,
+    arrangeDoes: [
+      "Convenu maintenant\u00a0: le jeu effectue le déplacement quand il arrive à son prochain jour",
+      "Son historique garde les matchs de cette saison avec son ancien club et indique le nouveau club avec le montant",
+      "Le jeu paie le montant ce jour-là, comme pour ses propres transferts",
+      "Contrat avec le nouveau club à partir de ce jour\u00a0; le salaire et la fin du contrat ne changent que si vous en fixez de nouveaux",
+      "Indiqué dans Modifications, où une seule annulation le retire jusqu'à ce jour",
+    ],
+    arrangeButton: "Préparer le transfert",
 
     // Le choix du club
     searchLabel: "Rechercher le club où le transférer",
@@ -2122,6 +2168,8 @@ export const fr: Strings = {
 
     // Le pied de la fenêtre
     hint: "Rien ne change dans le jeu tant que vous n'appuyez pas sur Transférer.",
+    arrangeHint: "Rien ne change dans le jeu tant que vous n'appuyez pas sur Préparer le transfert.",
+    moveNowHint: "Rien ne change dans le jeu tant que vous n'appuyez pas sur Déplacer maintenant.",
     move: "Transférer",
     moving: "Transfert…",
     cancel: "Annuler",
@@ -2381,6 +2429,16 @@ export const fr: Strings = {
     maxAllTitle:
       "Porter chaque attribut de chaque joueur de cette équipe à son meilleur niveau\u00a0: 20, et 1 pour la tendance à " +
       "se blesser et la violence",
+    atItsBest: "Équipe au maximum",
+    atItsBestTitle:
+      "«\u00a0Tout soigner\u00a0», «\u00a0Inspirer l'équipe\u00a0», «\u00a0Tout régénérer\u00a0», «\u00a0Cohésion " +
+      "maximale\u00a0» et «\u00a0Tactique au maximum\u00a0» en un seul clic, que «\u00a0Annuler\u00a0» défait d'un " +
+      "coup. Les attributs et les suspensions restent tels quels. Une étape qui ne peut pas se faire, comme " +
+      "«\u00a0Tout soigner\u00a0» quand personne n'est blessé, est sautée, et le résultat le dit. Les domaines de la " +
+      "tactique baissent de nouveau à mesure que l'entraînement vieillit, au bout de six semaines environ, et une " +
+      "autre tactique demande un autre clic. Le jeu affiche les modifications une fois qu'il avance\u00a0: appuyez " +
+      "sur Continuer dans le jeu",
+    atItsBestSkipped: (step, reason) => `Étape «\u00a0${step}\u00a0» sautée\u00a0: ${reason}`,
     hint:
       "Les actions concernent chaque joueur de la liste, y compris ceux prêtés ailleurs. L'annulation se trouve aussi " +
       "dans la vue Modifications.",

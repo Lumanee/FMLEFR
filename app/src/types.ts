@@ -89,6 +89,11 @@ export interface ConnectionInfo {
   knownBuild: boolean;
   /** Whether the game's layout tells women from men, players and staff alike: the lists offer that filter only then. */
   genderKnown: boolean;
+  /**
+   * Whether a transfer can be arranged for the game to make the next day (`arrange_transfer`): the game's layout places
+   * its transfers, and the editor can take memory of the game's own (Windows).
+   */
+  arrangesTransfers: boolean;
   /** What the checks the editor makes before it writes found on this game. */
   health: Health;
   /** Only from `connect`: what it froze again of what was frozen in this save before, when there was any. */
@@ -978,6 +983,11 @@ export interface LoggedChange {
     released?: string;
     /** The fee the buying club paid the selling one, in pounds, if any. */
     fee?: number;
+    /**
+     * For a transfer arranged for the game to make (`arrange_transfer`): the day of the move, as a number like
+     * 20261019. The game moves him and pays the fee on that day; until then he is at his club.
+     */
+    arranged?: number;
   };
   /**
    * Set for a change to a player's ties, which is logged as a change of his field `tie.nationality`,
@@ -1103,9 +1113,18 @@ export type CaptainRole = "captain" | "viceCaptain";
  * What a team-wide action does to every player of the team, those out on loan too: "heal" heals every injury,
  * "liftBans" lifts every ban, "inspire" sets morale to 20, "refresh" sets energy and match sharpness to 100%,
  * "maxCohesion" sets cohesion with the club to 100 for those who have one, "maxTactics" has the players know the
- * tactic the team plays at its best.
+ * tactic the team plays at its best, and "atItsBest" does Heal all, Inspire all, Refresh all, Max cohesion and Max
+ * tactics in that order, as one batch.
  */
-export type TeamAction = "heal" | "liftBans" | "inspire" | "refresh" | "maxAttributes" | "maxCohesion" | "maxTactics";
+export type TeamAction =
+  | "heal"
+  | "liftBans"
+  | "inspire"
+  | "refresh"
+  | "maxAttributes"
+  | "maxCohesion"
+  | "maxTactics"
+  | "atItsBest";
 
 /** The actions a national team's senior team has: Heal all, Inspire all and Refresh all. */
 export type NationalTeamAction = Extract<TeamAction, "heal" | "inspire" | "refresh">;
@@ -1167,6 +1186,18 @@ export interface MovePreview {
   contract?: NewContract;
   /** For a member of staff who has no club, the contract the editor makes for him. */
   staffContract?: NewStaffContract;
+}
+
+/** A transfer the game is to make the next day, as the plan has it (`plan_arranged_transfer`). */
+export interface ArrangedPreview {
+  from: ClubName;
+  to: ClubName;
+  /** Pounds; the game pays it on the day. */
+  fee: number;
+  /** The day the game makes the move, as a number like 20261019. */
+  moveDay: number;
+  /** The contract he is to have. */
+  contract: NewContract;
 }
 
 /** The contract the editor makes for a member of staff who has no club, as the plan has it. */
@@ -1295,6 +1326,11 @@ export interface MassReport {
   applied: number;
   /** Changes not written, e.g. because the game changed the value after the preview. */
   failed: { uid: number; name: string; field: string; error: Failure }[];
+}
+
+/** From `team_action`: a mass report, and the steps of Team at its best it left out (none for any other action). */
+export interface TeamReport extends MassReport {
+  skipped: { action: TeamAction; reason: Failure }[];
 }
 
 /** From `undo_batch`. */

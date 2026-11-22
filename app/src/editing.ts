@@ -4,6 +4,7 @@ import { call } from "./api";
 import { converts, toPounds, toShown } from "./currency";
 import type {
   ApplyReport,
+  ArrangedPreview,
   BatchUndo,
   CaptainRole,
   Scouted,
@@ -36,6 +37,7 @@ import type {
   StadiumName,
   TeamAction,
   TeamFreeze,
+  TeamReport,
   TieKind,
 } from "./types";
 
@@ -397,6 +399,22 @@ export const movePlayer = (uid: number, club: number, terms: MoveTerms, fee?: nu
   call<LoggedChange>("move_player", { uid, club, terms, fee, release });
 
 /**
+ * Checks that the transfer of the player `uid` to the club `club` can be arranged for the game to make the next day, for
+ * `fee` pounds, on `terms`, and says what it would be. Nothing is written; when it cannot, the error says why. The
+ * first time it looks for the game's transfers, which takes a few seconds.
+ */
+export const planArrangedTransfer = (uid: number, club: number, terms: MoveTerms, fee?: number) =>
+  call<ArrangedPreview>("plan_arranged_transfer", { uid, club, terms, fee });
+
+/**
+ * Arranges the transfer for the game to make the next day: on that day the game moves him, writes the move into his
+ * history (the season's row with his old club kept, the fee with the new one) and pays the fee. Logged as a change of
+ * his club with `moved.arranged`; one undo takes it back until the day.
+ */
+export const arrangeTransfer = (uid: number, club: number, terms: MoveTerms, fee?: number) =>
+  call<LoggedChange>("arrange_transfer", { uid, club, terms, fee });
+
+/**
  * Checks that the players `uid` and `other` can swap clubs, each joining the other's senior team on his own contract,
  * and names the clubs (`from` is the club of `uid`). Nothing is written; when they cannot, the error says why.
  */
@@ -450,7 +468,7 @@ export const setCaptain = (club: number, team: number, role: CaptainRole, uid: n
  * batch, undone with `undoBatch`; `applied` counts the changes (an injured player healed counts once).
  */
 export const teamAction = (club: number, team: number, action: TeamAction) =>
-  call<MassReport>("team_action", { club, team, action });
+  call<TeamReport>("team_action", { club, team, action });
 
 /** Heal all, Inspire all or Refresh all for the players the senior team of the national team `uid` lists. */
 export const nationalTeamAction = (uid: number, action: NationalTeamAction) =>

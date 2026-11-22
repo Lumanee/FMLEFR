@@ -41,6 +41,24 @@ code). On Windows it puts no code of its own in the
 game; on macOS the game loads one small library of ours, the bridge (see
 [On macOS](#on-macos)).
 
+A transfer arranged for the game to make needs memory the game gives back to the C
+runtime's `free()` later, which memory of the editor's own would not survive: the move due
+on a day (on Windows), and any list larger than the game's own allocator hands out, such as
+the transfer manager's list of offers. The editor has the game's C runtime take that memory:
+it runs `_strdup` in the game, on a thread of its own, with a string of the size it needs,
+unlike any other, and checks the block `_strdup` took by that string; it gives a block back
+with the runtime's `free` the same way (`heap.rs`). On Windows that is `ucrtbase.dll`'s,
+run with `CreateRemoteThread` (see `Process::call`). macOS has no such call: the editor makes
+a bare Mach thread in the game whose registers call `pthread_create_from_mach_thread`, the
+one function macOS lets such a thread call, to start a thread like the game's own that runs
+the system's `strdup` or `free`; the bare thread then returns to address 0, and its fault
+goes to the editor alone, which ends it (`fmlibre-mem`'s `macos/call.rs`). That works on
+Apple silicon only: Rosetta does not let a thread's registers be set. These are functions the
+game has loaded; the editor writes no code into the game for them. The offer and the
+contract of such a transfer go in slots of the game's pools, as above (see `arranged.rs`).
+Until the day, the app refuses to move, swap or release the player another way: the game
+makes the transfer from the club he is at.
+
 Before every write it checks five things:
 - the game still has the save the editor read (see [When the game loads a save](#when-the-game-loads-a-save));
 - the object still belongs to the same person;
@@ -221,6 +239,9 @@ bridge hooks nothing, patches nothing and reads none of the game's data. It only
 same user with the game's task port, macOS's handle to a process's memory. From there the
 editor works as it does on Windows: it reads with `mach_vm_read_overwrite`, writes with
 `mach_vm_write` into the game's heap only, and makes the same four checks before every write.
+It hands `mach_vm_write` less than a page at a time: given whole pages, the kernel puts pages
+of the editor's in place of the game's, splits the game's region around them, and reports the
+pieces as shared.
 
 The connect panel of the app sets the bridge up (**Set up the bridge**) or takes it out
 again. Setting up copies the bridge and the launcher to

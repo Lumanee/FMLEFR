@@ -697,6 +697,64 @@ dd,
   gap: 8px;
 }
 
+/* The note that asks for a star on GitHub, once: a card at the top right of the views, under any notice, over the
+   list until one of its buttons closes it. The anchor takes no room; it only marks where the views begin. */
+.star-anchor {
+  position: relative;
+  flex: none;
+  height: 0;
+}
+
+.star-request {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  z-index: 40;
+  width: min(340px, calc(100vw - 36px));
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-top: 3px solid var(--text);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.25);
+  animation: palette-open 160ms ease-out;
+}
+
+.star-request-title {
+  display: block;
+  font-weight: 700;
+}
+
+.star-request p {
+  margin: 4px 0 12px;
+  color: var(--muted);
+}
+
+.star-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.star-request-actions button.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.star-request-actions svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-request {
+    animation: none;
+  }
+}
+
 /* Check for updates in the colophon: a link in the small print, and what it found beside it. */
 .update-check {
   display: inline-flex;
