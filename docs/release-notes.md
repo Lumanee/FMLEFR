@@ -7,8 +7,8 @@
 `latest.json` and `FMLibreEditor-macOS.app.tar.gz` are what the app's **Update** button
 installs from; there is no need to download them.
 
-Windows 10 or 11 with Football Manager 27 from Xbox / Game Pass or Steam; macOS with FM27
-from Steam.
+Windows 10 or 11 with Football Manager 27 from Xbox / Game Pass or Steam (Epic Games Store
+as an experiment); macOS with FM27 from Steam.
 
 How to install: [INSTALL.md](https://github.com/tozmoz/FMLibreEditor/blob/main/docs/INSTALL.md).
 Windows may say "Windows protected your PC": that is covered there. The macOS app is signed

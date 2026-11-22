@@ -2,7 +2,8 @@
 
 FMLibreEditor is a free program that edits the players, staff and clubs of Football Manager
 27 while the game runs. It works on Windows with the Xbox / Game Pass and Steam builds, and
-on macOS with the Steam build.
+on macOS with the Steam build. Support for the Epic Games Store build on Windows is
+experimental, as we cannot test it ourselves.
 
 **Before you start, save your game under a new name in FM.**
 

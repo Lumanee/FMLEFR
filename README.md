@@ -3,7 +3,8 @@
 A free, open-source live editor for **Football Manager 27**. Edit players, staff and clubs
 while the game runs.
 
-Works on **Windows** (Xbox / Game Pass and Steam) and **macOS** (Steam).
+Works on **Windows** (Xbox / Game Pass and Steam) and **macOS** (Steam). The Epic Games Store
+version on Windows is supported as an experiment, since we cannot test it ourselves.
 
 [![Latest release](https://img.shields.io/github/v/release/tozmoz/FMLibreEditor?label=release)](https://github.com/tozmoz/FMLibreEditor/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/tozmoz/FMLibreEditor/total)](https://github.com/tozmoz/FMLibreEditor/releases)
