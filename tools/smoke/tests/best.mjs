@@ -182,8 +182,8 @@ export async function run({ app, report, probe }) {
   await app.waitFor(`${best} && !${best}.disabled && !${best}.hasAttribute("aria-disabled")`, "Team at its best", 30000);
   const title = await app.js(`${best}.title`);
   report.check(
-    "the Squad tab has Team at its best after the other buttons, its hover text naming the five steps",
-    (await app.js(`${buttons}.at(-1) === ${best}`)) &&
+    "the Squad tab has Team at its best first, before More actions and Destroy, its hover text naming the five steps",
+    (await app.js(`${buttons}[0] === ${best}`)) &&
       title.startsWith("Heal all, Inspire all, Refresh all, Max cohesion and Max tactics in one press"),
     title.slice(0, 90),
   );

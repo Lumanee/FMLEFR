@@ -1,4 +1,5 @@
-//! How well a team's players know the tactic it plays, and Max tactics, which has them know it at its best.
+//! How well a team's players know the tactic it plays; Max tactics, which has them know it at its best; and Min tactics,
+//! Destroy's last step, which has them know it at its least.
 //!
 //! The Tactical Effectiveness screen shows each player's eight tactical areas (see `tactical_areas.rs`), and the game
 //! keeps how well he knows each in two places ([`FamiliarityLayout`]):
@@ -23,6 +24,11 @@
 //! memory of the editor's own (see `own_memory.rs`), and the old buffer stays as it was, for the undo. A player the
 //! training manager keeps no history for, one who does not train, as when injured, has his record written and his
 //! history left as it is: the game makes one when he trains.
+//!
+//! Min tactics writes both for the same players the other way. Every entry of the record and every shape goes to
+//! nothing, which the screen reads as 10 for an option, the least it shows, and 0 for a shape; and the history is
+//! emptied as the game empties a list, its end put back at its begin, so no training counts. Nothing is added or grown,
+//! and the entries stay in their buffer for the undo. The areas grow again as the team trains.
 //!
 //! Read and written on the Mac (Steam 27.0.1, the Benevento save, November 2026): after Max tactics the eight circles of
 //! every senior player were full, a save made then loaded and played on, and the lists grown into the editor's memory
@@ -95,7 +101,7 @@ pub struct Familiarity {
     pub trains: bool,
 }
 
-/// Max tactics worked out for one player: the writes that set his record and his history, and the lists to grow.
+/// Max or Min tactics worked out for one player: the writes that set his record and his history, and the lists to grow.
 #[derive(Debug, Clone)]
 pub struct TacticsPlan {
     pub player: u32,
@@ -113,7 +119,7 @@ impl TacticsPlan {
     }
 }
 
-/// Max tactics written for one player: what undoing it takes.
+/// Max or Min tactics written for one player: what undoing it takes.
 #[derive(Debug, Clone)]
 pub struct TacticsSet {
     pub player: u32,
@@ -203,6 +209,29 @@ impl Session {
         team: usize,
         players: &PlayerIndex,
     ) -> Result<Option<Vec<TacticsPlan>>, MoveError> {
+        self.plan_team_tactics(club, team, players, true)
+    }
+
+    /// Works out Min tactics for the same players as Max tactics (see the module's notes); `None` where the layout does
+    /// not place familiarity, or no human manager picks the team's tactic. Nothing is written.
+    pub fn plan_min_tactics(
+        &self,
+        club: &ClubSummary,
+        team: usize,
+        players: &PlayerIndex,
+    ) -> Result<Option<Vec<TacticsPlan>>, MoveError> {
+        self.plan_team_tactics(club, team, players, false)
+    }
+
+    /// Max tactics, or with `best` false Min tactics, for each player who plays for the team at `team` in the list of
+    /// `club`'s teams and has a record of familiarity.
+    fn plan_team_tactics(
+        &self,
+        club: &ClubSummary,
+        team: usize,
+        players: &PlayerIndex,
+        best: bool,
+    ) -> Result<Option<Vec<TacticsPlan>>, MoveError> {
         let (Some(f), Some(tactic)) = (&self.layout.familiarity, self.team_tactic(club, team)?) else {
             return Ok(None);
         };
@@ -216,13 +245,17 @@ impl Session {
                 continue;
             };
             let history = tactic.histories.get(&self.training_person(f, player)?);
-            plans.push(self.plan_player_tactics(&tactic, player.uid, record, history));
+            plans.push(if best {
+                self.plan_player_tactics(&tactic, player.uid, record, history)
+            } else {
+                plan_player_unlearning(&tactic, player.uid, record, history)
+            });
         }
         Ok(Some(plans))
     }
 
-    /// Writes Max tactics planned for one player, only over what the plan found: the lists to grow get their buffers
-    /// first, then every write is made after checking them all.
+    /// Writes Max or Min tactics planned for one player, only over what the plan found: the lists to grow get their
+    /// buffers first, then every write is made after checking them all.
     pub fn apply_tactics(&self, plan: &TacticsPlan) -> Result<TacticsSet, MoveError> {
         if let Some(lock) = self.tactics_lock() {
             return Err(MoveError::Locked(lock));
@@ -236,7 +269,7 @@ impl Session {
         Ok(TacticsSet { player, before, after, patches })
     }
 
-    /// Puts the record and the history back as they were, provided they still hold what Max tactics wrote: the game
+    /// Puts the record and the history back as they were, provided they still hold what was written: the game
     /// changes both as it moves on. A grown list is pointed back at its old buffer.
     pub fn undo_tactics(&self, done: &TacticsSet) -> Result<(), MoveError> {
         self.undo_patches(&done.patches)
@@ -682,6 +715,34 @@ fn entry_weight(e: &[u8], options: &[i8; OPTION_AREAS], shapes: [Option<u16>; 2]
     Some(closeness * aged * kind * session * player * weeks)
 }
 
+/// Min tactics for one player: every entry of his record and every shape at nothing, and his history, where he has
+/// one, emptied: its end back at its begin, the entries left in the buffer for the undo. What is at nothing already,
+/// or empty, is not written again.
+fn plan_player_unlearning(tactic: &TeamTactic, player: u32, record: Record, history: Option<&List>) -> TacticsPlan {
+    let before = familiarity(tactic, &record, history.map(|h| h.bytes.as_slice()));
+    let mut patches = Patches::default();
+    let mut new_record = record;
+    for list in &mut new_record.areas {
+        let old = list.bytes.clone();
+        for e in list.bytes.as_chunks_mut::<{ RECORD_ENTRY as usize }>().0 {
+            set_value(e, 0);
+        }
+        patches.push(list.begin(), old, list.bytes.clone());
+    }
+    if let Some(shapes) = &mut new_record.shapes {
+        let old = shapes.bytes.clone();
+        for entry in shapes.bytes.as_chunks_mut::<{ SHAPE_ENTRY as usize }>().0 {
+            entry[SHAPE_VALUE..SHAPE_VALUE + 2].copy_from_slice(&0u16.to_le_bytes());
+        }
+        patches.push(shapes.begin(), old, shapes.bytes.clone());
+    }
+    if let Some(list) = history {
+        patches.push(list.header + 8, list.was[1].to_le_bytes(), list.begin().to_le_bytes());
+    }
+    let after = familiarity(tactic, &new_record, history.map(|_| [].as_slice()));
+    TacticsPlan { player, before, after, patches: patches.0, grow: Vec::new() }
+}
+
 /// The end a list holding `was` `(begin, end, capacity)` has with `bytes` bytes written from its begin, where its buffer
 /// has room for them; `None` where it has not, and the list is grown elsewhere.
 fn end_within(was: [u64; 3], bytes: u64) -> Option<u64> {
@@ -808,6 +869,52 @@ mod tests {
         // No room for one entry more, or no buffer yet: grown elsewhere.
         assert_eq!(end_within(full, bytes + HISTORY_ENTRY), None);
         assert_eq!(end_within([0; 3], bytes), None);
+    }
+
+    #[test]
+    fn min_tactics_takes_every_value_to_nothing_and_empties_the_history() {
+        let t = tactic();
+        let known = record(
+            [&[(19, BEST)], &[(17, 5_000), (16, BEST)], &[(10, BEST)], &[(4, BEST)], &[(20, BEST)], &[(10, BEST)]],
+            &[BEST, 4_000],
+        );
+        let history = list(today_history(&t, &[]));
+        let plan = plan_player_unlearning(&t, 7, known.clone(), Some(&history));
+        assert!(plan.before.overall > 50);
+        // 10 for each option, the least the screen shows, and nothing for the shapes: 4 over the eight areas.
+        assert_eq!(plan.after, Familiarity { overall: 4, trains: true });
+        // The six lists, the shapes and the history's end, which goes back to its begin; nothing is grown.
+        assert_eq!(plan.patches.len(), 8);
+        assert!(plan.grow.is_empty());
+        let end = plan.patches.last().expect("the history's end");
+        assert_eq!(end.address, history.header + 8);
+        assert_eq!(
+            (end.before.as_slice(), end.after.as_slice()),
+            (&history.was[1].to_le_bytes()[..], &[0, 0x10, 0, 0, 0, 0, 0, 0][..])
+        );
+        // Every record entry keeps its option's code.
+        let codes = |r: &Record| -> Vec<i32> {
+            r.areas
+                .iter()
+                .flat_map(|l| l.bytes.as_chunks::<4>().0.iter().map(|e| entry_code(e)).collect::<Vec<_>>())
+                .collect()
+        };
+        let mut unlearned = known.clone();
+        for (list, patch) in unlearned.areas.iter_mut().zip(&plan.patches) {
+            list.bytes = patch.after.clone();
+        }
+        assert_eq!(codes(&unlearned), codes(&known));
+        assert!(unlearned.areas.iter().all(|l| l.bytes.as_chunks::<4>().0.iter().all(|e| entry_value(e) == 0)));
+        // A second press finds nothing to write.
+        let mut emptied = history.clone();
+        emptied.was[1] = emptied.was[0];
+        emptied.bytes.clear();
+        if let Some(shapes) = &mut unlearned.shapes {
+            shapes.bytes = plan.patches[6].after.clone();
+        }
+        let again = plan_player_unlearning(&t, 7, unlearned, Some(&emptied));
+        assert!(!again.writes());
+        assert_eq!(again.before, again.after);
     }
 
     #[test]

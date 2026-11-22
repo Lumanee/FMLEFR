@@ -2649,8 +2649,40 @@ export const en = {
       "Attributes and bans stay as they are. A step that cannot run, such as Heal all while nobody is injured, is " +
       "skipped, and the result says so. The areas of the tactic fall again as the training ages, after some six weeks, " +
       "and another tactic needs another press. The game shows the changes once it moves on: press Continue in the game",
-    /** After Team at its best: a step it left out, by the name of its button, and why. */
+    /** After Team at its best or Destroy: a step it left out, by its name, and why. */
     atItsBestSkipped: (step: string, reason: string) => `${step} skipped: ${reason}`,
+    /** The red button that takes the team to its worst, after asking (see `destroyDialog`). */
+    destroy: "Destroy",
+    destroyTitle:
+      "Take every player in this team to his worst: morale and happiness, energy, match sharpness and jadedness, " +
+      "cohesion with the club and, where you pick the team's tactic, how well he knows it. Nothing is made better " +
+      "than it is; attributes, injuries and bans stay. It asks first, and one Undo takes it all back",
+    /** The names of Destroy's steps, for one it left out (see `atItsBestSkipped`). */
+    destroySteps: {
+      demoralize: "Morale and happiness",
+      exhaust: "Energy and sharpness",
+      minCohesion: "Cohesion",
+      minTactics: "Tactics",
+    },
+    /** The menu with the actions on the whole team one at a time: Heal all to Max tactics. */
+    moreActions: "More actions",
+    moreActionsTitle: "The actions on the whole team, one at a time",
+    /** Destroy's question, asked before anything is written. */
+    destroyDialog: {
+      title: "Destroy this team?",
+      doesHeading: "For every player in the list, those out on loan too",
+      does: [
+        "Morale to 1, the lowest; happiness and playing time happiness to -100",
+        "Energy to 0%, match sharpness to 35% and jadedness to 1000",
+        "Cohesion with the club to 1, for those who have it",
+        "How well he knows the tactic to its least, where you pick the team's tactic",
+      ],
+      keeps: "No value is made better than it is. Attributes, injuries and bans stay as they are.",
+      /** When a manager of the user's runs the club. */
+      ownClub: "This is a team of your own club.",
+      hint: "One Undo takes it all back, before the game moves on.",
+      cancel: "Cancel",
+    },
     /** Beside the buttons: whom they cover, and where undoing is. */
     hint: "The actions cover every player in the list, those out on loan too. Undo is in the Changes view as well.",
 

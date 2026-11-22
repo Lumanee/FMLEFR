@@ -1,5 +1,5 @@
-// Max tactics for the senior team of the club the human manager has, read back and undone as one batch. It and `best`
-// are the tests that write to the human manager's own players: nobody else's tactic is one he picks.
+// Max tactics for the senior team of the club the human manager has, read back and undone as one batch. It, `best` and
+// `destroy` are the tests that write to the human manager's own players: nobody else's tactic is one he picks.
 import { humanClubs, topClubs } from "../lib/witness.mjs";
 
 export const name = "tactics";

@@ -2355,6 +2355,33 @@ export const it: Strings = {
       "a calare man mano che l'allenamento invecchia, dopo circa sei settimane, e un'altra tattica chiede un altro clic. " +
       "Il gioco mostra le modifiche quando va avanti: premi Continua nel gioco",
     atItsBestSkipped: (step, reason) => `${step} saltato: ${reason}`,
+    destroy: "Squadra a pezzi",
+    destroyTitle:
+      "Porta ogni giocatore di questa squadra al suo peggio: morale e felicità, energia, forma partita e stanchezza, " +
+      "affiatamento con la società e, se scegli tu la tattica della squadra, quanto la conosce. Nessun valore " +
+      "migliora; attributi, infortuni e squalifiche restano. Prima chiede, e un solo Ripristina annulla tutto",
+    destroySteps: {
+      demoralize: "Morale e felicità",
+      exhaust: "Energia e forma partita",
+      minCohesion: "Affiatamento",
+      minTactics: "Tattica",
+    },
+    moreActions: "Altre azioni",
+    moreActionsTitle: "Le azioni su tutta la squadra, una alla volta",
+    destroyDialog: {
+      title: "Mandare la squadra a pezzi?",
+      doesHeading: "Per ogni giocatore dell'elenco, anche quelli in prestito altrove",
+      does: [
+        "Morale a 1, il minimo; felicità e felicità per il minutaggio a -100",
+        "Energia allo 0%, forma partita al 35% e stanchezza a 1000",
+        "Affiatamento con la società a 1, per chi ce l'ha",
+        "Quanto conosce la tattica al minimo, se scegli tu la tattica della squadra",
+      ],
+      keeps: "Nessun valore migliora. Attributi, infortuni e squalifiche restano come sono.",
+      ownClub: "È una squadra della tua società.",
+      hint: "Un solo Ripristina annulla tutto, prima che il gioco vada avanti.",
+      cancel: "Annulla",
+    },
     hint:
       "Le azioni riguardano ogni giocatore dell'elenco, anche quelli in prestito altrove. Si possono annullare anche " +
       "nella vista Modifiche.",

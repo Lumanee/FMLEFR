@@ -2432,6 +2432,34 @@ export const fr: Strings = {
       "autre tactique demande un autre clic. Le jeu affiche les modifications une fois qu'il avance\u00a0: appuyez " +
       "sur Continuer dans le jeu",
     atItsBestSkipped: (step, reason) => `Étape «\u00a0${step}\u00a0» sautée\u00a0: ${reason}`,
+    destroy: "Équipe au plus bas",
+    destroyTitle:
+      "Amener chaque joueur de cette équipe à son plus bas\u00a0: moral et état d'esprit, énergie, forme physique et " +
+      "fatigue, cohésion avec le club et, si vous choisissez la tactique de l'équipe, sa connaissance de celle-ci. " +
+      "Aucune valeur n'est améliorée\u00a0; les attributs, les blessures et les suspensions ne changent pas. Une " +
+      "question est posée d'abord, et tout se défait d'un seul coup",
+    destroySteps: {
+      demoralize: "Moral et état d'esprit",
+      exhaust: "Énergie et forme",
+      minCohesion: "Cohésion",
+      minTactics: "Tactique",
+    },
+    moreActions: "Plus d'actions",
+    moreActionsTitle: "Les actions sur toute l'équipe, une par une",
+    destroyDialog: {
+      title: "Mettre l'équipe au plus bas\u00a0?",
+      doesHeading: "Pour chaque joueur de la liste, y compris ceux prêtés ailleurs",
+      does: [
+        "Moral à 1, le minimum\u00a0; état d'esprit et satisfaction temps de jeu à -100",
+        "Énergie à 0\u00a0%, forme physique à 35\u00a0% et fatigue à 1000",
+        "Cohésion avec le club à 1, pour ceux qui en ont une",
+        "Connaissance de la tactique au minimum, si vous choisissez la tactique de l'équipe",
+      ],
+      keeps: "Aucune valeur n'est améliorée. Les attributs, les blessures et les suspensions restent tels quels.",
+      ownClub: "C'est une équipe de votre propre club.",
+      hint: "Tout se défait d'un seul coup, avant que le jeu n'avance.",
+      cancel: "Annuler",
+    },
     hint:
       "Les actions concernent chaque joueur de la liste, y compris ceux prêtés ailleurs. L'annulation se trouve aussi " +
       "dans la vue Modifications.",

@@ -216,6 +216,15 @@ before trusting them.
   team action and one batch, undone with one Undo; attributes and bans stay. A step that cannot run (nobody
   injured, a lock, a build where Max tactics is off) is skipped and named, and the others still run (#227).
 - [ ] Team at its best for one player, in his profile.
+- [x] Destroy in the squad tab, the other way: morale 1, happiness and playing time happiness -100, no energy,
+  35% match sharpness, jadedness 1000, cohesion 1 and the tactic known at its least (where a human picks it), as
+  one team action and one batch after a question, undone with one Undo. No value is made better than it was (a
+  youth intake's lower sharpness stays); attributes, injuries and bans stay. The game itself held each of those
+  values on the Game Pass save of 0.9.2524.0 (energy down to 0.01%, jadedness up to 605). Team at its best,
+  a More actions menu with the single actions and Destroy now share the row, which fits every language.
+- [ ] Destroy for a rival's tactic: the editor reads no familiarity where no human picks the tactic, and the game
+  shows it nowhere, so whether the record alone counts there is not known.
+- [ ] A freeze that holds a team at its worst: Freeze energy and sharpness only keeps them from going down.
 
 ## Phase 7: what FMRTE, FM Live Editor and FM27€0 users reach for (in progress)
 

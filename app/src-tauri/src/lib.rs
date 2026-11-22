@@ -1328,8 +1328,8 @@ impl Connection {
         self.push_log(LoggedChange { undo: Some(Undo::Cohesion(done)), ..entry })
     }
 
-    /// Logs Max tactics just written, as a change of how well the player knows the tactic (`tactics`, 0..100) from what
-    /// it was to what it is.
+    /// Logs Max or Min tactics just written, as a change of how well the player knows the tactic (`tactics`, 0..100)
+    /// from what it was to what it is.
     fn log_tactics(&mut self, done: TacticsSet, batch: Option<u32>) -> LoggedChange {
         let change = Change {
             entity: Entity::Player,
@@ -2369,6 +2369,8 @@ struct TeamView {
     age_limit: Option<u8>,
     captain: Option<u32>,
     vice_captain: Option<u32>,
+    /// Whether a manager of the user's runs the club, as Destroy's question says: never for a national team.
+    human_club: bool,
     players: Vec<SquadRow>,
 }
 
@@ -2441,11 +2443,43 @@ enum TeamAction {
     MaxTactics,
     /// The team at its best in one go: `AT_ITS_BEST`, each step skipped where it cannot run. Attributes and bans stay.
     AtItsBest,
+    /// Morale, happiness and happiness with playing time to the bottom: `DEMORALIZE`, Destroy's first step.
+    Demoralize,
+    /// No energy, the least match sharpness and the most jadedness: `EXHAUST`, Destroy's second step.
+    Exhaust,
+    /// Cohesion with the club to the bottom, for those who have an entry for it.
+    MinCohesion,
+    /// The tactic the human manager plays with the team known at its least (see `familiarity.rs`).
+    MinTactics,
+    /// The team at its worst in one go: `DESTROY`, each step skipped where it cannot run. No value is made better than
+    /// it was; attributes, injuries and bans stay.
+    Destroy,
 }
 
 /// What Team at its best does, in order.
 const AT_ITS_BEST: [TeamAction; 5] =
     [TeamAction::Heal, TeamAction::Inspire, TeamAction::Refresh, TeamAction::MaxCohesion, TeamAction::MaxTactics];
+
+/// What Destroy does, in order.
+const DESTROY: [TeamAction; 4] =
+    [TeamAction::Demoralize, TeamAction::Exhaust, TeamAction::MinCohesion, TeamAction::MinTactics];
+
+/// Destroy's morale, happiness and happiness with playing time: the least the editor writes, as the game itself holds
+/// them (1, -100 and -100 on the Game Pass save of 0.9.2524.0, November 2026). Lower values stay as they are.
+const DEMORALIZE: [(&str, Operation); 3] = [
+    ("morale", Operation::AtMost { value: 1 }),
+    ("contract.happiness", Operation::AtMost { value: -100 }),
+    ("contract.playing_time_happiness", Operation::AtMost { value: -100 }),
+];
+
+/// Destroy's energy, match sharpness and jadedness: no energy, the least sharpness the editor writes and the most
+/// jadedness, each kept where it is worse already, as a youth intake's sharpness below 35%. On the same save the game
+/// itself held energy down to 0.01% (players long injured), nobody's sharpness below 35%, and jadedness up to 605.
+const EXHAUST: [(&str, Operation); 3] = [
+    ("condition", Operation::AtMost { value: 0 }),
+    ("match_sharpness", Operation::AtMost { value: 3_500 }),
+    ("jadedness", Operation::AtLeast { value: 1_000 }),
+];
 
 #[derive(Clone, Serialize, Deserialize)]
 struct MovedClubs {
@@ -2591,7 +2625,7 @@ impl From<MassReport> for TeamReport {
     }
 }
 
-/// A step of Team at its best that did not run, and why.
+/// A step of Team at its best or Destroy that did not run, and why.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SkippedStep {
@@ -3486,6 +3520,7 @@ fn national_squad(state: State<'_, AppState>, uid: u32, kind: Option<u8>) -> Res
         age_limit: squad.age_limit,
         captain: None,
         vice_captain: None,
+        human_club: false,
         players: squad
             .players
             .into_iter()
@@ -4787,6 +4822,7 @@ fn club_squads(state: State<'_, AppState>, uid: u32) -> Result<Vec<TeamView>, Fa
                 age_limit: team.age_limit,
                 captain: team.captain,
                 vice_captain: team.vice_captain,
+                human_club: connection.human_clubs.contains(&uid),
                 players: team
                     .players
                     .into_iter()
@@ -4874,44 +4910,52 @@ fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamA
         .players;
     let batch = connection.fresh_id();
     match action {
-        TeamAction::MaxCohesion => Ok(max_cohesion(connection, &summary, &members, batch).0.into()),
-        TeamAction::MaxTactics => {
-            let report = max_tactics(connection, &summary, team, batch)?;
+        TeamAction::MaxCohesion | TeamAction::MinCohesion => {
+            Ok(set_cohesion(connection, &summary, &members, batch, action == TeamAction::MaxCohesion).0.into())
+        }
+        TeamAction::MaxTactics | TeamAction::MinTactics => {
+            let report = set_tactics(connection, &summary, team, batch, action == TeamAction::MaxTactics)?;
             Ok(report.unwrap_or(MassReport { batch, applied: 0, failed: Vec::new() }).into())
         }
-        TeamAction::AtItsBest => Ok(at_its_best(connection, &summary, team, &members, batch)),
+        TeamAction::AtItsBest => Ok(run_steps(connection, &summary, team, &members, batch, &AT_ITS_BEST)),
+        TeamAction::Destroy => Ok(run_steps(connection, &summary, team, &members, batch, &DESTROY)),
         _ => act_on_players(connection, &members, action, batch).map(TeamReport::from),
     }
 }
 
-/// Team at its best: every step of `AT_ITS_BEST` under the one batch `batch`, so one Undo takes them all back. A step
-/// that cannot run (nobody injured, a lock, a part of the game this version has not been checked for) is left out and
-/// named, and the others still run.
-fn at_its_best(
+/// Team at its best or Destroy: every one of `steps` under the one batch `batch`, so one Undo takes them all back. A
+/// step that cannot run (nobody injured, a lock, a part of the game this version has not been checked for, a team whose
+/// tactic no human picks) is left out and named, and the others still run.
+fn run_steps(
     connection: &mut Connection,
     summary: &ClubSummary,
     team: usize,
     members: &[SquadMember],
     batch: u32,
+    steps: &[TeamAction],
 ) -> TeamReport {
     let mut done = TeamReport::from(MassReport { batch, applied: 0, failed: Vec::new() });
-    for action in AT_ITS_BEST {
+    for &action in steps {
         let ran = match action {
             TeamAction::Heal if !members.iter().any(|member| member.injuries > 0) => {
                 Err(Failure::new("team.nobodyInjured", "nobody in the team is injured"))
             }
-            TeamAction::MaxCohesion => match max_cohesion(connection, summary, members, batch) {
-                (report, true) => Ok(report),
-                (_, false) => Err(Failure::new(
-                    "team.noCohesion",
-                    "no player of the team has an entry for cohesion with the club that the editor can read",
-                )),
-            },
-            TeamAction::MaxTactics => max_tactics(connection, summary, team, batch).and_then(|report| {
-                report.ok_or_else(|| {
-                    Failure::new("team.noTactics", "the editor cannot read how well the team knows its tactic")
+            TeamAction::MaxCohesion | TeamAction::MinCohesion => {
+                match set_cohesion(connection, summary, members, batch, action == TeamAction::MaxCohesion) {
+                    (report, true) => Ok(report),
+                    (_, false) => Err(Failure::new(
+                        "team.noCohesion",
+                        "no player of the team has an entry for cohesion with the club that the editor can read",
+                    )),
+                }
+            }
+            TeamAction::MaxTactics | TeamAction::MinTactics => {
+                set_tactics(connection, summary, team, batch, action == TeamAction::MaxTactics).and_then(|report| {
+                    report.ok_or_else(|| {
+                        Failure::new("team.noTactics", "the editor cannot read how well the team knows its tactic")
+                    })
                 })
-            }),
+            }
             _ => act_on_players(connection, members, action, batch),
         };
         match ran {
@@ -4925,17 +4969,19 @@ fn at_its_best(
     done
 }
 
-/// Cohesion with the club at its best for every one of `members`, logged under `batch`, as FM27 Editor saw FMRTE's
-/// Improve Team Cohesion set it, for those who have an entry for the club: one is added nowhere, and the app counts
-/// those without one. The game shows the team's cohesion on its Dynamics page once it moves on. Also says whether any
-/// of them has an entry the editor could read.
-fn max_cohesion(
+/// Cohesion with the club at its best, 100, or with `best` false at its least, 1, for every one of `members` who has an
+/// entry for the club, logged under `batch`: one is added nowhere, and the app counts those without one. One there
+/// already, or past it, is left as it is. The game shows the team's cohesion on its Dynamics page once it moves on.
+/// Also says whether any of them has an entry the editor could read.
+fn set_cohesion(
     connection: &mut Connection,
     summary: &ClubSummary,
     members: &[SquadMember],
     batch: u32,
+    best: bool,
 ) -> (MassReport, bool) {
-    let (_, best) = COHESION_RANGE;
+    let (least, most) = COHESION_RANGE;
+    let value = if best { most } else { least };
     let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
     let mut read = false;
     for member in members {
@@ -4943,10 +4989,10 @@ fn max_cohesion(
             continue;
         };
         let name = player.name.clone();
-        let planned = connection.session.plan_cohesion(player, summary, best);
+        let planned = connection.session.plan_cohesion(player, summary, value);
         read |= matches!(planned, Ok(Some(_)));
         let set = match planned {
-            Ok(Some(plan)) if plan.before == best => continue,
+            Ok(Some(plan)) if (best && plan.before >= value) || (!best && plan.before <= value) => continue,
             Ok(Some(plan)) => connection.session.apply_cohesion(&plan),
             Ok(None) => continue,
             Err(err) => Err(err),
@@ -4967,19 +5013,27 @@ fn max_cohesion(
     (report, read)
 }
 
-/// The tactic the human manager plays with the team at `team` of the club known at its best, logged under `batch`:
-/// each player's record and history of training (see `familiarity.rs`). One the game keeps no history for has his
-/// record written; the app counts them. None where the editor cannot read the team's familiarity with its tactic.
-fn max_tactics(
+/// The tactic the human manager plays with the team at `team` of the club known at its best, or with `best` false at
+/// its least, logged under `batch`: each player's record and history of training (see `familiarity.rs`). One the game
+/// keeps no history for has his record written; the app counts them. None where the editor cannot read the team's
+/// familiarity with its tactic, as for a team whose tactic no human picks.
+fn set_tactics(
     connection: &mut Connection,
     summary: &ClubSummary,
     team: usize,
     batch: u32,
+    best: bool,
 ) -> Result<Option<MassReport>, Failure> {
     if let Some(lock) = connection.session.tactics_lock().or_else(|| connection.session.structure_lock()) {
         return Err(MoveError::Locked(lock).into());
     }
-    let Some(plans) = connection.session.plan_max_tactics(summary, team, &connection.players)? else {
+    let (session, players) = (&connection.session, &connection.players);
+    let planned = if best {
+        session.plan_max_tactics(summary, team, players)?
+    } else {
+        session.plan_min_tactics(summary, team, players)?
+    };
+    let Some(plans) = planned else {
         return Ok(None);
     };
     let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
@@ -5002,7 +5056,7 @@ fn max_tactics(
 }
 
 /// Does `action` to `members`, the players of one team, logged under `batch`: the actions a club's team and a national
-/// team share. Max cohesion, Max tactics and Team at its best need the club, and are `team_action`'s own.
+/// team share. Cohesion, tactics, Team at its best and Destroy need the club, and are `team_action`'s own.
 fn act_on_players(
     connection: &mut Connection,
     members: &[SquadMember],
@@ -5015,7 +5069,7 @@ fn act_on_players(
     {
         return Err(MoveError::Locked(lock).into());
     }
-    let values: &[(&str, i64)] = match action {
+    let values: &[(&str, Operation)] = match action {
         TeamAction::Heal => {
             let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
             for member in members.iter().filter(|member| member.injuries > 0) {
@@ -5065,12 +5119,25 @@ fn act_on_players(
             }
             return Ok(report);
         }
-        // Morale at its best, and the reasons to be unhappy gone, as FMRTE's Inspire does.
-        TeamAction::Inspire => &[("morale", 20), ("contract.unhappiness", 0)],
+        // Morale at its best, and the reasons to be unhappy gone.
+        TeamAction::Inspire => {
+            &[("morale", Operation::Set { value: 20 }), ("contract.unhappiness", Operation::Set { value: 0 })]
+        }
         // Rested as the game rests a player: full energy and sharpness, and jadedness at its least.
-        TeamAction::Refresh => &[("condition", 10_000), ("match_sharpness", 10_000), ("jadedness", -500)],
+        TeamAction::Refresh => &[
+            ("condition", Operation::Set { value: 10_000 }),
+            ("match_sharpness", Operation::Set { value: 10_000 }),
+            ("jadedness", Operation::Set { value: -500 }),
+        ],
+        TeamAction::Demoralize => &DEMORALIZE,
+        TeamAction::Exhaust => &EXHAUST,
         TeamAction::MaxAttributes => &[],
-        TeamAction::MaxCohesion | TeamAction::MaxTactics | TeamAction::AtItsBest => {
+        TeamAction::MaxCohesion
+        | TeamAction::MaxTactics
+        | TeamAction::AtItsBest
+        | TeamAction::MinCohesion
+        | TeamAction::MinTactics
+        | TeamAction::Destroy => {
             return Err(Failure::new("team.action", "This action needs the club the team belongs to."));
         }
     };
@@ -5084,7 +5151,7 @@ fn act_on_players(
     } else {
         values
             .iter()
-            .map(|&(key, value)| Ok((connection.session.field(Entity::Player, key)?, Operation::Set { value })))
+            .map(|&(key, operation)| Ok((connection.session.field(Entity::Player, key)?, operation)))
             .collect::<Result<Vec<_>, EditError>>()?
     };
     let plan = connection.session.plan_mass_edit(&targets, &operations)?;

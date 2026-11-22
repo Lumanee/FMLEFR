@@ -2420,6 +2420,34 @@ export const de: Strings = {
       "Wochen, und eine andere Taktik braucht einen weiteren Klick. Das Spiel zeigt die Änderungen, sobald es " +
       "weiterläuft: Klicken Sie im Spiel auf Fortfahren",
     atItsBestSkipped: (step, reason) => `„${step}“ übersprungen: ${reason}`,
+    destroy: "Mannschaft in Tiefstform",
+    destroyTitle:
+      "Bringt jeden Spieler dieser Mannschaft auf seinen Tiefstwert: Moral und Zufriedenheit, Energie, Spielpraxis " +
+      "und Erschöpfung, Teambuilding mit dem Verein und, wenn Sie die Taktik der Mannschaft wählen, wie gut er sie " +
+      "kennt. Kein Wert wird besser, als er ist; Attribute, Verletzungen und Sperren bleiben. Es fragt vorher, und " +
+      "ein einziges „Rückgängig“ nimmt alles zurück",
+    destroySteps: {
+      demoralize: "Moral und Zufriedenheit",
+      exhaust: "Energie und Spielpraxis",
+      minCohesion: "Teambuilding",
+      minTactics: "Taktik",
+    },
+    moreActions: "Weitere Aktionen",
+    moreActionsTitle: "Die Aktionen für die ganze Mannschaft, einzeln",
+    destroyDialog: {
+      title: "Mannschaft in Tiefstform bringen?",
+      doesHeading: "Für jeden Spieler der Liste, auch die verliehenen",
+      does: [
+        "Moral auf 1, den Tiefstwert; Zufriedenheit und Zufriedenheit mit Einsatzzeiten auf -100",
+        "Energie auf 0 %, Spielpraxis auf 35 % und Erschöpfung auf 1000",
+        "Teambuilding mit dem Verein auf 1, bei denen, die einen Wert haben",
+        "Wie gut er die Taktik kennt, auf das Mindeste, wenn Sie die Taktik der Mannschaft wählen",
+      ],
+      keeps: "Kein Wert wird besser, als er ist. Attribute, Verletzungen und Sperren bleiben, wie sie sind.",
+      ownClub: "Das ist eine Mannschaft Ihres eigenen Vereins.",
+      hint: "Ein einziges „Rückgängig“ nimmt alles zurück, bevor das Spiel weiterläuft.",
+      cancel: "Abbrechen",
+    },
     hint:
       "Die Aktionen betreffen jeden Spieler der Liste, auch die verliehenen. Rückgängig machen lässt sich auch in der " +
       "Ansicht Änderungen.",

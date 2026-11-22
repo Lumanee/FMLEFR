@@ -38,6 +38,9 @@
 
   --danger: #b23a2b;
   --danger-soft: rgb(178 58 43 / 0.09);
+  /* Destroy's red fill, and its words on it. */
+  --danger-hover: #952e21;
+  --on-danger: #ffffff;
   --ok: #1f7547;
   /* What dims the app behind a dialog. */
   --scrim: rgb(22 24 29 / 0.42);
@@ -105,6 +108,8 @@
 
     --danger: #f0705f;
     --danger-soft: rgb(240 112 95 / 0.14);
+    --danger-hover: #f48d7f;
+    --on-danger: #15161a;
     --ok: #57b784;
     --scrim: rgb(0 0 0 / 0.6);
 
@@ -2786,6 +2791,22 @@ button.danger:hover:not(:disabled) {
   background: var(--danger-soft);
 }
 
+/* Destroy, the one action that makes a team worse: filled red, in the squad's row and in its question. */
+button.destroy {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--on-danger);
+}
+
+button.destroy:hover:not(:disabled, [aria-disabled="true"]) {
+  border-color: var(--danger-hover);
+  background: var(--danger-hover);
+}
+
+button.destroy[aria-disabled="true"]:hover {
+  background: var(--danger);
+}
+
 /* Changes */
 
 .view-title {
@@ -4603,6 +4624,57 @@ button.danger:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* More actions: its word and a caret that says a menu opens. */
+.squad-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.squad-more svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.squad-more[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+/* Destroy keeps a little room from the actions that make the team better. */
+.squad-buttons .destroy {
+  margin-left: 8px;
+}
+
+/* An action of the menu that cannot run now is dimmed, and its hover text says why. */
+.squad-actions-menu button[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.squad-actions-menu button[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+/* Destroy's question: the line that says the club is the user's own, and what it leaves alone. */
+.destroy-own {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.destroy-keeps {
+  margin: 0;
 }
 
 .squad-hint {

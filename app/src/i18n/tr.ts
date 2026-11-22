@@ -2266,6 +2266,33 @@ export const tr: Strings = {
       "Antrenman eskidikçe, yaklaşık altı hafta sonra taktiğin alanları yeniden düşer; başka bir taktik için yeniden " +
       "basmak gerekir. Oyun değişiklikleri bir kez ilerleyince gösterir: oyunda Devam'a basın",
     atItsBestSkipped: (step, reason) => `“${step}” atlandı: ${reason}`,
+    destroy: "Takımı en kötü hâline getir",
+    destroyTitle:
+      "Bu takımdaki her oyuncuyu en kötü hâline getir: moral ve mutluluk, enerji, maç kondisyonu ve yorgunluk, " +
+      "kulüple uyum ve takımın taktiğini sen seçiyorsan taktik bilgisi. Hiçbir değer olduğundan iyi yapılmaz; " +
+      "özellikler, sakatlıklar ve cezalar olduğu gibi kalır. Önce sorar; tek bir “Geri al” hepsini geri alır",
+    destroySteps: {
+      demoralize: "Moral ve mutluluk",
+      exhaust: "Enerji ve maç kondisyonu",
+      minCohesion: "Uyum",
+      minTactics: "Taktik",
+    },
+    moreActions: "Diğer işlemler",
+    moreActionsTitle: "Takımın tamamına yönelik işlemler, tek tek",
+    destroyDialog: {
+      title: "Takım en kötü hâline getirilsin mi?",
+      doesHeading: "Listedeki her oyuncu için, kiralık gönderilenler de dahil",
+      does: [
+        "Moral en düşük değer olan 1'e; mutluluk ve forma süresi mutluluğu -100'e",
+        "Enerji %0'a, maç kondisyonu %35'e, yorgunluk 1000'e",
+        "Kulüple uyum 1'e (uyumu olanlarda)",
+        "Taktik bilgisi en düşüğe (takımın taktiğini sen seçiyorsan)",
+      ],
+      keeps: "Hiçbir değer olduğundan iyi yapılmaz. Özellikler, sakatlıklar ve cezalar olduğu gibi kalır.",
+      ownClub: "Bu, kendi kulübünün takımı.",
+      hint: "Oyun ilerlemeden önce tek bir “Geri al” hepsini geri alır.",
+      cancel: "İptal",
+    },
     hint:
       "İşlemler listedeki her oyuncuyu kapsar, kiralık gönderilenler de dahil. " +
       "Geri alma işlemi Değişiklikler bölümünde de yapılabilir.",
