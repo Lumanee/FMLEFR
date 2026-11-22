@@ -223,6 +223,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (es.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Nadie en este equipo está lesionado.",
+  "team.noCohesion": () =>
+    "El editor no puede leer la cohesión de este equipo: esta versión del juego no se ha comprobado, o ninguno de " +
+    "sus jugadores tiene cohesión con el club.",
+  "team.noTactics": () =>
+    "El editor no puede leer cuánto conoce este equipo su táctica: esta versión del juego no se ha comprobado, o el " +
+    "equipo no juega una táctica que elijas tú.",
   "guard.unknownBuild": () =>
     "FMLibreEditor no se ha probado con esta versión del juego, así que no escribe en ella. «Editar de todos modos», " +
     "en el aviso de arriba, activa la edición.",
@@ -2313,6 +2320,14 @@ export const es: Strings = {
     maxAllTitle:
       "Poner cada atributo de cada jugador de este equipo en su mejor valor: 20, y 1 para la propensión a lesiones y " +
       "el juego sucio",
+    atItsBest: "Equipo al máximo",
+    atItsBestTitle:
+      "«Curar a todos», «Motivar a todos», «Recuperar a todos», «Máxima cohesión» y «Táctica al máximo» con una sola " +
+      "pulsación, que un solo «Deshacer» revierte. Los atributos y las sanciones se quedan como están. Un paso que " +
+      "no se puede dar, como «Curar a todos» cuando nadie está lesionado, se omite, y el resultado lo indica. Las " +
+      "áreas de la táctica vuelven a bajar a medida que el entrenamiento envejece, al cabo de unas seis semanas, y " +
+      "otra táctica necesita otra pulsación. El juego muestra los cambios cuando avanza: pulsa Continuar en el juego",
+    atItsBestSkipped: (step, reason) => `Se omitió «${step}»: ${reason}`,
     hint:
       "Las acciones abarcan a todos los jugadores de la lista, también a los cedidos. Se pueden deshacer también " +
       "en Cambios.",

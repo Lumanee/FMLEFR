@@ -130,6 +130,9 @@ const STAFF_DEPARTMENTS: Partial<Record<string, string>> = {
 
 /** 按错误代码显示中文提示；参数由命令返回。 */
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "这支球队没有受伤球员。",
+  "team.noCohesion": () => "无法读取这支球队的凝聚力：此游戏版本尚未验证该功能，或球员都没有与俱乐部的凝聚力记录。",
+  "team.noTactics": () => "无法读取这支球队对其战术的熟悉程度：此游戏版本尚未验证该功能，或这支球队使用的不是你选择的战术。",
   "edit.unknownField": (p) => `此处没有可编辑的字段“${p.field}”。`,
   "edit.outOfRange": (p) => `${p.value} 不是有效的${field(p.field)}；取值范围为 ${p.min}–${p.max}。`,
   "edit.notADate": (p) => `${p.value} 不是有效的${field(p.field)}日期。`,
@@ -2555,6 +2558,10 @@ export const zhCN: Strings = {
     maxAll: "属性拉满",
     maxAllTitle:
       "将全队所有球员的属性设为最高值 20；受伤倾向和肮脏动作设为最低值 1",
+    atItsBest: "全队状态拉满",
+    atItsBestTitle:
+      "一键完成“治疗全队”“鼓舞全队”“恢复全队状态”“凝聚力拉满”和“战术拉满”，点一次“撤销”即可全部撤回。属性和停赛保持不变。无法执行的步骤（例如没有球员受伤时的“治疗全队”）会被跳过，结果中会注明。随着训练变旧，约六周后战术各方面会再次下降；换用其他战术需要再点一次。在游戏中点击“继续”推进后，页面才会显示更新后的数值。",
+    atItsBestSkipped: (step, reason) => `已跳过“${step}”：${reason}`,
     /** Beside the buttons: whom they cover, and where undoing is. */
     hint: "操作会应用于列表中的所有球员，包括外租球员。也可以在“改动记录”中撤销。",
 

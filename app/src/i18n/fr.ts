@@ -269,6 +269,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (fr.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Personne n'est blessé dans cette équipe.",
+  "team.noCohesion": () =>
+    "L'éditeur ne peut pas lire la cohésion de cette équipe\u00a0: cette version du jeu n'a pas été vérifiée pour " +
+    "cela, ou aucun de ses joueurs n'a d'entrée pour le club.",
+  "team.noTactics": () =>
+    "L'éditeur ne peut pas lire à quel point cette équipe connaît sa tactique\u00a0: cette version du jeu n'a pas " +
+    "été vérifiée pour cela, ou l'équipe ne joue pas une tactique que vous choisissez.",
   "guard.unknownBuild": () =>
     "FMLibreEditor n'a pas été vérifié avec cette version du jeu\u00a0; il n'y écrit donc pas. «\u00a0Modifier quand " +
     "même\u00a0», dans l'avis en haut, active la modification.",
@@ -2415,6 +2422,16 @@ export const fr: Strings = {
     maxAllTitle:
       "Porter chaque attribut de chaque joueur de cette équipe à son meilleur niveau\u00a0: 20, et 1 pour la tendance à " +
       "se blesser et la violence",
+    atItsBest: "Équipe au maximum",
+    atItsBestTitle:
+      "«\u00a0Tout soigner\u00a0», «\u00a0Inspirer l'équipe\u00a0», «\u00a0Tout régénérer\u00a0», «\u00a0Cohésion " +
+      "maximale\u00a0» et «\u00a0Tactique au maximum\u00a0» en un seul clic, que «\u00a0Annuler\u00a0» défait d'un " +
+      "coup. Les attributs et les suspensions restent tels quels. Une étape qui ne peut pas se faire, comme " +
+      "«\u00a0Tout soigner\u00a0» quand personne n'est blessé, est sautée, et le résultat le dit. Les domaines de la " +
+      "tactique baissent de nouveau à mesure que l'entraînement vieillit, au bout de six semaines environ, et une " +
+      "autre tactique demande un autre clic. Le jeu affiche les modifications une fois qu'il avance\u00a0: appuyez " +
+      "sur Continuer dans le jeu",
+    atItsBestSkipped: (step, reason) => `Étape «\u00a0${step}\u00a0» sautée\u00a0: ${reason}`,
     hint:
       "Les actions concernent chaque joueur de la liste, y compris ceux prêtés ailleurs. L'annulation se trouve aussi " +
       "dans la vue Modifications.",

@@ -249,6 +249,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (de.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Niemand in dieser Mannschaft ist verletzt.",
+  "team.noCohesion": () =>
+    "Der Editor kann das Teambuilding dieser Mannschaft nicht lesen: Diese Version des Spiels wurde dafür nicht " +
+    "geprüft, oder keiner ihrer Spieler hat einen Eintrag für den Verein.",
+  "team.noTactics": () =>
+    "Der Editor kann nicht lesen, wie gut diese Mannschaft ihre Taktik kennt: Diese Version des Spiels wurde dafür " +
+    "nicht geprüft, oder die Mannschaft spielt keine Taktik, die Sie wählen.",
   "guard.unknownBuild": () =>
     "FMLibreEditor wurde mit dieser Version des Spiels nicht geprüft und schreibt daher nicht hinein. „Trotzdem " +
     "bearbeiten“ im Hinweis oben schaltet das Bearbeiten ein.",
@@ -2404,6 +2411,15 @@ export const de: Strings = {
     maxAllTitle:
       "Setzt jedes Attribut jedes Spielers dieser Mannschaft auf den besten Wert: 20, und 1 für " +
       "Verletzungsanfälligkeit und Unsportlichkeit",
+    atItsBest: "Mannschaft in Bestform",
+    atItsBestTitle:
+      "„Alle heilen“, „Alle motivieren“, „Alle regenerieren“, „Teambuilding maximieren“ und „Taktik maximieren“ mit " +
+      "einem Klick, den ein einziges „Rückgängig“ zurücknimmt. Attribute und Sperren bleiben, wie sie sind. Ein " +
+      "Schritt, der nicht ausgeführt werden kann, etwa „Alle heilen“, wenn niemand verletzt ist, wird übersprungen, " +
+      "und das Ergebnis nennt ihn. Die Bereiche der Taktik sinken wieder, wenn das Training altert, nach etwa sechs " +
+      "Wochen, und eine andere Taktik braucht einen weiteren Klick. Das Spiel zeigt die Änderungen, sobald es " +
+      "weiterläuft: Klicken Sie im Spiel auf Fortfahren",
+    atItsBestSkipped: (step, reason) => `„${step}“ übersprungen: ${reason}`,
     hint:
       "Die Aktionen betreffen jeden Spieler der Liste, auch die verliehenen. Rückgängig machen lässt sich auch in der " +
       "Ansicht Änderungen.",

@@ -102,6 +102,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (id.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Tidak ada yang cedera di tim ini.",
+  "team.noCohesion": () =>
+    "Editor tidak dapat membaca kekompakan tim ini: versi game ini belum diperiksa untuk itu, atau tidak ada " +
+    "pemainnya yang memiliki kekompakan dengan klub.",
+  "team.noTactics": () =>
+    "Editor tidak dapat membaca seberapa baik tim ini memahami taktiknya: versi game ini belum diperiksa untuk itu, " +
+    "atau tim tidak memainkan taktik yang Anda pilih.",
   "edit.unknownField": (p) => `Tidak ada kolom “${p.field}” yang bisa diedit di sini.`,
   "edit.outOfRange": (p) => `${p.value} bukan nilai ${field(p.field)} yang valid: harus dari ${p.min} sampai ${p.max}.`,
   "edit.notADate": (p) => `${p.value} bukan tanggal yang valid untuk ${field(p.field)}.`,
@@ -2180,6 +2187,15 @@ export const id: Strings = {
     maxAll: "Maksimalkan atribut",
     maxAllTitle:
       "Atur setiap atribut setiap pemain di tim ini ke nilai terbaiknya: 20, dan 1 untuk kerentanan cedera dan kekasaran",
+    atItsBest: "Tim dalam kondisi prima",
+    atItsBestTitle:
+      "“Sembuhkan semua”, “Inspirasi semua”, “Segarkan semua”, “Kekompakan maksimal”, dan “Maksimalkan taktik” " +
+      "sekaligus dalam satu tekan, dan satu “Urungkan” membatalkan semuanya. Atribut dan larangan bermain tetap " +
+      "seperti semula. Langkah yang tidak bisa dijalankan, misalnya “Sembuhkan semua” saat tidak ada yang cedera, " +
+      "dilewati, dan hasilnya menyebutkannya. Area taktik akan turun lagi seiring latihan menua, setelah sekitar " +
+      "enam minggu, dan taktik lain perlu ditekan sekali lagi. Game menampilkan perubahan setelah waktu berjalan: " +
+      "tekan Lanjutkan di game",
+    atItsBestSkipped: (step, reason) => `“${step}” dilewati: ${reason}`,
     hint: "Tindakan ini mencakup setiap pemain di daftar, termasuk yang sedang dipinjamkan. Urungkan juga ada di tampilan Perubahan.",
 
     freezeLabel: "Bekukan seluruh tim",
