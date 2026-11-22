@@ -3219,7 +3219,7 @@ export const de: Strings = {
         },
         {
           title: "Eigenschaften für Kader.",
-          text: "Unter „Kader“ eines Vereins gibt „Eigenschaften für Kader“ allen Spielern der Mannschaft die Spielereigenschaften, die Sie wählen, oder nimmt sie ihnen, und lässt ihre übrigen Eigenschaften, wie sie sind. Ein einziges „Rückgängig“ nimmt es zurück.",
+          text: "Unter „Kader“ eines Vereins, im Menü „Weitere Aktionen“, gibt „Eigenschaften für Kader“ allen Spielern der Mannschaft die Spielereigenschaften, die Sie wählen, oder nimmt sie ihnen, und lässt ihre übrigen Eigenschaften, wie sie sind. Ein einziges „Rückgängig“ nimmt es zurück.",
         },
         {
           title: "Alle Mitarbeiter transferieren.",

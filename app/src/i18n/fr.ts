@@ -3242,7 +3242,7 @@ export const fr: Strings = {
         },
         {
           title: "Caractéristiques du groupe.",
-          text: "Dans l'onglet Effectif d'un club, Caractéristiques du groupe donne à tous les joueurs de l'équipe les caractéristiques que vous choisissez, ou les leur retire, et laisse les autres telles quelles. Un seul Annuler revient en arrière.",
+          text: "Dans l'onglet Effectif d'un club, sous Plus d'actions, Caractéristiques du groupe donne à tous les joueurs de l'équipe les caractéristiques que vous choisissez, ou les leur retire, et laisse les autres telles quelles. Un seul Annuler revient en arrière.",
         },
         {
           title: "Transférer tout le staff.",

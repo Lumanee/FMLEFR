@@ -5,8 +5,8 @@
 // in the change log, a second press with nothing left to write, then one undo of the batch putting every player back. On
 // the senior team of the best known club no human manages, Min tactics skipped and named while the other steps still
 // run, undone. Then the Squad tab of the human manager's club: Team at its best, More actions with the seven single
-// actions and the red Destroy; Destroy's question, Cancel writing nothing, Destroy there, the line under the buttons, and
-// its Undo.
+// actions and Batch traits, and the red Destroy; Batch traits' dialog from the menu, and Escape giving focus back to More
+// actions; Destroy's question, Cancel writing nothing, Destroy there, the line under the buttons, and its Undo.
 import { SHOWN, VIS, sleep } from "../lib/app.mjs";
 import { humanClubs, topClubs } from "../lib/witness.mjs";
 
@@ -229,8 +229,8 @@ export async function run({ app, report, probe }) {
     "the More actions menu",
   );
   report.check(
-    "More actions lists the seven single actions",
-    items.length === 7 && items[0].startsWith("Heal all") && items[6] === "Max tactics",
+    "More actions lists the seven single actions, then Batch traits",
+    items.length === 8 && items[0].startsWith("Heal all") && items[6] === "Max tactics" && items[7] === "Batch traits",
     items.join(" | "),
   );
   await app.press("Escape");
@@ -238,6 +238,24 @@ export async function run({ app, report, probe }) {
     "and Escape closes it",
     await app.js(`!document.querySelector(".squad-actions-menu")`),
   );
+
+  // Batch traits (#237) opens its dialog from the menu; closing it gives focus back to More actions.
+  await app.click(`${buttons}[1]`, "More actions");
+  const traitsItem = `[...(document.querySelector(".squad-actions-menu")?.querySelectorAll("[role=menuitem]") ?? [])].find((i) => i.textContent === "Batch traits")`;
+  await app.waitFor(traitsItem, "Batch traits in the menu");
+  report.check("Batch traits says it opens a dialog", await app.js(`${traitsItem}.getAttribute("aria-haspopup") === "dialog"`));
+  await app.click(traitsItem, "Batch traits");
+  const traitsDialog = `document.querySelector(".batch-traits-dialog")`;
+  await app.waitFor(traitsDialog, "the Batch traits dialog");
+  report.check(
+    "it opens the Batch traits dialog in place of the menu, with the 64 traits and focus on Cancel",
+    await app.js(
+      `!document.querySelector(".squad-actions-menu") && ${traitsDialog}.querySelectorAll("input[type=checkbox]").length === 64 && document.activeElement?.textContent === "Cancel"`,
+    ),
+  );
+  await app.press("Escape");
+  await app.waitFor(`!${traitsDialog}`, "the Batch traits dialog to close");
+  report.check("Escape closes it and gives focus back to More actions", await app.js(`document.activeElement === ${buttons}[1]`));
 
   const logLength = (await app.must("change_log")).length;
   await app.click(destroy, "Destroy");
