@@ -145,9 +145,14 @@ For a build without one, or where a place a profile names does not check out, th
     value for the day before sits some 0x2F000 bytes away;
   - the one that fits the witnesses better than every other: no more contracts after it, no fewer injuries, and
     better on one count. On a day on which no contract was signed and no injury began, the day before fits exactly
-    as well as the date, so this alone cannot tell them apart.
+    as well as the date, so this alone cannot tell them apart;
+  - of the dates none fits better than, the one held in more places than any other. Game Pass 0.9.2524.0 keeps a
+    value for the day after (`game_plugin.dll+0x53bb3b4`), which only an injury over on the day rules out: on a save
+    of 23 October 2026 none was, and the 24th fitted exactly as well as the 23rd, which three places held against its
+    one. Each value for another day seen so far was held in one place.
 
-  Otherwise none is used.
+  Otherwise none is used, as where two dates are held in as many places: right after a load the date's own variable
+  can be the only place that holds it.
 - **The retirement manager's static** where other builds keep it, as far from the players' array, checked by the
   name of the class its object has. Otherwise the plugin's writable data is searched for a pointer to an object of
   the class `RETIREMENT_MANAGER`, which takes about half a second.
@@ -196,8 +201,8 @@ are, in `[layout.<section>]` tables: a session reads its build's layout with tho
 #### On the day of an update
 
 1. Load a save in the updated game. If the probe finds values that read as two dates a day apart (the value the
-   game keeps for the day before), it says how it chose between them: check that the date it took is the one the game
-   shows, and that it read it where the other builds keep their date.
+   game keeps for the day before, or for the day after), it says how it chose between them: check that the date it
+   took is the one the game shows, and that it read it where the other builds keep their date.
 2. `fmlibre-probe profile --out profiles/fm27/<storefront>-<version>.toml` looks for everything as for a build
    without a profile, runs the checks with what it found, and writes the profile. It lists the values that read as a
    plausible date, and whether the guessed and the searched places of the retirement manager and of the game object

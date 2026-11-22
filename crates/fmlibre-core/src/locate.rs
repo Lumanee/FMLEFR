@@ -7,7 +7,8 @@
 //! - the entity arrays, by scanning the game plugin ([`crate::calibrate`]);
 //! - the in-game date, among the values in the plugin's writable data that read as dates: the one the game's own data
 //!   agrees with, which [`crate::health`] works out from contracts and injuries, the values about as far from the
-//!   players' array as another build keeps its date marked as such;
+//!   players' array as another build keeps its date marked as such, and where values for two days fit as well, the
+//!   day more places hold;
 //! - the retirement manager's static and the game object's, each as far from the players' array as another build keeps
 //!   it, or else by searching the plugin's writable data for a pointer to the one object of its class (see
 //!   [`crate::rtti`]).
@@ -321,8 +322,10 @@ mod tests {
         // November 2026 moved it about 0x1490 nearer the players pair, out of reach of every guess from the builds
         // before (0x14A0 on Game Pass 0.9.2524.0, 0x1480 on Steam build 26620374): there the search found it, the one
         // date that fits best on a save of 18 January 2028, and the only one but the field beside the arrays on a save
-        // of 14 October 2026. Their profiles guess the next builds' dates. The Epic profile of the same update now
-        // guesses Steam build 26620374's date, so that one is no longer beyond the guesses.
+        // of 14 October 2026. On a Game Pass save of 23 October 2026 the day after fitted as well, and the search told
+        // the date by the places that held it, three against one. Their profiles guess the next builds' dates. The
+        // Epic profile of the same update now guesses Steam build 26620374's date, so that one is no longer beyond the
+        // guesses.
         let kind = |profile: &BuildProfile| std::mem::discriminant(&profile.plugin);
         let beyond_the_guesses = |profile: &BuildProfile| profile.package_version.as_deref() == Some("0.9.2524.0");
         for profile in profiles.iter().filter(|profile| profile.current_date.is_some()) {
