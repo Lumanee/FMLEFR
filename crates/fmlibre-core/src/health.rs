@@ -515,10 +515,10 @@ const GAP: f64 = 20.0;
 /// How much higher, as stored (0–100), goalkeeping coaches rate on average at goalkeeping than coaches, physios at
 /// physiotherapy than coaches, and scouts at judging potential than physios, for the staff's attributes to be read
 /// right. Read right, these gaps were 39, 51 and 30 on the Game Pass test save (9 September 2026), 42, 50 and 30 over
-/// all the staff of the Mac Steam save (17 July 2027), and 27, 41 and 19 on a Game Pass career in October 2027: the
-/// gaps narrow as a career goes on, so they ask for less than the players' [`GAP`]. Read one byte off on the Mac save,
-/// they were -9, -17 and -21 one way and -2 at physiotherapy the other (judging then reads judging ability, which
-/// scouts are good at too, and stays at 30).
+/// all the staff of the Mac Steam save (17 July 2027), and 27, 41 and 19 on a Game Pass career in October 2027. They
+/// differ from one career to another, so the check asks staff for less than the players' [`GAP`]. Read one byte off on
+/// the Mac save, the gaps were -9, -17 and -21 one way and -2 at physiotherapy the other (judging then reads judging
+/// ability, which scouts are good at too, and stays at 30).
 const STAFF_GAP: f64 = 10.0;
 
 /// Runs every check on the running game, and finds the in-game date.
