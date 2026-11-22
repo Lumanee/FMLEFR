@@ -21,6 +21,12 @@ const NEW_INSTALL = "new";
 /** Where the look for updates keeps its last answer, with the version the app then was (see `update.ts`). */
 const UPDATE_KEY = "fmlibre.update";
 
+/**
+ * Where the star request counts the starts (see `StarRequest.tsx`). Its module counts this very start as it loads,
+ * which is before this one reads the storage, so the key tells nothing about a version used before.
+ */
+const STAR_KEY = "fmlibre.star";
+
 /** The most versions the dialog shows at once, newest first: after a long gap, the rest are a link away. */
 const MOST_VERSIONS = 3;
 
@@ -51,8 +57,9 @@ function keepSeen(version: string): void {
 
 /**
  * The version whose notes the user had seen when the app started, or `NEW_INSTALL`. Where nothing was kept yet, it is
- * the version updated from, or "0" for a copy used before by a version that kept neither; it is kept at once, before
- * anything else this start writes, so that a reload (to change the language, say) reads the same.
+ * the version updated from, or "0" for a copy used before by a version that kept neither; it is kept at once, so that
+ * a reload (to change the language, say) reads the same. Of what this start writes, only the star request's count can
+ * come before it, and that is left out.
  */
 const seenAtStart: string = (() => {
   try {
@@ -67,7 +74,7 @@ const seenAtStart: string = (() => {
     } catch {
       // An answer that cannot be read tells nothing about the version before.
     }
-    const usedBefore = Object.keys(storage).some((key) => key.startsWith("fmlibre."));
+    const usedBefore = Object.keys(storage).some((key) => key.startsWith("fmlibre.") && key !== STAR_KEY);
     const seen = isVersion(before) ? before : usedBefore ? "0" : NEW_INSTALL;
     storage.setItem(SEEN_KEY, seen);
     return seen;
