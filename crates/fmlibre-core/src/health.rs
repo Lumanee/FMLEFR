@@ -810,15 +810,24 @@ fn find_date(session: &Session, evidence: &DateEvidence) -> (Option<DatePlace>, 
 /// More than one date can fit. The game keeps a value for the day before, and the evidence leaves some room, so the
 /// day before fits as well unless enough contracts were signed and injuries begun on the day to rule it out: on the
 /// Game Pass save of 23 September 2026, `game_plugin.dll+0x56546f8` held the 22nd and fitted as well as the date; on
-/// 0.9.2435.0, `+0x53886f8` held 10 January 2028 and fitted too, if less well than the 11th. Then the date is, in turn:
+/// 0.9.2435.0, `+0x53886f8` held 10 January 2028 and fitted too, if less well than the 11th. On 0.9.2524.0 a value for
+/// the day after fits instead (`+0x53bb3b4`), which only an injury over on the day rules out. Then the date is, in
+/// turn:
 /// - the latest of them, when the field beside the arrays holds it: where the builds before November 2026 kept the
 ///   date, and 0.9.2409.0 keeps it there too once the game has moved on a day after a load;
 /// - the one of them read about as far from the players' array as other builds keep their date ([`Found::Guessed`]):
 ///   the date's own variable has kept its distance from build to build, and the day before is far from it;
 /// - the one of them that fits better than every other ([`DateFit::beats`]): each contract signed and each injury
-///   begun on the day counts against the day before.
+///   begun on the day counts against the day before, and each injury over on the day against the day after;
+/// - of those no other fits better, the one held in more places than any other: the game can keep its date in more
+///   than one place, while each value for another day seen so far was held in one. On 0.9.2524.0, on a save of 23
+///   October 2026 played on for some days since it was loaded, no injury was over on the day, and the day after
+///   fitted every contract and injury as well as the date, which three places held, `+0x539dd10` (its own variable),
+///   `+0x53ce958` and `+0x53fb6e8`, against the one value for the 24th.
 ///
-/// Otherwise no date is used. Along with the place, a note on how the date was chosen among several, if it was.
+/// Otherwise no date is used, as where two of them are held in as many places: right after a load the date's own
+/// variable can be the only place that holds it, as on 0.9.2409.0. Along with the place, a note on how the date was
+/// chosen among several, if it was.
 fn pick_date(candidates: &[DatePlace], evidence: &DateEvidence) -> Result<(DatePlace, Option<String>), String> {
     let fitting: Vec<DatePlace> =
         candidates.iter().copied().filter(|place| evidence.fit(place.date).holds_strictly()).collect();
@@ -852,12 +861,30 @@ fn pick_date(candidates: &[DatePlace], evidence: &DateEvidence) -> Result<(DateP
         .iter()
         .find(|(date, fit)| fits.iter().all(|(other, other_fit)| other == date || fit.beats(other_fit)))
         .map(|&(date, _)| date);
+    // The dates no other fits better, each with the number of places that hold it.
+    let held: Vec<(FmDate, usize)> = fits
+        .iter()
+        .filter(|(_, fit)| !fits.iter().any(|(_, other)| other.beats(fit)))
+        .map(|&(date, _)| (date, fitting.iter().filter(|place| place.date == date).count()))
+        .collect();
+    let most_held = held
+        .iter()
+        .find(|&&(date, count)| held.iter().all(|&(other, other_count)| other == date || count > other_count))
+        .map(|&(date, count)| {
+            let next = held.iter().filter(|&&(other, _)| other != date).map(|&(_, count)| count).max().unwrap_or(0);
+            (date, count, next)
+        });
     let pick = if beside == Some(latest) {
-        Some((latest, "the latest, which the field beside the arrays holds"))
+        Some((latest, "the latest, which the field beside the arrays holds".to_owned()))
     } else if let [date] = guessed.as_slice() {
-        Some((*date, "the one read about as far from the players' array as other builds keep the date"))
+        Some((*date, "the one read about as far from the players' array as other builds keep the date".to_owned()))
+    } else if let Some(date) = best {
+        Some((date, "the one that fits the contracts and the current injuries better than any other".to_owned()))
     } else {
-        best.map(|date| (date, "the one that fits the contracts and the current injuries better than any other"))
+        most_held.map(|(date, count, next)| {
+            let next = if held.len() > 2 { format!("at most {next}") } else { next.to_string() };
+            (date, format!("the one held in the most places among those that fit best ({count}, against {next})"))
+        })
     };
     if let Some((date, how)) = pick {
         let chosen = format!("of the {} dates that fit ({}), {how}", several.len(), listed(several));
@@ -872,11 +899,16 @@ fn pick_date(candidates: &[DatePlace], evidence: &DateEvidence) -> Result<(DateP
         0 => "none is read where other builds keep the date".to_owned(),
         count => format!("{count} are read where other builds keep the date"),
     };
+    let places = |count: usize| if count == 1 { "1 place".to_owned() } else { format!("{count} places") };
+    let counted: Vec<String> =
+        held.iter().map(|&(date, count)| format!("{} in {}", iso(date), places(count))).collect();
     Err(format!(
         "values in the plugin's data read as {} dates that fit, and nothing tells them apart, so none is used: {}; \
-         {beside}; {guessed}; none fits better than every other",
+         {beside}; {guessed}; none fits better than every other, and of those that fit best none is held in more \
+         places than every other ({})",
         several.len(),
-        listed(several)
+        listed(several),
+        counted.join(", ")
     ))
 }
 
@@ -1172,11 +1204,15 @@ mod tests {
         assert_eq!(picked(&candidates), Ok(candidates[2]));
         // The field beside the arrays alone, as right after a load it would not be.
         assert_eq!(picked(&candidates[..2]), Ok(candidates[1]));
-        // A second date that fits leaves the editor without one when nothing tells them apart: a date the day after,
-        // which every contract and injury fits as well, and which is later than the field beside the arrays.
+        // A date the day after, which every contract and injury fits as well, and which is later than the field beside
+        // the arrays: held in one place, where the date's own variable and the field hold the date. Held in as many
+        // places, nothing tells the two apart, and the editor goes without a date.
         let mut later = candidates.to_vec();
         later.push(place(0x100, today.plus_days(1), Found::Searched));
-        assert!(picked(&later).is_err());
+        assert_eq!(picked(&later), Ok(candidates[2]));
+        later.push(place(0x108, today.plus_days(1), Found::Searched));
+        let refused = pick_date(&later, &evidence).expect_err("no date");
+        assert!(refused.contains("2027-08-13 in 2 places, 2027-08-14 in 2 places"), "{refused}");
         // The day before is told apart by the field beside the arrays, and without it by the contract signed and the
         // injuries begun on the day.
         let mut before = candidates.to_vec();
@@ -1269,6 +1305,55 @@ mod tests {
         assert!(!on_the_day.beats(&the_day_before) && !the_day_before.beats(&on_the_day));
         let refused = pick_date(&candidates, &torn).expect_err("no date");
         assert!(refused.contains("none fits better than every other"), "{refused}");
+    }
+
+    #[test]
+    fn the_date_is_held_in_more_places_than_the_day_after() {
+        // As on Game Pass 0.9.2524.0 on 23 October 2026, with no profile, some days after the save was loaded: no
+        // injury was over on the day, so the value the game keeps for the day after fitted every contract and injury
+        // as well as the date. Three places held the date, beyond every guess from other builds, and one the day
+        // after; another value held 14 October, which the contracts and the injuries rule out.
+        let today = date(2026, 10, 23);
+        let evidence = evidence_on(today);
+        let (on_the_day, the_day_after) = (evidence.fit(today), evidence.fit(today.plus_days(1)));
+        assert!(on_the_day.holds_strictly() && the_day_after.holds_strictly());
+        assert!(!on_the_day.beats(&the_day_after) && !the_day_after.beats(&on_the_day));
+        let place = |rva, date, found| DatePlace { rva, date, found };
+        let candidates = [
+            place(0x539_DD10, today, Found::Searched),
+            place(0x53B_B3B4, today.plus_days(1), Found::Searched),
+            place(0x53C_E958, today, Found::Searched),
+            place(0x53F_B4C0, date(2026, 10, 14), Found::Searched),
+            place(0x53F_B6E8, today, Found::Searched),
+        ];
+        let (picked, note) = pick_date(&candidates, &evidence).expect("a date");
+        // Read from the first place that holds it, the date's own variable, where the build's profile puts it.
+        assert_eq!(picked, candidates[0]);
+        assert!(
+            note.as_deref().is_some_and(|note| note.contains("the most places") && note.contains("(3, against 1)"))
+        );
+        // Right after a load the date's own variable can be the only place that holds it, as on 0.9.2409.0: then
+        // nothing tells it from the day after.
+        let loaded = [candidates[0], candidates[1], candidates[3]];
+        let refused = pick_date(&loaded, &evidence).expect_err("no date");
+        assert!(refused.contains("2026-10-23 in 1 place, 2026-10-24 in 1 place"), "{refused}");
+        // A date another fits better than counts for nothing, however many places hold it: the day before, ruled out by
+        // the contracts signed on the day, held in three places, leaves the date and the day after held in one each.
+        let before = [
+            candidates[0],
+            candidates[1],
+            place(0x100, today.plus_days(-1), Found::Searched),
+            place(0x200, today.plus_days(-1), Found::Searched),
+            place(0x300, today.plus_days(-1), Found::Searched),
+        ];
+        assert!(on_the_day.beats(&evidence.fit(today.plus_days(-1))));
+        let refused = pick_date(&before, &evidence).expect_err("no date");
+        assert!(refused.contains("2026-10-23 in 1 place, 2026-10-24 in 1 place"), "{refused}");
+        // And with the date in two places of its own, among three dates that fit, it is the one.
+        let three = [before[0], before[1], before[2], before[3], before[4], candidates[2]];
+        let (picked, note) = pick_date(&three, &evidence).expect("a date");
+        assert_eq!(picked, candidates[0]);
+        assert!(note.as_deref().is_some_and(|note| note.contains("(2, against 1)")), "{note:?}");
     }
 
     #[test]
