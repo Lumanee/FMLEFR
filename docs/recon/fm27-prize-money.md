@@ -62,10 +62,26 @@ new amount too), the African Champions League's per draw and per loss, and the C
 its league phase started; each read back, put back, and every competition then read as before. The refusals held: a
 21st place of a 20-team league, more than £200M, and "League", which 18 competitions match.
 
+The game pays from these amounts. pdalu's write test in #123 showed it on the Mac Steam build 26385295, for a Serie
+BKT club, on a save loaded from disk on 14 September 2026, each change made on a copy of the save:
+- It pays per match, on the day of the match. The Serie BKT pays nothing per match; with £22,222 written per loss,
+  the club's prize money for the month went up by €25,868 after a defeat, which is £22,222 at the save's rate
+  (1.16407). The Rules screen showed the new amounts at once.
+- It pays by final position at the season's end. Three different amounts written into the Serie BKT's list in
+  September were paid to the first three clubs, to the pound, by 17 May 2027 (the league's last day was 14 May).
+- A change lasts through a save and a reload. The settings came back from the save at a new address, with the
+  amounts written, and the defeat above was paid after that reload.
+- It does not last into the next season. The settings written to held the database's amounts again on 29 June, and
+  the new season's Rules screen showed those. A new settings object that appeared on 8 July held the written list;
+  what it is was not looked at.
+
+On that build the club's finance record (club `+0x150`, `finance` in `layout.toml`) holds this month's prize money at
+`+0x348`, as `i32` pounds; the payments were read there.
+
 Not known yet:
-- whether the game pays from these amounts: a per-match amount is the quick test (change it, win a match, and look
-  at the prize money in the club's income); a list by position needs the end of a season;
-- whether a change lasts through a save and a reload, and into the next season.
+- whether the game reads a list again when it is changed after the season's last match but before it pays;
+- whether it pays the same way on the Windows builds and on the Intel half of the Mac's `game_plugin`, where no
+  payment was tried.
 
 ## Cups and play-offs
 
