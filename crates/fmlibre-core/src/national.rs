@@ -410,6 +410,8 @@ mod tests {
         assert!(!OTHER_KINDS.contains(&SENIOR_KIND));
     }
 
+    /// The builds the national teams were read on, and the Epic build of 27.1.0, which keeps them where its Steam twin
+    /// does (see `profile.rs`).
     #[test]
     fn only_the_builds_read_place_the_national_teams() {
         let placed: Vec<String> = crate::profile::built_in_profiles()
@@ -424,7 +426,8 @@ mod tests {
                 "FM27 Steam build 26577676",
                 "FM27 Steam build 26620374",
                 "FM27 Steam build 26385295 (27.0.1, macOS, Apple silicon)",
-                "FM27 Steam build 26620374 (macOS, Apple silicon)"
+                "FM27 Steam build 26620374 (macOS, Apple silicon)",
+                "FM27 (Epic Games Store)"
             ]
         );
     }
