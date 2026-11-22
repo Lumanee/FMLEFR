@@ -22,7 +22,8 @@ findings about FM27's data are all welcome. See [Contributing](#contributing).
 - **macOS:**
   [FMLibreEditor-macOS.zip](https://github.com/tozmoz/FMLibreEditor/releases/latest/download/FMLibreEditor-macOS.zip)
 
-How to install and use it: [docs/INSTALL.md](docs/INSTALL.md).
+How to install and use it: [docs/INSTALL.md](docs/INSTALL.md). How the Windows builds are
+signed: [Code signing policy](#code-signing-policy).
 
 ## What it does
 
@@ -118,6 +119,33 @@ much of FM27's data was worked out.
 FMLibreEditor is not affiliated with or endorsed by Sports Interactive or SEGA. Memory-layout
 leads come from GPL-3.0 project:
 [fm-editor](https://github.com/barak14/fm-editor) by barak14
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+Windows signing is being set up: the Windows builds of the releases so far are not signed yet.
+Once it is in place, the installer and the programs in it are signed only when they are built
+by this repository's [release workflow](.github/workflows/release.yml) on GitHub Actions, from
+the source code in this repository. The macOS app is signed and notarized with the
+maintainer's Apple Developer ID.
+
+Team roles:
+
+- Committers and reviewers: [tozmoz](https://github.com/tozmoz), the maintainer. Every pull
+  request from anyone else is reviewed by the maintainer before it is merged.
+- Approvers: [tozmoz](https://github.com/tozmoz). Each release will be approved by hand before
+  it is signed.
+
+Privacy: this program will not transfer any information to other networked systems unless
+specifically requested by the user or the person installing or operating it. The one
+exception it makes on its own: when it starts (at most once every six hours), and when
+**Check for updates** is pressed, it asks GitHub's public API for the latest FMLibreEditor
+release, sending nothing about you, your computer or your game. An update is downloaded from
+GitHub only when you click **Update**. The app reads and changes the memory of the Football
+Manager 27 process it connects to and nothing else on your system; on disk it writes only its
+own settings and change history, and the exports you ask for.
 
 ## License
 
