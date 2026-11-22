@@ -2356,6 +2356,23 @@ export const de: Strings = {
     cancel: "Abbrechen",
   },
 
+  batchTraits: {
+    title: "Eigenschaften für Kader",
+    addMode: "+ Zum Kader hinzufügen",
+    removeMode: "- Aus dem Kader entfernen",
+    addHint: "Fügt den Spielern dieser Mannschaft ausgewählte Eigenschaften hinzu, die sie noch nicht haben. Bestehende Eigenschaften bleiben erhalten.",
+    removeHint: "Entfernt die ausgewählten Eigenschaften von Spielern dieser Mannschaft, die sie haben. Andere Eigenschaften bleiben unberührt.",
+    noneSelected: "Keine Eigenschaften in diesem Modus ausgewählt",
+    selectedCount: (count: number) => (count === 1 ? "1 Eigenschaft ausgewählt" : `${format(count)} Eigenschaften ausgewählt`),
+    deselectAll: "Auswahl aufheben",
+    oppositeModeNote: "Im anderen Modus ausgewählt",
+    applyNote: (players: number) => `Betrifft ${format(players)} Spieler · Kann mit 1 Klick rückgängig gemacht werden`,
+    emptySquad: (players: number) => `Kader von ${format(players)} Spielern`,
+    cancel: "Abbrechen",
+    apply: "Anwenden",
+    applying: "Wird angewendet…",
+  },
+
   squad: {
     teamsLabel: "Mannschaft",
     teams: {
@@ -2414,6 +2431,8 @@ export const de: Strings = {
     refreshAllTitle:
       "Setzt Energie und Spielpraxis jedes Spielers dieser Mannschaft auf 100 % und lässt ihn sich voll erholen " +
       "(Erschöpfung -500)",
+    batchTraits: "Eigenschaften für Kader",
+    batchTraitsTitle: "Bevorzugte Spielweisen für Spieler dieser Mannschaft hinzufügen oder entfernen",
     maxAll: "Attribute maximieren",
     maxAllTitle:
       "Setzt jedes Attribut jedes Spielers dieser Mannschaft auf den besten Wert: 20, und 1 für " +

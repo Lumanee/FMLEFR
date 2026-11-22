@@ -2206,6 +2206,23 @@ export const ko: Strings = {
     cancel: "취소",
   },
 
+  batchTraits: {
+    title: "선수단 선호 플레이 설정",
+    addMode: "+ 선수단에 추가",
+    removeMode: "- 선수단에서 삭제",
+    addHint: "선택한 선호 플레이를 아직 가지고 있지 않은 선수에게 추가합니다. 기존 선호 플레이는 유지됩니다.",
+    removeHint: "선택한 선호 플레이를 보유한 선수에게서 삭제합니다. 다른 선호 플레이는 변경되지 않습니다.",
+    noneSelected: "선택된 선호 플레이 없음",
+    selectedCount: (count: number) => `${format(count)}개 선택됨`,
+    deselectAll: "모두 선택 해제",
+    oppositeModeNote: "반대 모드에서 선택됨",
+    applyNote: (players: number) => `선수 ${format(players)}명에게 적용 · 한 번의 클릭으로 되돌리기 가능`,
+    emptySquad: (players: number) => `선수 ${format(players)}명으로 구성된 팀`,
+    cancel: "취소",
+    apply: "적용",
+    applying: "적용 중…",
+  },
+
   squad: {
     teamsLabel: "팀",
     teams: {
@@ -2252,6 +2269,8 @@ export const ko: Strings = {
     tacticsUntrained: (count) => `${playerCount(count)}은 훈련하지 않아(부상 등) 훈련 기록이 그대로 남습니다`,
     refreshAll: "모두 회복",
     refreshAllTitle: "이 팀 모든 선수의 컨디션과 경기력을 100%로 설정하고 완전히 쉬게 합니다(피로도 -500)",
+    batchTraits: "선수단 선호 플레이 일괄 설정",
+    batchTraitsTitle: "이 팀 선수의 선호 플레이를 일괄 추가하거나 삭제합니다",
     maxAll: "능력치 최대",
     maxAllTitle: "이 팀 모든 선수의 모든 능력치를 최고로 만듭니다. 20으로, 부상 빈도와 더티 플레이는 1로 설정합니다",
     atItsBest: "팀 최상 상태",

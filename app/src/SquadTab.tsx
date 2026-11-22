@@ -6,9 +6,19 @@
 
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { Ability } from "./Ability";
+import { BatchTraitsDialog } from "./BatchTraitsDialog";
 import { CaptainMenu } from "./CaptainMenu";
 import { DestroyDialog } from "./DestroyDialog";
-import { changeLog, clubSquads, freezeTeam, setCaptain, teamAction, undoBatch, undoChange } from "./editing";
+import {
+  batchTraitsTeam,
+  changeLog,
+  clubSquads,
+  freezeTeam,
+  setCaptain,
+  teamAction,
+  undoBatch,
+  undoChange,
+} from "./editing";
 import { describeError, formatNumber } from "./format";
 import { intlLocale } from "./i18n";
 import { InfoTip } from "./InfoTip";
@@ -221,6 +231,7 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
   const refocus = useRef(false);
   // The player whose profile is up over the squad, and the name that opened it.
   const [shown, setShown] = useState<SquadPlayer | null>(null);
+  const [batchTraitsOpen, setBatchTraitsOpen] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
   const wasShown = useRef(false);
 
@@ -324,6 +335,18 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
         failed: false,
         problems: [...skipped, ...refusalLines(report.failed)],
         // An action that wrote nothing has nothing to take back.
+        undo: report.applied > 0 ? () => undoBatch(report.batch) : null,
+      };
+    });
+
+  const batchTraits = (target: ClubTeam, addTraits: number[], removeTraits: number[]) =>
+    write(target.index, async () => {
+      const report = await batchTraitsTeam(clubUid, target.index, addTraits, removeTraits);
+      return {
+        team: target.index,
+        message: text.written(report.applied),
+        failed: false,
+        problems: refusalLines(report.failed),
         undo: report.applied > 0 ? () => undoBatch(report.batch) : null,
       };
     });
@@ -433,6 +456,7 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
               onAction={(action) => void act(team, action)}
               onDestroy={() => setDestroying(team)}
               destroyRef={destroyButton}
+              onBatchTraits={() => setBatchTraitsOpen(true)}
             />
             <p className="note squad-hint">{text.hint}</p>
           </div>
@@ -506,6 +530,18 @@ export function SquadTab({ clubUid, clubName, version, panel, label, overview }:
             void act(destroying, "destroy");
           }}
           onClose={() => setDestroying(null)}
+        />
+      )}
+
+      {batchTraitsOpen && team && (
+        <BatchTraitsDialog
+          team={team}
+          busy={busy}
+          onApply={async (addTraits, removeTraits) => {
+            await batchTraits(team, addTraits, removeTraits);
+            setBatchTraitsOpen(false);
+          }}
+          onClose={() => setBatchTraitsOpen(false)}
         />
       )}
     </div>
@@ -588,16 +624,18 @@ interface TeamActionsProps {
   onDestroy: () => void;
   /** The Destroy button, which takes focus back once the question is answered. */
   destroyRef: Ref<HTMLButtonElement>;
+  /** Opens the batch traits dialog for the shown team. */
+  onBatchTraits: () => void;
 }
 
 /**
  * Team at its best (Heal all, Inspire all, Refresh all, Max cohesion and Max tactics in one go), the More actions menu
- * with each action on its own (those five, Lift bans and Max attributes), and Destroy in red, for the shown team. Heal
- * all and Lift bans say how many players are injured or banned and wait until somebody is, Max cohesion until
- * somebody's cohesion can be read and Max tactics until somebody's familiarity with the tactic can; every one waits
- * while the game cannot be written to, and says why.
+ * with each action on its own (those five, Lift bans and Max attributes), Batch traits, and Destroy in red, for the
+ * shown team. Heal all and Lift bans say how many players are injured or banned and wait until somebody is, Max
+ * cohesion until somebody's cohesion can be read and Max tactics until somebody's familiarity with the tactic can;
+ * every one waits while the game cannot be written to, and says why.
  */
-function TeamActions({ team, editable, busy, onAction, onDestroy, destroyRef }: TeamActionsProps) {
+function TeamActions({ team, editable, busy, onAction, onDestroy, destroyRef, onBatchTraits }: TeamActionsProps) {
   const { readOnlyNote } = useContext(EditorContext);
   const injured = team.players.filter((player) => player.injuries > 0).length;
   const banned = team.players.filter((player) => player.bans > 0).length;
@@ -634,6 +672,14 @@ function TeamActions({ team, editable, busy, onAction, onDestroy, destroyRef }: 
         onPress={() => onAction("atItsBest")}
       />
       <TeamActionMenu actions={singles} editable={editable} busy={busy} onPick={onAction} />
+      <ActionButton
+        dialog
+        label={text.batchTraits}
+        title={hover(text.batchTraitsTitle, empty ? text.empty : null)}
+        waiting={!editable || empty}
+        busy={busy}
+        onPress={onBatchTraits}
+      />
       <ActionButton
         ref={destroyRef}
         className="destroy"

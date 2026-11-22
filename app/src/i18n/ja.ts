@@ -2170,6 +2170,23 @@ export const ja: Strings = {
     cancel: "キャンセル",
   },
 
+  batchTraits: {
+    title: "チーム特徴の一括設定",
+    addMode: "+ チームに追加",
+    removeMode: "- チームから削除",
+    addHint: "選択したプレイスタイルをまだ持っていない選手に追加します。既存のプレイスタイルは保持されます。",
+    removeHint: "選択したプレイスタイルを持っている選手から削除します。他のプレイスタイルには影響しません。",
+    noneSelected: "このモードで選択された特徴はありません",
+    selectedCount: (count: number) => `${format(count)}件選択中`,
+    deselectAll: "すべて解除",
+    oppositeModeNote: "別のモードで選択済み",
+    applyNote: (players: number) => `選手${format(players)}人に適用 · 1クリックで元に戻せます`,
+    emptySquad: (players: number) => `選手${format(players)}人のスカッド`,
+    cancel: "キャンセル",
+    apply: "適用",
+    applying: "適用中…",
+  },
+
   squad: {
     teamsLabel: "チーム",
     teams: {
@@ -2212,6 +2229,8 @@ export const ja: Strings = {
       `${format(count)}人はトレーニングしていない（負傷など）ため、トレーニング履歴はそのままです`,
     refreshAll: "全員を回復",
     refreshAllTitle: "このチームの全選手のコンディションと試合勘を100%にし、完全に休養させます（疲労蓄積 -500）",
+    batchTraits: "チーム特徴の一括設定",
+    batchTraitsTitle: "このチームの選手にプレイスタイルを追加または削除します",
     maxAll: "能力値を最大化",
     maxAllTitle: "このチームの全選手の能力値をすべて最高にします：20（負傷しやすさとラフプレーは1）",
     atItsBest: "チームを万全の状態に",

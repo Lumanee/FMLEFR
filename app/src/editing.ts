@@ -474,6 +474,19 @@ export const teamAction = (club: number, team: number, action: TeamAction) =>
 export const nationalTeamAction = (uid: number, action: NationalTeamAction) =>
   call<MassReport>("national_team_action", { uid, action });
 
+/**
+ * Adds or removes traits for every player of the club's team `team`.
+ * `addTraits` are trait bits (0..63) to set to 1.
+ * `removeTraits` are trait bits (0..63) to set to 0.
+ * The changes are logged as one batch, undone with `undoBatch`.
+ */
+export const batchTraitsTeam = (
+  club: number,
+  team: number,
+  addTraits: number[],
+  removeTraits: number[],
+) => call<MassReport>("batch_traits_team", { club, team, addTraits, removeTraits });
+
 /** The human manager's club, its money, its squad line by line and the players to let go; fast. */
 export const scoutingOverview = () => call<ScoutingOverview>("scouting_overview");
 

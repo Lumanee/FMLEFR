@@ -212,6 +212,9 @@ export function nationalTeamLabel(kind: number): string {
 /** A club's squad: the tab of its profile with its teams' players, the actions on a team and the captains. */
 export const squadText = strings.squad;
 
+/** Batch traits dialog: the dialog that adds or removes preferred moves for a squad. */
+export const batchTraitsText = strings.batchTraits;
+
 /** The kind of team the game calls a B team (see `ClubTeam.kind`). */
 const B_TEAM_KIND = 3;
 
