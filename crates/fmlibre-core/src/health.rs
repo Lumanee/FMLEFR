@@ -507,11 +507,19 @@ const GOALKEEPING: [&str; 9] = [
 ];
 
 /// How much higher, as stored (0–100), goalkeepers rate on average at goalkeeping than outfield players, strikers
-/// at finishing than centre-backs, and centre-backs at tackling than strikers, for the attributes to be read right;
-/// and among staff, goalkeeping coaches at goalkeeping, physios at physiotherapy and scouts at judging potential. On
-/// the Game Pass test save (9 September 2026) these gaps were 42, 37 and 36, and 39, 51 and 30. With the players'
-/// attributes read one byte off, the first three were 23, -4 and -5.
+/// at finishing than centre-backs, and centre-backs at tackling than strikers, for the players' attributes to be read
+/// right. On the Game Pass test save (9 September 2026) these gaps were 42, 37 and 36. With the players' attributes
+/// read one byte off, they were 23, -4 and -5.
 const GAP: f64 = 20.0;
+
+/// How much higher, as stored (0–100), goalkeeping coaches rate on average at goalkeeping than coaches, physios at
+/// physiotherapy than coaches, and scouts at judging potential than physios, for the staff's attributes to be read
+/// right. Read right, these gaps were 39, 51 and 30 on the Game Pass test save (9 September 2026), 42, 50 and 30 over
+/// all the staff of the Mac Steam save (17 July 2027), and 27, 41 and 19 on a Game Pass career in October 2027. They
+/// differ from one career to another, so the check asks staff for less than the players' [`GAP`]. Read one byte off on
+/// the Mac save, the gaps were -9, -17 and -21 one way and -2 at physiotherapy the other (judging then reads judging
+/// ability, which scouts are good at too, and stays at 30).
+const STAFF_GAP: f64 = 10.0;
 
 /// Runs every check on the running game, and finds the in-game date.
 pub(crate) fn check(session: &Session) -> Health {
@@ -1004,9 +1012,10 @@ fn check_staff(session: &Session) -> CheckResult {
     ];
     let shown = |gap: Option<f64>| gap.map_or_else(|| "-".to_owned(), |gap| format!("{gap:.0}"));
     let mut result = tally.result(Check::Staff, 0.97, String::new());
-    result.passed &= contracts.holds(0.95) && gaps.iter().all(|gap| gap.is_some_and(|gap| gap >= GAP));
+    result.passed &= contracts.holds(0.95) && gaps.iter().all(|gap| gap.is_some_and(|gap| gap >= STAFF_GAP));
     result.note = format!(
-        "{} of {} contracts point back; goalkeeping gap {}, physiotherapy gap {}, judging gap {} (at least {GAP:.0})",
+        "{} of {} contracts point back; goalkeeping gap {}, physiotherapy gap {}, judging gap {} (at least \
+         {STAFF_GAP:.0})",
         contracts.fit,
         contracts.sampled,
         shown(gaps[0]),
