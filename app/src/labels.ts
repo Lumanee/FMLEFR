@@ -150,6 +150,9 @@ export const graphicsText = strings.graphics;
 /** New versions: the notice under the masthead and Check for updates at the foot of the window. */
 export const updateText = strings.update;
 
+/** The note that asks for a star on GitHub, once, in the top right corner (see `StarRequest.tsx`). */
+export const starText = strings.star;
+
 /** A version of the game the editor was not checked with, or whose data did not check out: the notice about it. */
 export const compatibilityText = strings.compatibility;
 

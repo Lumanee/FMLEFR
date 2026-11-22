@@ -1507,6 +1507,13 @@ export const es: Strings = {
     failed: "No se ha podido comprobar si hay actualizaciones.",
   },
 
+  star: {
+    title: "¿Te gusta FMLibreEditor?",
+    text: "Una estrella en GitHub le ayuda a llegar a más jugadores y a crecer más rápido.",
+    star: "Dar una estrella en GitHub",
+    dismiss: "No, gracias",
+  },
+
   edit: {
     unknownNation: "País desconocido",
     unknownCity: "Ciudad desconocida",

@@ -1628,6 +1628,16 @@ export const en = {
     failed: "Could not check for updates.",
   },
 
+  /** Once, after a few starts: the note in the top right corner that asks for a star on GitHub (see `StarRequest`). */
+  star: {
+    title: "Enjoying FMLibreEditor?",
+    text: "A star on GitHub helps it reach more players and grow faster.",
+    /** Opens the project's page on GitHub, where the star is; the note does not come back. */
+    star: "Star on GitHub",
+    /** Puts the note away for good. */
+    dismiss: "No thanks",
+  },
+
   /** Editing a person or a club: the Edit button, the inputs, and the footer under the profile. */
   edit: {
     /** A nation field's value whose name the app has not read: one no one in the lists belongs to. */

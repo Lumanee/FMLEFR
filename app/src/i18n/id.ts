@@ -1438,6 +1438,13 @@ export const id: Strings = {
     failed: "Tidak bisa memeriksa pembaruan.",
   },
 
+  star: {
+    title: "Suka FMLibreEditor?",
+    text: "Bintang di GitHub membantunya menjangkau lebih banyak pemain dan berkembang lebih cepat.",
+    star: "Beri bintang di GitHub",
+    dismiss: "Tidak, terima kasih",
+  },
+
   edit: {
     unknownNation: "Negara tak dikenal",
     unknownCity: "Kota tak dikenal",
