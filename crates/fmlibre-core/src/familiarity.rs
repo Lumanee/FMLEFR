@@ -360,13 +360,12 @@ impl Session {
         }
         let new_history = history.map(|list| {
             let entries = today_history(tactic, &list.bytes);
-            let length = entries.len() as u64;
-            if length * HISTORY_ENTRY <= list.was[2] - list.was[0] {
-                // Within its buffer: the entries over the old ones and those after, and the end past the last.
-                let (begin, end) = (list.was[0], list.was[0] + length * HISTORY_ENTRY);
+            if let Some(end) = end_within(list.was, entries.len() as u64) {
+                // Within its buffer: the entries over the old ones and those after, and the end past the last. A
+                // history Max tactics wrote before is the same again, and nothing is written.
                 let mut old = list.bytes.clone();
                 old.extend(self.read_or_zero(list.was[1], end.saturating_sub(list.was[1])));
-                patches.push(begin, old, entries.clone());
+                patches.push(list.begin(), old, entries.clone());
                 patches.push(list.header + 8, list.was[1].to_le_bytes(), end.to_le_bytes());
                 entries
             } else if let Some(growth) = self.growth(list.header, list.was, entries.clone(), HISTORY_ENTRY) {
@@ -683,6 +682,12 @@ fn entry_weight(e: &[u8], options: &[i8; OPTION_AREAS], shapes: [Option<u16>; 2]
     Some(closeness * aged * kind * session * player * weeks)
 }
 
+/// The end a list holding `was` `(begin, end, capacity)` has with `bytes` bytes written from its begin, where its buffer
+/// has room for them; `None` where it has not, and the list is grown elsewhere.
+fn end_within(was: [u64; 3], bytes: u64) -> Option<u64> {
+    (bytes <= was[2] - was[0]).then_some(was[0] + bytes)
+}
+
 /// A player's history rewritten as training done today: on the tactic's options and his shapes, at the factors' most,
 /// the areas taken in turn, as many entries as he had and at least [`ENTRIES_PER_AREA`] for each area.
 fn today_history(tactic: &TeamTactic, history: &[u8]) -> Vec<u8> {
@@ -786,6 +791,23 @@ mod tests {
         assert_eq!(areas, [Some(100); 8]);
         // A week on, each entry adds 9: still 100, where 9 entries would give 81.
         assert_eq!(history_areas(&new, &t.options, shapes_of(&new), t.today + 7), [Some(100); 8]);
+    }
+
+    #[test]
+    fn a_history_that_fits_its_buffer_is_written_there_and_the_same_again() {
+        let t = tactic();
+        let first = today_history(&t, &[]);
+        let bytes = first.len() as u64;
+        // In a buffer just as large as its entries (by bytes, not by entries): over the old ones, the end where it was.
+        let full = [0x1000, 0x1000 + bytes, 0x1000 + bytes];
+        assert_eq!(end_within(full, bytes), Some(full[1]));
+        // Rewritten once more, it is the same: a second press writes nothing.
+        assert_eq!(today_history(&t, &first), first);
+        // Room past the end: the end moves past the new entries.
+        assert_eq!(end_within([0x1000, 0x1000 + 120, 0x1000 + 4_000], bytes), Some(0x1000 + bytes));
+        // No room for one entry more, or no buffer yet: grown elsewhere.
+        assert_eq!(end_within(full, bytes + HISTORY_ENTRY), None);
+        assert_eq!(end_within([0; 3], bytes), None);
     }
 
     #[test]
