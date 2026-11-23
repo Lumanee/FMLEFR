@@ -1,6 +1,6 @@
 // Connecting and reading: the build, the checks, the in-game date, the lists and the profiles. Writes nothing.
 import { SHOWN, VIS, sleep } from "../lib/app.mjs";
-import { topClubs } from "../lib/witness.mjs";
+import { humanClubs, topClubs } from "../lib/witness.mjs";
 
 export const name = "connect";
 export const writes = false;
@@ -14,6 +14,17 @@ export async function run({ app, report, connection: c }) {
   report.check("every check passes", failed.length === 0, failed.length ? `failed: ${failed.join(", ")}` : "");
   report.check("has the in-game date", c.gameDate != null, JSON.stringify(c.gameDate));
 
+  // Where the app opens: on My club when the save has a club of the user's, on the players when it has none. Only a
+  // copy of the app that no test has moved yet tells.
+  if (await app.js(`!document.querySelector(".profile")`)) {
+    const own = await humanClubs(app);
+    const expected = own.length > 0 ? "My club" : "Players";
+    const tab = `document.querySelector("nav.tabs .tab.active")?.firstChild?.textContent`;
+    await app.waitFor(`${tab} === ${JSON.stringify(expected)}`, `the ${expected} tab`, 15000).catch(() => {});
+    const opened = await app.js(tab);
+    report.check(`the app opens on ${expected}`, opened === expected, `${opened}; ${own.length} club(s) of the user's`);
+  }
+
   const page = await app.must("search_players", { query: "", limit: 200 });
   const aged = page.rows.filter((player) => player.age != null).length;
   report.check("the best players have ages", aged === page.rows.length, `${aged} of ${page.rows.length}`);
@@ -22,6 +33,9 @@ export async function run({ app, report, connection: c }) {
   const masthead = await app.js(`document.querySelector(".masthead")?.textContent ?? ""`);
   report.check("the masthead shows the date", masthead.includes(year), masthead.replace(/\s+/g, " ").slice(0, 120));
   report.check("no notice about the build or the checks", !(await app.js(`!!document.querySelector(".compatibility-notice")`)));
+  // The game's count of the saves it loaded is where the editor read it: it has the save the lists were read from.
+  report.check("the game has the save it was read from", (await app.must("save_changed")) === false);
+  report.check("no notice that the save has changed", !(await app.js(`!!document.querySelector(".save-changed-notice")`)));
 
   // The players' list and a profile.
   await app.openTab("Players");

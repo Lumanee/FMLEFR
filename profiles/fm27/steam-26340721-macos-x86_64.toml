@@ -22,3 +22,6 @@ uuid = "0981AB31-AC3B-3D93-944F-47FE4B59CD9E"
 players = 0x5C891C8
 staff = 0x5C89210
 clubs = 0x5C89380
+
+# [national_teams] is not here: the places of the national teams were not read on this build, so the National teams
+# tab shows nothing on it (see docs/DEVELOPING.md, National teams).

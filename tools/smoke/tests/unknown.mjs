@@ -24,6 +24,12 @@ export async function run({ app, report, probe, connection: c, known }) {
   const aged = page.rows.filter((player) => player.age != null).length;
   report.check("the players have ages", aged === page.rows.length, `${aged} of ${page.rows.length}`);
 
+  // The game's count of the saves it loaded, which tells the app when the game has loaded a save since it read it: the
+  // probe looks for it as the app does, without the profiles too.
+  const saves = probe.run(["calibrate"], { FMLIBRE_IGNORE_PROFILES: "1" }).match(/^Saves loaded: (.*)$/m)?.[1] ?? "";
+  report.check("finds the game's count of saves by itself", saves.includes("loaded since the game started"), saves);
+  report.check("the game has the save it was read from", (await app.must("save_changed")) === false);
+
   const [retiring] = retiringPlayers(probe);
   if (retiring == null) {
     report.skip("finds the planned retirements by itself", "the game plans no player's retirement on this save");
@@ -52,6 +58,14 @@ export async function run({ app, report, probe, connection: c, known }) {
   await sleep(500);
   const allowed = await app.must("current_connection");
   report.check("Edit anyway allows editing", allowed.editable);
+  // Once editing is allowed, the notice is left with nothing but the checks that did not pass to tell.
+  if (failed.length === 0) {
+    const gone = await app.waitFor(`!${notice}`, "the notice to go", 5000).then(() => true, () => false);
+    report.check("and takes the notice away", gone,
+      gone ? "" : (await app.js(`${notice}?.textContent ?? ""`)).replace(/\s+/g, " ").slice(0, 160));
+  } else {
+    report.skip("and takes the notice away", "it still tells the checks that did not pass");
+  }
   const read = await app.must("read_values", { entity: "player", uid });
   report.check("then reads the fields", read["attribute.finishing"] === value, `finishing ${read["attribute.finishing"]}`);
   const open = await app.must("apply_edits", { entity: "player", uid, edits: same });

@@ -431,3 +431,250 @@ ban lifted, a retirement called off; a stadium renamed in place, into a string o
 ties changed, added (a full list grown), and removed; a release clause changed and one removed; captains; a coach moved
 into a full department, new jobs, a member of staff with no club signed, a manager moved and one signed, and a director
 of football moved.
+
+## The update of 12 November 2026 (Steam build 26577676)
+
+Steam's update of 12 November 2026 (version 27.0.1.2503222; the Windows side has its own profile) gave both halves of
+`game_plugin` new UUIDs again: arm64 `A8550B47-…`, Intel `DD0EE157-…`. Nothing moved this time: `__DATA` starts where
+27.0.1's does in both halves (`0x5740000`, `0x5CD6000`), and every variable sits where 27.0.1 keeps it. Without a
+profile the editor found them all by itself, and the game stayed read-only until Edit anyway.
+
+- **arm64:** read on the maintainer's save (Arsenal, 12 July 2027). `fmlibre-probe profile` found the date, the
+  retirement manager, the game's own object and the arrays at 27.0.1's places, and all twelve checks passed. The two
+  managers Max tactics reads sit at 27.0.1's places too: `instances` finds one `TACTICS_MANAGER` and one
+  `TRAINING_MANAGER`, and `refs` one pointer in the plugin to each, `game_plugin+0x5744310` and `+0x5741740`.
+- **Intel:** not run; checked in the file. Its code's RIP-relative loads peak at 27.0.1's places exactly as often: 7,625
+  at the date, 185 and 173 at the players' begin and end, 18 and 18 at the staff's, 105 and 93 at the clubs', 63 at
+  the retirement manager's static and 527 at the game's own object's.
+
+The new profiles take 27.0.1's places with the new UUIDs. With the arm64 one the `tactics` check passed (1,059 of 1,059
+records, 40 histories of training), and Max tactics, written to Arsenal's 25 senior players and undone, left every
+record and every history entry as it was.
+
+## The update of 17 November 2026 (Steam build 26620374)
+
+Steam's update of 17 November 2026 (version 27.1.0.2505117, the same update as Game Pass 0.9.2524.0 and the Windows
+side of build 26620374) gave both halves of `game_plugin` new UUIDs: arm64 `869F5F90-…`, Intel `864625AF-…`. Every
+place moved: `__DATA` starts 0x34000 further on in the arm64 half (`0x5774000`) and 0x50000 in the Intel half
+(`0x5D26000`). Without a profile the editor found the arrays, the date, the retirement manager and the game's own object
+by itself, and all twelve checks passed; the game stayed read-only until Edit anyway.
+
+- **arm64:** read on the maintainer's save (Arsenal, 14 July 2027). The date at `0x5781DC8` and the retirement
+  manager's static at `0x57782B8` sit 0x10 further into `__DATA` than before, the arrays at `0x57A2FC8`, `0x57A3010`
+  and `0x57A3180` 0x178 further. `instances` finds one `TACTICS_MANAGER` and one `TRAINING_MANAGER`, and `refs` one
+  pointer in the plugin to each, `game_plugin+0x5778320` (still 0x68 after the retirement manager's) and `+0x5775758`.
+  The national teams' arrays sit 0xA8 and 0xC0 past the players pair, 251 containers each, and the prize money reads
+  as on Windows (the Premier League's 20 places from £53,100,000, Serie A's from £28,691,666).
+- **Intel:** not run; checked in the file. Its code's RIP-relative loads peak where build 26577676's did, moved as the
+  arm64 half's (the date and the retirement manager's static 0x10 more than `__DATA`, the arrays 0x180 more), with the
+  same counts around each: 7,630 at the date `0x5D33710`, 197 and 181 at the players' begin and end `0x5D53368`, 19
+  and 19 at the staff's, 106 and 94 at the clubs', 66 at the retirement manager's static `0x5D29F00` (still 0x9810
+  before the date) and 537 at the game's own object's `0x5D54E50`.
+
+As on Windows, two objects keep something a few bytes further on, and neither has a check of its own:
+- The club finance record keeps corporate facilities at 0x8AD, not 0x8A9: Arsenal 19, Liverpool 16, Tottenham Hotspur
+  20 there, and 0 at 0x8A9. Read at 0x8A9, no club's finances look real, so `fields club --stats` finds no class for
+  the full record ("finances are not writable"); read at 0x8AD it finds it, and 336 clubs keep their finances.
+- A team's tactics keep the list of tactics at 0x1008 and the index of the one in use at 0x1020, not 0x1000 and
+  0x1018: with them `training-history 602` finds Arsenal's tactic in use (options 5, 17, 10, 4, 6, 10, each among the
+  options the players' familiarity records list for its area); with the old places it finds none.
+
+Both profiles name them under `[layout.club_finance]` and `[layout.tactics]`; the Intel half's are the arm64 half's, as
+the Mac layout is the same for both.
+
+## The game's own object and its count of saves loaded
+
+The object of the class `game_plugin::GAME_UI` (see `layout.toml`'s `[game]`) is laid out as on Windows: at `+0x100`
+the count of the saves the game has loaded since it started, 1 on the Arsenal save (Steam build 26385295, Apple
+silicon) after one load. Loading the same save again raised it to 2: the editor's core, watching meanwhile, said the
+save had changed within half a second and refused every write (`SaveChanged`), and after `recheck` (what Reload data
+runs) every check passed and writes were allowed again. Two statics of the plugin point at the object, as on Windows:
+
+| | arm64 | Intel (in the file) | Loaded at |
+|---|---|---|---|
+| Among other singletons' (the multiplayer manager's, the match coordinator's) | `0x5740B60` | not told apart | 5 places |
+| The one the code goes through | `0x57708F0` | `0x5D04CA8` | 470 (arm64), 527 (Intel) |
+
+A search finds the first one first, so the arm64 profile places it. In the Intel half the second one's neighbours are
+loaded as the arm64 one's, 0x20 further from the players' pair: 12, 20 or 24 times, then the static, then 23, 19 and 5.
+
+**In the app, with a renamed stadium** (11 November 2026, main after #142, the Arsenal save of 12 July 2027).
+Brentford's stadium was renamed in the app to "Gtech Community Stadium FMLibre Test" (36 bytes, so a string of the
+editor's own), then the same save was loaded again in the game:
+
+- The app said the save had changed as soon as the count read 2, and the notice showed 5 seconds later (its 3-second
+  poll). `read_values` gave no field, and an edit of the value already there was refused with `guard.saveChanged`.
+- The game let go of the old stadium without a crash. The count of holders of the editor's string went from
+  `0x40000000` to `0x3FFFFFFF`, so the game never frees it.
+- Within 2 seconds of the count changing, the hold had found the same human manager and given the new stadium the name
+  again, in a second string of the editor's own. Nothing points at the first one any more.
+- Reload data took the notice away in 0.6 seconds and edits were allowed again. Undo then named the stadium Gtech
+  Community Stadium again, by renaming it back.
+- After it, `fmlibre-probe health` passed every check.
+
+The class's name was not found at first: the editor took a name to start only where no letter came before it, as one
+that ends a longer name ("P15X" is a pointer's) would. In this plugin `N11game_plugin7GAME_UIE` follows random-looking
+text with no NUL between. The type info that points at a name tells where it starts, so the editor now goes by that
+(`rtti::vtables`), and so does the probe's `types`: it lists 5,364 class names where it listed 4,748.
+
+## Team cohesion
+
+The roadmap had set team cohesion aside, as no stored value matched ten clubs' readings in FM Live Editor (see the
+Steam notes). The game works a team's cohesion out from each player's cohesion with his club, which [FM27
+Editor](https://github.com/Jackhamerp24/Football-Manager-27-Editor) (GPL-3.0) found on Windows. It reads the same on
+the Mac:
+
+- The record a player's `relations` pointer leads to (`+0x2C0`; `+0x300` on Windows) starts with the list of his
+  ties (`[relation]`), and holds a second list at `+0x18`. Its entries are 8 bytes: the `i32` index of a club or a
+  nation, a `u8` kind at `+4` (1 a club, 2 a nation) and the `i8` cohesion at `+5`, from 1 to 100.
+- An entry names a club by the `i32` at club `+0x8`. On the Steam save (25 July 2026): Arsenal 331, Manchester United
+  408, Barcelona 1152, Juventus 738, Benevento 1522.
+- Kobbie Mainoo's list there reads `98010000015b0000 8b00000002470000`: 91 with Manchester United, and 71 with
+  England (139). FM27 Editor's tests hold the same entries from a Windows save, at 87 and 67.
+- A player keeps an entry for each club he has played for: Saka 99 with Arsenal, and 13 to 17 for clubs players had
+  left.
+
+`fmlibre-probe cohesion <club> [--raw]` lists each senior player's entries:
+
+| Club | Mean with the club | With an entry | Without |
+|---|---|---|---|
+| Arsenal | 56.1 | 20 | 4 |
+| Manchester United | 64.6 | 22 | 4 |
+| Barcelona | 62.1 | 21 | 6 |
+| Juventus | 46.1 | 19 | 9 |
+| Benevento | 26.4 | 28 | 2 |
+
+The game uses them. On one Benevento save the Dynamics page read the team's cohesion as:
+
+- Poor, on loading the save, with the entries as they were;
+- Excellent, "significantly improved", with all 28 at 100;
+- fallen, on a copy, a day after all 28 were set to 1. The day did not change the entries: they were still at 1.
+
+The page shows the cohesion as the game last worked it out, and works it out again once the game moves on
+(Continue). After the entries were put back from 100, it still read Excellent.
+
+**Who has no entry.** The game gives a player an entry for his club when it signs him. On Game Pass two players had
+one at 2 two days after joining (#140), and Piero Hincapié, whose move the game made on 1 July 2026, had 27 here.
+Those without one had all joined in the save's first weeks (1 to 20 July 2026), and two at least by an editor's move:
+Nick Woltemade and Kamil Grabara are at Juventus with the joined dates of their real moves to Newcastle (30 August
+2025) and Wolfsburg (1 July 2024). The app's own move skips the game's transfer code too. Whether the game gives
+such a player an entry later is not known yet. Players here on loan, such as Pape Matar Sarr at Juventus, have only
+their own club's.
+
+The `cohesion` check (`fmlibre-probe health`) asks that nearly all the lists it samples hold only kinds 1 and 2 with
+values of 1 to 100, and that at least half the players have an entry for their club. On this save 1,663 of 1,663
+lists held, and 1,259 had one.
+
+**Tactical familiarity was not found then.** What FM27 Editor edits as a player's tactical familiarity, player `+0x190` on
+Windows (`+0x188` here), is his versatility: Saliba's 35 and Saka's 90 there are `attribute.versatility`. FM27's
+Tactical Effectiveness screen has four parts, and its familiarity is the first, the team's tactical knowledge. That
+covers eight tactical areas: the shape in and out of possession, passing style, build-up, chance creation, line of
+engagement, pressing intensity and pressing trap. FM27 Editor reads six of them in a team block at an address found
+by hand: `dword`s every `0x10` from `+0xC0` to `+0x110`, the value × 100 in their low 14 bits. No team keeps such a
+block: the game works the areas out for each player (see [Tactical familiarity](#tactical-familiarity)).
+
+## Who a reason to be unhappy is about
+
+An entry of the record a contract's `unhappiness` points at (28 bytes: see `[contract]`) holds more than its dates,
+motive and kind. Read with `fmlibre-probe concerns --all` on the Steam save (build 26385295, 30 August 2026): 915
+entries of 843 players, 422 of them not over.
+
+- `+0x19`, a `u8`: the category of the motive. Every one of the 50 motives of this save has one category, of 16.
+- `+0x08`, an `i32`, -1 for none: in the entries of categories 19 and 20, the game's id of a person (a player's
+  `player_person`). It named a player in all 578 of them, a teammate in 564; the rest were players who had played
+  with him and moved on. Motive 808 (thinks a teammate has been treated unfairly) is in category 19, 926 (doesn't
+  believe a teammate deserves the playing time he wants) in 20.
+- In the other categories the same place holds something else, and so does the `i32` at `+0x0C` in some entries of
+  every category: one value for the players of a club, at times the same in both places. It is not a person's id, a
+  club's index or a club's UID. The app reads neither.
+- `+0x18`, the kind: 3, 4, 5 and 255 turn up besides 1 and 2. `+0x1B` is 0, 4 or 6.
+
+**Groups.** The game keeps no record of a group of unhappy players. A group is the entries of categories 19 and 20
+that teammates hold about one player:
+
+- 342 of the 422 entries not over were of these two categories;
+- they formed 41 groups of two or more players, in 32 clubs, the largest 18 about one player;
+- in all 41 the player they were about had an entry of his own, of another category, that was not over.
+
+**The game ends a group itself.** On a copy of the save, the count of two such players' records was set to none, as
+Remove all does, and their teammates' entries left alone:
+
+| Teammates' entries about | Not over | Ended after one day | Ended after two days |
+|---|---|---|---|
+| Sydney Leroux (Angel City) | 18 | 16 | 18 |
+| Ryan Manning (Southampton) | 11 | 3 | 11 |
+| Anyone else, untouched | 312 | 6 | 38 |
+
+The entries ended on the day the game moved on, and those teammates' morale and happiness rose. Among the untouched
+ones, those that ended did so a whole group at a time, as when a player's own reason ends. So the app writes
+nothing more than Remove all does: it names the teammate a reason is about, and marks in the squad tab the players
+their teammates hold reasons about.
+
+## Tactical familiarity
+
+The Tactical Effectiveness screen shows a player's eight tactical areas from two places. Read on the Benevento save,
+on 27.0.0 (Steam build 26340721) and 27.0.1 (26385295), August to September 2026 in the game:
+
+- **His record**, which `player +0xF8` points at (`[familiarity]`; the game makes one at game_plugin+0xd47b38 on
+  26340721 when it is missing). Six lists `(begin, end, capacity)` `0x20` apart, each naming its area by the byte at
+  `+0x18`, of 4-byte entries: an option's code in six bits from bit 14 and the value × 100 in bits 0–13. Giacomo
+  Ricci's area 0 read `0x65C0`, option 1 at 96.64. Then, at `+0xC0`, a list of 16-byte entries for his shapes, keyed by
+  the formation's places, with the value × 100 in the `u16` at `+0xE`. For the option a tactic plays, the screen takes
+  the best of his entries less 10 a step between codes, and 10 at least (game_plugin+0x47fe108). On the save 27,081
+  players had a record; 201 of them had six empty lists, with no buffer.
+- **His history of training**, which the training manager keeps for each human manager's players
+  (`TRAINING_MANAGER`, the profile's `training_manager`): a map from a person's id to 12-byte entries, each the day of
+  the year from 0, the tag `0x0C8C` (or the code of his place in the formation, for a shape), the area, the kind, the
+  option and three factors. game_plugin+0x486d408 adds them up for the screen: a weight for the entry's age (12 up to 6
+  days, then 9, 7, 6, 4 and 2, and none after 251), times 1 less 0.1 for each step from the tactic's option, times the
+  factors; an area holds at most 100. The map held the 56 players of the senior team, the B team and the under-19s,
+  with 72 to 170 entries; one injured since February had none.
+- **The options** are the tactic in use's, worked out from its team instructions (`tactical_areas.rs`): 5, 17, 10, 4,
+  20 and 10 for Benevento's Tiki-Taka, 19 in area 0 with a high press.
+
+The circles look like the mean of the two. With the line of engagement moved to a high press, the record at 100 for
+option 19 and the history at 0 for it, the line's circle read half full for everyone; with the history rewritten on
+the new option, it was full again.
+
+**Max tactics**, tried with the probe's `familiarity --set --add` and `training-history --max --grow` on copies of the
+save:
+
+- With the record's entries for the tactic at 100 and the history rewritten as today's training on its options, the
+  eight circles of every senior player were full, in the player's view and the team's. A save made then loaded with
+  both as they were written, and five days with a match passed without an error.
+- A player new to the club had only his old club's options in his record (Ricci: 1, 3, 1, 12, 1, 15) and 7 entries
+  of history. With his history at 100 his circles read about 70%: an entry for each of the tactic's options had to be
+  added to his record, as for 7 players of the 27.
+- **How many entries.** Dated today, 9 entries for each area fill it, but fall below 100 after a week, when each adds
+  9; 10 for each area read 70 after 19 days. 18 for each area, as players long at the club have, keep it full for six
+  weeks.
+
+**Growing the lists.** Both kinds come from the game's first allocator (`game_plugin+0x575d630` on 27.0.1, see
+[The game's allocator](#the-games-allocator)): history buffers sit their class apart (1024 bytes for 80 entries, 3584
+for 276) with nothing before them, and the record lists of players new to the club are full, one entry in an 8-byte
+block. Grown into the editor's memory as relations are: Ricci's history (14 entries to 72, in a 1024-byte block with
+room for 3 more) and 33 record lists of 7 players. Within a week the game filled the history's room and moved it into
+a buffer of its own (80 entries, room for 150), letting the editor's block go; a save, a load and another week
+passed without an error, with the entries added to the records still there.
+
+The Windows layout does not place the record or the training manager yet, so Max tactics stays off there.
+
+## How the game words a reason to be unhappy
+
+The game's code that words a reason (Steam build 26340721) takes the entry's motive and picks a sentence of
+`languages.fmf` by it: each motive from 500 to 1362 maps to the key of a sentence, which it then fills with what the
+entry names. The same keys hold on Game Pass, and they give the same sentences there.
+
+- 471 motives have a sentence, 391 none; 1102 is worded elsewhere. Several motives share one: 700 to 724 all read
+  "Disappointed to not be able to join [team]".
+- The category of each motive, which `+0x19` holds, is in a table of the game, one byte a motive: 19 is 800 to 834, 20
+  is 900 to 1030. Only their sentences name the teammate the app knows.
+- A few motives pick their sentence by more of the entry. For the motives about playing time, 648 to 654, the `i16`
+  at `+0x14` says it: 3 is "Wants to leave to get better playing time", 1 "Unhappy with his amount of playing time",
+  the other values a loan, while the kind is under 5 (for 651, 652 and 654, whatever the kind). For 1300 and 1301, 3
+  is wanting to leave and the others wanting to play more. 594 depends on the team he was moved to: "moved to" or
+  "placed in" it.
+- With the high bit of the `u8` at `+0x1B` set, a motive of category 8 (628 to 638, a new contract) reads "Unhappy how
+  new contract negotiations are going" instead.
+- The other things a sentence names (a team, a competition, a second player) come from `+0x08` and `+0x0C` in the
+  categories but 19 and 20, which the app does not read: its dictionaries word those sentences without them.

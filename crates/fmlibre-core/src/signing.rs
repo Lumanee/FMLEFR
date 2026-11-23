@@ -126,7 +126,7 @@ impl Session {
         let pool = self.pool_holding(model, size)?;
         let taken = pool.take(process, pools)?;
         let model = process.read_bytes(model, size as usize)?;
-        let contract = self.new_contract(model, object, senior, terms, today, status);
+        let contract = self.new_contract(model, object, senior, terms, today, today, status);
         let c = &layout.contract;
         let field = |offset: u64, kind: Kind| kind.decode(&contract[offset as usize..offset as usize + 4]);
         let made = NewContract {
@@ -150,6 +150,8 @@ impl Session {
             patches: patches.0,
             leavers: Vec::new(),
             grow: grow.into_iter().collect(),
+            // He goes back to having no team and no contract, and wore no number at one.
+            numbers: Vec::new(),
             contract: Some(made),
         })
     }
@@ -218,14 +220,17 @@ impl Session {
     }
 
     /// The bytes of a new contract for the player `object` with the senior team `senior`, on `terms`, made from
-    /// `model`'s (see the module's notes), with the squad status `status` when given.
-    fn new_contract(
+    /// `model`'s (see the module's notes), signed and joined on `start`, with the squad status `status` when given.
+    /// Without an end date in `terms`, it runs to the end of the season after the one under way on `today`.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new_contract(
         &self,
         model: Vec<u8>,
         object: u64,
         senior: u64,
         terms: MoveTerms,
         today: FmDate,
+        start: FmDate,
         status: Option<u8>,
     ) -> Vec<u8> {
         let (p, c) = (&self.layout.player, &self.layout.contract);
@@ -238,7 +243,7 @@ impl Session {
         put(c.job, &[PLAYER_JOB]);
         // The dates keep the flags the model's have.
         for offset in [c.signed, c.joined] {
-            put(offset, &Kind::Date.encode(today.to_number(), &model[at(offset, 4)]));
+            put(offset, &Kind::Date.encode(start.to_number(), &model[at(offset, 4)]));
         }
         let expires = terms.expires.unwrap_or_else(|| default_expiry(today));
         put(c.expires, &Kind::Date.encode(expires, &model[at(c.expires, 4)]));

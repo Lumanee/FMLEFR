@@ -15,6 +15,7 @@ import { FEET, GOALKEEPING, HIDDEN, isGoalkeeper, MENTAL, PHYSICAL, TECHNICAL } 
 import { PositionFreeze, PositionPitch, PositionRatings } from "./PositionPitch";
 import { PermanentDialog } from "./PermanentDialog";
 import { RecallDialog } from "./RecallDialog";
+import { RenameButton } from "./NamesDialog";
 import { ReleaseButton } from "./ReleaseDialog";
 import { TiesGroup } from "./TiesGroup";
 import {
@@ -141,6 +142,7 @@ export function PlayerProfile({ player, version, onClose, comparison, modal }: P
               {info.club !== null && (
                 <ReleaseButton player={{ uid: info.uid, name: info.name, club: info.club, clubUid: info.clubUid }} />
               )}
+              <RenameButton player={{ uid: info.uid, name: info.name }} />
             </div>
           )}
           {comparison && <CompareToggle comparison={comparison} player={{ uid: info.uid, name: info.name }} />}
@@ -264,7 +266,7 @@ function ContractGroup({ details, contract }: { details: PlayerDetails; contract
             </Fact>
           </dl>
         </div>
-        <ContractDates contract={contract} />
+        <ContractDates entity="player" uid={uid} contract={contract} />
       </div>
       {details.loan && <LoanFacts uid={uid} name={details.name} loan={details.loan} contract={contract} />}
       <ClauseList
@@ -404,8 +406,9 @@ function LoanFacts({ uid, name, loan, contract }: { uid: number; name: string; l
 }
 
 /**
- * The reasons to be unhappy that last, by name, with the button that removes them all (FMRTE's "Remove all"): the
- * count of the player's list goes to none, and an undo in Changes lists them again.
+ * The reasons to be unhappy that last, in the game's words, naming the teammate a reason is held about, and the
+ * button that removes them all (FMRTE's "Remove all"): the count of the player's list goes to none, and an undo in
+ * Changes lists them again. The reasons his teammates hold about him the game then ends itself, as the button says.
  */
 function ConcernList({ uid, concerns }: { uid: number; concerns: Concern[] }) {
   const { editable, onEdited } = useContext(EditorContext);
@@ -449,7 +452,7 @@ function ConcernList({ uid, concerns }: { uid: number; concerns: Concern[] }) {
             className="heal-toggle"
             disabled={!editable}
             aria-disabled={removing || undefined}
-            title={profileText.removeUnhappinessTitle}
+            title={`${profileText.removeUnhappinessTitle}\n${profileText.removeUnhappinessFollows}`}
             onClick={() => void remove()}
           >
             {removing ? profileText.removingUnhappiness : profileText.removeUnhappiness}
@@ -460,13 +463,21 @@ function ConcernList({ uid, concerns }: { uid: number; concerns: Concern[] }) {
         <p className="note">{profileText.noUnhappiness}</p>
       ) : (
         <dl className="stats">
-          {lasting.map((concern, i) => (
-            <Fact key={i} label={profileText.concernMotive(concern.motive)}>
-              {[profileText.concernKind(concern.kind), concern.started && profileText.concernSince(formatDate(concern.started))]
-                .filter(Boolean)
-                .join(" · ")}
-            </Fact>
-          ))}
+          {lasting.map((concern, i) => {
+            const reason = profileText.concernMotive(concern);
+            return (
+              <Fact key={i} label={reason}>
+                {[
+                  profileText.concernKind(concern.kind),
+                  concern.started && profileText.concernSince(formatDate(concern.started)),
+                  // The teammate, when the sentence does not name him already.
+                  concern.about && !reason.includes(concern.about.name) && profileText.concernAbout(concern.about.name),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Fact>
+            );
+          })}
         </dl>
       )}
       {error && <p className="banner">{error}</p>}

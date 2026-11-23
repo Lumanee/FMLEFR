@@ -14,18 +14,24 @@
 
 import type {
   CheckKey,
+  Concern,
+  EditEntity,
   Entity,
   ExportEntity,
   ExportFormat,
   GraphicsCounts,
   MassOperationKind,
   MassPreview,
+  OpportunityKind,
   PlayerSort,
+  SessionChoice,
   SquadSort,
   StaffSort,
   Storefront,
 } from "../types";
 import { fieldName } from "./fieldNames";
+import { reasonText } from "./reasons";
+import { REASONS_EN } from "./reasons/en";
 
 const numbers = new Intl.NumberFormat("en-GB");
 const percents = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
@@ -78,13 +84,15 @@ const SQUAD_STATUSES: Partial<Record<number, string>> = {
   22: "Surplus to requirements",
 };
 
-/** The kinds of contract, by the codes contracts hold them as; 10 and 11 are the MLS's. */
+/** The kinds of contract, by the codes contracts hold them as; 8, 10 and 11 are the MLS's, and the game
+ * shows 8 and 11 under one name. */
 const CONTRACT_TYPES: Partial<Record<number, string>> = {
   0: "Part-time contract",
   1: "Full-time contract",
   2: "Amateur contract",
   3: "Youth contract",
   4: "Non-contract",
+  8: "Senior contract",
   10: "Senior minimum salary contract",
   11: "Senior contract",
 };
@@ -107,6 +115,11 @@ const checkName = (key: string | undefined) => {
 
 /** The commands' own English is kept where it names no field. */
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Nobody in this team is injured.",
+  "team.noCohesion": () =>
+    "The editor cannot read this team's cohesion: this version of the game has not been checked for it, or none of its players has an entry for the club.",
+  "team.noTactics": () =>
+    "The editor cannot read how well this team knows its tactic: this version of the game has not been checked for it, or the team does not play a tactic you pick.",
   "edit.unknownField": (p) => `There is no editable field “${p.field}” here.`,
   "edit.outOfRange": (p) => `${p.value} is not a valid ${field(p.field)}: it takes ${p.min} to ${p.max}.`,
   "edit.notADate": (p) => `${p.value} is not a date for ${field(p.field)}.`,
@@ -119,6 +132,14 @@ const errors: ErrorTexts = {
   "edit.notApplied": (p) => `${field(p.field)}: wrote ${p.wrote} but read back ${p.read}.`,
   "edit.conflict": (p) => `${field(p.field)} is now ${p.found}, not ${p.expected}: the game has changed it since.`,
   "move.outOfRange": (p) => `${p.value} is not a valid ${field(p.field)}: it takes ${p.min} to ${p.max}.`,
+  "names.unknown": () =>
+    "The editor cannot find where the game keeps people's names in this version of the game, so it cannot change them.",
+  "names.noRoom": (p) =>
+    `The game has no room for another new ${({ first: "first name", last: "last name", common: "common name" } as Record<string, string>)[p.table] ?? "name"} just now. ` +
+    "It makes room itself as new players and staff come in; or save the game, load the save again, and try again.",
+  "names.same": () => "That is the name already.",
+  "names.bad": (p) =>
+    `A first or last name cannot be empty, and no name can start or end with a space, hold control characters or take more than ${p.max} bytes.`,
   "export.failed": (p) => `Could not write the file: ${p.reason}`,
   "export.notAllowed": (p) =>
     `FMLibreEditor may not write to ${p.folder}. If macOS asked whether it may use your Documents folder, allow it ` +
@@ -129,6 +150,9 @@ const errors: ErrorTexts = {
     "the notice at the top, turns editing on.",
   "guard.failed": (p) =>
     `${checkName(p.check)} did not check out in this version of the game, so FMLibreEditor leaves them unchanged.`,
+  "guard.saveChanged": () =>
+    "The game has loaded a save, or gone back to its main menu, since FMLibreEditor read it, so it changes nothing " +
+    "until you reload the data.",
   "memory.noBridge": () =>
     "macOS does not let FMLibreEditor into the game: the game was started without the FMLibreEditor bridge. Set " +
     "the bridge up, then start the game again from Steam.",
@@ -202,13 +226,6 @@ const CLAUSE_NAMES_EN: Partial<Record<number, string>> = {
   56: "Active non promotion release clause",
   58: "Not shown in the game (58)",
   63: "Not shown in the game (63)",
-};
-
-/** Reasons to be unhappy, by the codes the game keeps them as; named as FMRTE names them. */
-const CONCERN_MOTIVES_EN: Partial<Record<number, string>> = {
-  596: "Left out of a competition squad",
-  808: "Thinks a teammate has been treated unfairly",
-  926: "Doesn't believe a teammate deserves the playing time he wants",
 };
 
 /** Players' traits (preferred moves), by their bit in the game's mask; named as FMRTE names them. */
@@ -465,6 +482,7 @@ export const en = {
     date_of_birth: "Date of birth",
     asking_price: "Asking price",
     nation: "Nationality",
+    city_of_birth: "City of birth",
     "reputation.home": "Home reputation",
     "reputation.current": "Current reputation",
     "reputation.world": "World reputation",
@@ -500,6 +518,9 @@ export const en = {
     club: "Club",
     // Healing a player, which the change log keeps as a change of his injuries.
     injuries: "Injuries",
+    // Setting a player's cohesion with his club, which the change log keeps as a change of it.
+    cohesion: "Cohesion",
+    tactics: "Tactical familiarity",
     // Lifting a player's bans, which the change log keeps as a change of his bans.
     bans: "Bans",
     // Keeping a player from retiring, which the change log keeps as a change of the date he was to retire on.
@@ -525,9 +546,17 @@ export const en = {
     "finance.total_wage_budget": "Total wage budget",
     "stadium.capacity": "Stadium capacity",
     "stadium.name": "Stadium name",
+    "name.first": "First name",
+    "name.last": "Last name",
+    "name.common": "Common name",
+    "name.full": "Full name",
     "stadium.seating": "Seated capacity",
     "stadium.used": "Capacity in use",
     "stadium.expansion": "Expansion capacity",
+    // Prize money a club's league pays, which the change log keeps as a change of the club (see `leaguePrizes`).
+    "prize.win": "League prize money per win",
+    "prize.draw": "League prize money per draw",
+    "prize.loss": "League prize money per loss",
   },
 
   profile: {
@@ -591,6 +620,12 @@ export const en = {
     signed: "Signed",
     expires: "Expires",
     joined: "Joined",
+    /** Under a contract's dates: the button that makes it run `years` longer, while it does, and its hover text. */
+    extendContract: (years: number) => `Extend by ${years} years`,
+    extendingContract: "Extending…",
+    /** `until` is the day the contract would end then. */
+    extendContractTitle: (years: number, until: string) =>
+      `Make the contract run ${years} years longer, to ${until}; Changes can undo it`,
     squadStatus: "Squad status",
     squadStatusName: (status: number) => SQUAD_STATUSES[status] ?? `Status ${status}`,
     contractType: "Contract type",
@@ -634,9 +669,15 @@ export const en = {
     removeUnhappiness: "Remove all",
     removingUnhappiness: "Removing…",
     removeUnhappinessTitle: "Take every reason to be unhappy off his list, as FMRTE's Remove all does; Changes can undo it",
+    /** The second line of Remove all's hover text: what the game then does about his teammates. */
+    removeUnhappinessFollows:
+      "The reasons his teammates hold about him end by themselves once the game moves on: press Continue in the game",
     concernSince: (date: string) => `since ${date}`,
+    /** After a reason held about a teammate whose sentence does not name him: who he is. */
+    concernAbout: (name: string) => `about ${name}`,
     concernKind: (kind: number) => (kind === 1 ? "Concerned" : kind === 2 ? "Internal" : `Type ${kind}`),
-    concernMotive: (motive: number) => CONCERN_MOTIVES_EN[motive] ?? `Reason ${motive}`,
+    /** A reason by the game's sentence for it (see `reasons.ts`); a motive without one by its number. */
+    concernMotive: (concern: Concern) => reasonText(REASONS_EN, concern) ?? `Reason ${concern.motive}`,
     /** A contract's clauses and bonuses: the heading, and what each kind the game has is called. */
     clauses: "Bonuses and clauses",
     noClauses: "No bonuses or clauses",
@@ -987,9 +1028,11 @@ export const en = {
     // The tabs under the header: what the club has, and its squad (see `squad`).
     /** The name of the tabs for assistive technology. */
     tabsLabel: "Club sections",
-    tabs: { overview: "Overview", squad: "Squad", stadium: "Stadium" },
+    tabs: { overview: "Overview", squad: "Squad", staff: "Staff", stadium: "Stadium" },
     /** Hover text of the Squad tab while the club is edited: its values are on the Overview. */
     squadLocked: "Finish editing to open the squad",
+    /** The same for the Staff tab (see `clubStaff`). */
+    staffLocked: "Finish editing to open the staff",
 
     facilities: "Facilities",
 
@@ -1059,6 +1102,123 @@ export const en = {
     socialMedia: "Social media followers",
   },
 
+  /**
+   * The Staff tab of a club's profile: the club's staff, and Release all staff, which releases every one of them the
+   * editor can (not you, not the board) after a dialog that asks first.
+   */
+  clubStaff: {
+    loading: "Reading the staff…",
+    /** When the game keeps no staff for the club. */
+    empty: "The game keeps no staff for this club: clubs of leagues not played in this save have none.",
+    /**
+     * Above the table: how many staff the club has, and how many of them stay when the rest are released (0 when there
+     * is nobody to release).
+     */
+    count: (total: number, staying: number) => {
+      const all = total === 1 ? "1 member of staff" : `${format(total)} staff`;
+      return staying === 0 ? all : `${all} · ${format(staying)} stay if the rest are released`;
+    },
+
+    // The action on the whole staff
+    /** The name of the group of buttons for assistive technology. */
+    actionsLabel: "Actions on the whole staff",
+    /** `count` is how many of the club's staff it releases. */
+    releaseAll: (count: number) => (count === 0 ? "Release all staff" : `Release all staff (${format(count)})`),
+    releaseAllTitle: "Release every member of the club's staff at once, but you and the board; a dialog asks first",
+    /** Hover text of Release all staff while none of the club's staff can be released. */
+    releaseNone: "None of this club's staff can be released",
+    /** Beside the button: whom it leaves, and where undoing is. */
+    hint: "Everyone but you and the board leaves the club at once. Undo is in the Changes view as well.",
+    /** What Release all did, under the button; `count` is how many were released. */
+    released: (count: number) =>
+      count === 1 ? "1 member of staff released" : `${format(count)} members of staff released`,
+    /** A release the game refused: `name` is the member of staff's, `reason` the game's answer. */
+    refused: (name: string, reason: string) => `${name}: ${reason}`,
+    undo: "Undo",
+    undoTitle: "Bring the released staff back to the club, on their contracts",
+
+    // The table
+    /** The table's name for assistive technology. */
+    tableLabel: "The club's staff",
+    /** The last column: why a member of staff stays when the rest are released (empty for one who leaves). */
+    staysColumn: "Stays",
+    /** The reasons, short; the hover text has the game's answer in full. */
+    stays: {
+      you: "You",
+      board: "The board",
+      player: "A player too",
+      held: "Held by the club",
+      other: "Cannot be released",
+    },
+
+    // The dialog that asks first
+    title: "Release all staff",
+    /** The club the staff leave. */
+    from: "Club",
+    /** The headings over those who leave and over those who stay; `count` is how many. */
+    leaving: (count: number) => (count === 1 ? "1 leaves the club" : `${format(count)} leave the club`),
+    staying: (count: number) => (count === 1 ? "1 stays" : `${format(count)} stay`),
+    /** After the names shown: how many more there are. */
+    more: (count: number) => `and ${format(count)} more`,
+    doesHeading: "What it does",
+    /** What the release does to each one, one line each. */
+    does: [
+      "Each one leaves the club's staff at once, and the contract ends: unemployed, as the game's own staff without a club are",
+      "No one is paid anything",
+      "A place as manager or director of football is left empty, for the club to fill",
+      "You, the board and those the editor cannot release stay",
+      "Listed under Changes, where one undo brings them all back on the same contracts",
+    ],
+    /** In the dialog's foot: nothing changes in the game until Release all. */
+    dialogHint: "Nothing changes in the game until you press Release all.",
+    release: "Release all",
+    releasing: "Releasing…",
+    cancel: "Cancel",
+
+    // Moving the whole staff to another club: a button beside Release all staff, and a dialog that asks for the club
+    moveAll: "Move all staff",
+    moveAllTitle:
+      "Move every member of the club's staff to another club at once, but you and the board; a dialog asks first",
+    /** Hover text of Move all staff while none of the club's staff can be moved. */
+    moveNone: "None of this club's staff can be moved",
+    /** What Move all did, under the button; `count` is how many moved, `club` the club they joined. */
+    moved: (count: number, club: string) =>
+      count === 1 ? `1 member of staff moved to ${club}` : `${format(count)} members of staff moved to ${club}`,
+    undoMoveTitle: "Bring the moved staff back to this club, on their contracts",
+    moveTitle: "Move all staff",
+    /** The name of the search box for the club the staff move to, for assistive technology. */
+    moveSearch: "Search for the club the staff move to",
+    /** The line under the club in the dialog: before a club is picked, while the move is worked out, and then. */
+    movePick: "Choose the club the staff move to.",
+    movePlanning: "Working out who can move…",
+    movePlan: (count: number, club: string) =>
+      count === 1 ? `1 member of staff moves to ${club}` : `${format(count)} members of staff move to ${club}`,
+    moveNobody: (club: string) => `None of this club's staff can move to ${club}.`,
+    /**
+     * Why one stays when the rest move, short, beyond the reasons a release has (see `stays`); `club` is the club they
+     * move to. The hover text has the game's answer in full.
+     */
+    moveStays: {
+      managerTaken: (club: string) => `${club} has a manager`,
+      directorTaken: (club: string) => `${club} has a director of football`,
+      yourClub: (club: string) => `You manage ${club}`,
+      other: "Cannot be moved",
+    },
+    /** What the move does to each one, one line each. */
+    moveDoes: [
+      "Each one joins the new club where the job is: its medical, coaching or scouting department",
+      "Same job, wage and contract end; each contract is dated from the game's date",
+      "A manager or a director of football joins only where the new club's place is empty; a place left here stays " +
+        "empty, for the club to fill",
+      "You, the board and those the editor cannot move stay",
+      "Listed under Changes, where one undo brings them all back to this club",
+    ],
+    /** In the dialog's foot: nothing changes in the game until Move all. */
+    moveHint: "Nothing changes in the game until you press Move all.",
+    move: "Move all",
+    moving: "Moving…",
+  },
+
   /** The club list, with the sidebar entry and the status-line count that go with it. */
   clubList: {
     /** The entry in the sidebar. */
@@ -1081,17 +1241,184 @@ export const en = {
     women: "Women",
     columns: {
       name: "Name",
+      nation: "Nation",
+      league: "League",
       reputation: "Reputation",
       founded: "Founded",
       uid: "UID",
     },
     filters: {
-      /** The name of the select, which has no label of its own. */
+      /** The label of the select of which clubs to show. */
       kind: "Clubs to show",
       all: "All clubs",
       men: "Men's clubs",
       women: "Women's clubs",
+      nation: "Nation",
+      league: "League",
+      /** The first entry of the league select. */
+      anyLeague: "Any league",
+      /** The hover text of the league select. */
+      leagueTitle: "The league the first team plays in this season",
+      reputation: "Reputation",
+      /** The hover text of the reputation range. */
+      reputationTitle: "From 0 to 10,000, as the game keeps it",
+      /** The names of the two ends of the range, which have no labels of their own. */
+      minReputation: "Lowest reputation",
+      maxReputation: "Highest reputation",
     },
+  },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "National teams",
+    /** The name of the Clubs tab's switch between the clubs and the national teams, for assistive technology. */
+    switchLabel: "Clubs or national teams",
+    search: "Search nations by name, code or UID",
+    summary: (total: number, shown: number) =>
+      total > shown ? `${format(total)} national teams · showing the top ${shown} by reputation` : `${format(total)} national teams`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query: string, filtered: boolean) => {
+      if (query === "") {
+        return filtered ? "No national teams match this filter." : "No national teams found.";
+      }
+      return filtered ? `No national teams match “${query}” with this filter.` : `No national teams match “${query}”.`;
+    },
+    /** The small tag on a women's team. */
+    women: "Women",
+    columns: {
+      name: "Nation",
+      code: "Code",
+      reputation: "Reputation",
+      players: "Players",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Teams to show",
+      all: "All teams",
+      men: "Men's teams",
+      women: "Women's teams",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Women's national team",
+    mensTeam: "Men's national team",
+    reputationShort: "REP",
+    reputationTitle: "Reputation of the senior team, from 0 to 10,000",
+    /**
+     * The game's names of a nation's teams by the code of their kind, as its national team screens name them; a kind
+     * missing here is named by `teamType`. Kind 0 is the senior team.
+     */
+    teamKinds: { 0: "Senior team", 9: "Under 23", 10: "Under 21", 18: "Under 20", 11: "Under 19", 12: "Under 18" } as Partial<Record<number, string>>,
+    /** A team of a kind the editor has no name for: the game's code for it. */
+    teamType: (kind: number) => `Type ${kind}`,
+    /** The name of the group of buttons that picks one of the nation's teams, for assistive technology. */
+    teamsLabel: "Teams of this nation",
+    /** The name of the reputation of a team other than the senior one, in the Changes view; `team` is its name. */
+    teamReputation: (team: string) => `Reputation (${team})`,
+    /** Hover text of the reputation of the team picked, other than the senior one. */
+    teamReputationTitle: "Reputation of this team, from 0 to 10,000",
+    /** Over the squad; `team` is the name of the team picked and `count` how many players it lists. */
+    squadHeading: (team: string, count: number) => `${team}: ${format(count)} ${count === 1 ? "player" : "players"}`,
+    /** The name of the squad table for assistive technology; `team` is the name of the team picked. */
+    squadLabel: (team: string) => `Players of the national team: ${team}`,
+    squadNote: "The players the game lists for this team, in its order. Calling players up, captains and the manager's contract are not edited here.",
+    /** Beside Heal all, Inspire all and Refresh all, which the senior team has: whom they cover, and where undoing is. */
+    actionsHint: "The actions cover every player the senior team lists. Undo is in the Changes view as well.",
+    /** For a nation the game keeps no team for. */
+    noTeams: "The game keeps no teams for this one, so there is no squad or reputation to show.",
+    reading: "Reading the squad…",
+    noPlayers: "The game lists no players for this team.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "National teams are not available on this version of the game",
+    unavailableBuild: "Nobody has found yet where this version of the game keeps its national teams, so the editor shows none rather than read the wrong memory.",
+    unavailableUnreadable: "The editor looked where it expects the national teams on this version of the game, but what it found does not read as the game's, so it shows none.",
+  },
+
+  /**
+   * The Prize money tab: the competitions whose stages pay prize money, what each pays by final position and per match.
+   * It only reads; the amounts are kept in pounds and shown in the chosen currency.
+   */
+  leaguePrizes: {
+    /** The heading of the group in a club's Overview, under its finances. */
+    title: "League prize money",
+    /** Under the heading: the league and its nation. */
+    league: (league: string) => `What ${league} pays this season`,
+    /** While the amounts are read: the editor reads all of the game's memory once. */
+    reading: "Reading the league's prize money from the game… The first time this can take half a minute or more.",
+    readAgain: "Read again",
+    readAgainTitle: "Read the amounts from the game again: a stage that has started since may pay too",
+    /** When the club's league pays nothing the editor reads. */
+    paysNothing: "The club's league pays no prize money by final position or per match this season.",
+    /** The heading of one stage of the league. */
+    stageStarted: "Stage being played",
+    stageFuture: "Stage not started yet",
+    /** Under a stage's heading, when several of its groups (or stages) pay the same. */
+    alike: (count: number) => `The same amounts in ${format(count)} groups or stages`,
+    byPosition: "By final position",
+    /** A row of the list by position. */
+    place: (place: number) => `${format(place)}.`,
+    perMatch: "Per match",
+    win: "Per win",
+    draw: "Per draw",
+    loss: "Per loss",
+    noList: "Nothing by final position.",
+    noPerMatch: "Nothing per match.",
+    /** Under the amounts. */
+    note: "What knockout rounds pay, such as a final's winner and loser, and a competition's participation fee are not read yet.",
+    /** Where the app cannot show prize money: why. */
+    unavailableBuild: "Nobody has checked yet where this version of the game keeps the prize money, so the editor shows none rather than read the wrong memory.",
+    unavailableUnreadable: "The editor looked for the prize money where it expects it on this version of the game, but what it found does not read as the game's, so it shows none.",
+    /** The button that turns a stage's amounts into inputs. */
+    edit: "Change amounts",
+    editTitle: "Change what this stage of the league pays, for every club in it",
+    save: "Save amounts",
+    saving: "Saving…",
+    cancel: "Cancel",
+    /** Under the inputs, and in the (i) beside the button. */
+    everyClub: (league: string) =>
+      `This changes what ${league} pays every club in it, not this club alone. The game keeps it in the save, but only for this season: it sets the next season up with its own amounts again. Undo in Changes puts the old amounts back.`,
+    infoLabel: "How a change of the prize money lasts",
+    /** Under an input that does not hold an amount the editor writes. */
+    invalid: (most: string) => `Enter a whole amount from 0 to ${most}.`,
+    /** Under the inputs, when every amount of the stage would be nothing. */
+    allNothing: "A stage that pays nothing at all is not listed any more: leave at least one amount above nothing.",
+    /** What the Changes view calls a change of the amount for a final position. */
+    placeField: (place: number) => `League prize money for place ${format(place)}`,
+    /** In the Changes view, under a change of the prize money: the league, and how many of its groups it changed. */
+    changedIn: (league: string, groups: number) =>
+      groups > 1 ? `For every club in ${league}, in ${format(groups)} groups` : `For every club in ${league}`,
+  },
+
+  /**
+   * A club's sponsorship deals, in its finances: each deal by the name the game's Sponsorship screen gives its kind, what
+   * it pays per season and in all, its term and the change a relegation (or a promotion) brings. It only reads; the
+   * amounts are kept in pounds and shown in the chosen currency.
+   */
+  sponsorships: {
+    /** The heading of the group in a club's Overview, under its finances. */
+    title: "Sponsorship deals",
+    reading: "Reading the club's sponsorship deals…",
+    /** When the club holds no deal. */
+    none: "The club has no sponsorship deals.",
+    perSeason: "Per season",
+    total: "Total value",
+    term: "Term",
+    /** The length of a deal, as the game's screen counts it. */
+    years: (count: number) => (count === 1 ? "1 year" : `${format(count)} years`),
+    /** The name of a kind the game's screen is not known to name here. */
+    unnamed: (kind: number) => `Type ${format(kind)}`,
+    unnamedTitle: "Nobody has matched this kind of deal to a name on the game's screen yet, and the screen may not list it.",
+    /** A badge on a deal that ended before the game's date. */
+    ended: "Ended",
+    endedTitle: "The deal ended before the game's date. The game's Sponsorship screen no longer lists it.",
+    /** What a deal's percentage does: on relegation, and for a kit manufacturer on promotion. */
+    falls: (percent: number) => `Falls by ${format(percent)}% on relegation`,
+    rises: (percent: number) => `Rises by ${format(percent)}% on promotion to the top division`,
+    /** Under the deals. */
+    note: "Read only. These are the amounts the game keeps for each deal. Its Sponsorship screen lists the deals that have not ended.",
+    /** Where the app cannot show the deals: why. */
+    unavailableBuild: "Nobody has checked yet where this version of the game keeps the sponsorship deals, so the editor shows none rather than read the wrong memory.",
+    unavailableUnreadable: "The editor looked for the sponsorship deals where it expects them on this version of the game, but what it found does not read as the game's, so it shows none.",
   },
 
   /** The app around the lists: the sidebar, the status line and the connect panel. */
@@ -1128,6 +1455,17 @@ export const en = {
     detecting: "Looking for Football Manager…",
     connecting: "Reading players, staff and clubs…",
     reloading: "Reloading players, staff and clubs…",
+
+    /**
+     * The notice under the masthead once the game has loaded a save, or gone back to its main menu, since the data was
+     * read (`SaveChangedNotice`), beside a Reload data button.
+     */
+    saveChanged: {
+      title: "The game's save has changed",
+      text:
+        "The game has loaded a save, or gone back to its main menu, since FMLibreEditor read it. Until you reload the " +
+        "data, it changes nothing in the game and holds nothing frozen: what it shows may belong to another save.",
+    },
 
     /** The notice after connecting to a save in which something was frozen before (`FrozenNotice`). */
     refrozen: {
@@ -1225,20 +1563,32 @@ export const en = {
     unknownBuildText:
       "The game has probably been updated. FMLibreEditor found the game's data and checked it, but it does not " +
       "write to a version it was not tested with until you allow it. A new FMLibreEditor usually follows within days.",
-    /** Once Edit anyway was pressed. */
-    allowedText: "Editing is on for this session, as far as the checks allow. Keep a backup of your save.",
-    /** The headline when checks did not pass on a version the editor knows, and what may help. */
+    /** The headline when checks did not pass on a version the editor knows or may edit, and what may help. */
     failedTitle: "Some of the game's data did not check out",
     reloadHint: "If a save was still loading, Reload data checks again.",
     /** The in-game date did not check out: shown apart, as it leaves nothing read-only. */
     noDate: "The in-game date did not check out, so no ages are shown.",
-    /** The other checks that did not pass, their names joined (see `checks`). */
+    /** The other checks that did not pass, joined (see `join`), each as `failedCheck` words it. */
     failed: (names: string) => `Left read-only: ${names}.`,
+    /** A check that did not pass: its name (see `checks`), and how many of the people or clubs it sampled fit. */
+    failedCheck: (name: string, fit: number, sampled: number) => `${name} (${format(fit)} of ${format(sampled)} fit)`,
     /** Joins the names of the checks that did not pass. */
     join: (names: string[]) =>
       names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`,
     allow: "Edit anyway",
     allowTitle: "Turn editing on until FMLibreEditor is closed or connects again. Back up your save first.",
+  },
+
+  /**
+   * Copy diagnostics, at the foot of the window and in the notice under the masthead: copies a report of what the app
+   * found in the game, in English whatever the language, to paste into a bug report (`CopyDiagnostics`).
+   */
+  diagnostics: {
+    copy: "Copy diagnostics",
+    copyTitle: "Copy what FMLibreEditor found in the game, to paste into a bug report. It holds no names or paths.",
+    /** Said by the button for a moment once the report is on the clipboard. */
+    copied: "Copied",
+    failed: (reason: string) => `Could not copy the diagnostics: ${reason}`,
   },
 
   /** What each check is about (`CheckKey`), as the notice lists the ones that did not pass and the errors name them. */
@@ -1253,6 +1603,8 @@ export const en = {
     teams: "teams",
     staff: "staff",
     clubs: "clubs",
+    cohesion: "cohesion with clubs",
+    tactics: "tactical familiarity",
   } satisfies Record<CheckKey, string>,
 
   /** New versions: the notice under the masthead, and the version and Check for updates at the foot of the window. */
@@ -1279,10 +1631,21 @@ export const en = {
     failed: "Could not check for updates.",
   },
 
+  /** Once, after a few starts: the note in the top right corner that asks for a star on GitHub (see `StarRequest`). */
+  star: {
+    title: "Enjoying FMLibreEditor?",
+    text: "A star on GitHub helps it reach more players and grow faster.",
+    /** Opens the project's page on GitHub, where the star is; the note does not come back. */
+    star: "Star on GitHub",
+    /** Puts the note away for good. */
+    dismiss: "No thanks",
+  },
+
   /** Editing a person or a club: the Edit button, the inputs, and the footer under the profile. */
   edit: {
     /** A nation field's value whose name the app has not read: one no one in the lists belongs to. */
     unknownNation: "Unknown nation",
+    unknownCity: "Unknown city",
     /** The button in the header of a profile that can be edited. */
     edit: "Edit",
     editTitle: "Change this profile's values in the game",
@@ -1348,8 +1711,33 @@ export const en = {
   changes: {
     /** The entry in the sidebar. */
     nav: "Changes",
-    title: "Changes this session",
-    hint: "Newest first. A change can be undone only while the game still holds the value it wrote.",
+    title: "Changes",
+    hint: "Newest first. The app keeps the changes of each career, so they are listed again after a restart. A change can be undone only while the game still holds the value it wrote.",
+    /** Under the hint, when the list holds changes from earlier sessions: how many, and how many of them the game did not hold. */
+    earlierNote: (count: number, missing: number) =>
+      `${changeCount(count)} from earlier sessions` +
+      (missing > 0 ? `, ${format(missing)} of them not in the game when the data was read` : "") +
+      ". Moves, heals, ties, clauses and names among them are kept as history, without Undo.",
+    /** The small tag after the name of an earlier change, and its hover text. */
+    earlierTag: "Earlier",
+    earlierTitle: "Written before the app last connected, and kept in the history of this career",
+    /** Under the status of an earlier change: whether the game held its value when the data was last read. */
+    inGame: "In the game",
+    inGameTitle: "The game held this value when the data was last read",
+    notInGame: "Not in the game",
+    notInGameTitle:
+      "The game did not hold this value when the data was last read: the game was not saved after the change, or it has changed the value since",
+    /** In the place of Undo for an earlier change that cannot be undone from here, and its hover text. */
+    historyOnly: "History",
+    historyOnlyTitle: "Made before the app last connected: undoing it needed the game's memory as it was then",
+    /** Under a mass edit: how many of its earlier changes the game did not hold. */
+    batchNotInGame: (count: number) => `${format(count)} not in the game`,
+    /** Empties the list and the history of the career; the question that asks first, and its two answers. */
+    clearHistory: "Clear history",
+    clearHistoryTitle: "Empty this list and forget the history of this career. The changes stay in the game.",
+    confirmClear: "Clear the history of this career? The changes stay in the game, but can no longer be undone from here.",
+    keepHistory: "Keep",
+    clearConfirm: "Clear",
     /** Under the hint: a change shows in the game only after it has moved on once. */
     continueHint: "The game shows a change once it moves on: press Continue in the game.",
     /** Under a move to another club that was a swap: the player who went the other way. */
@@ -1358,6 +1746,8 @@ export const en = {
     released: (name: string) => `${name} released`,
     /** Under a transfer that had a fee: the amount, written out. */
     fee: (amount: string) => `Fee ${amount}`,
+    /** Under a transfer arranged for the game to make: the day it moves him (and pays the fee). */
+    arranged: (date: string) => `The game makes the move on ${date}`,
     /** Under a recall from loan that took the loan's option to buy away, which its undo writes back. */
     optionRemoved: (amount: string) => `Option to buy (${amount}) taken away`,
     /** What a heal changed, in the place of its values: `count` is how many injuries the player had. */
@@ -1381,7 +1771,7 @@ export const en = {
       status: "Status",
     },
     /** The small tag after a name. */
-    kinds: { player: "Player", staff: "Staff", club: "Club" } satisfies Record<Entity, string>,
+    kinds: { player: "Player", staff: "Staff", club: "Club", nationalTeam: "National team" } satisfies Record<EditEntity, string>,
     /** Hover text of a change of an attribute: the values as stored; `change` is from `valueChange`. */
     stored: (change: string) => `stored ${change}`,
     undone: (time: string) => `Undone at ${time}`,
@@ -1412,6 +1802,28 @@ export const en = {
     next: "Next",
     /** Between the buttons: the rows on show and how many there are, e.g. "101–200 of 450". */
     range: (first: number, last: number, total: number) => `${format(first)}–${format(last)} of ${format(total)}`,
+
+    // Search and filters
+    /** The search box: what it looks through. Its name for assistive technology is the same. */
+    searchPlaceholder: "Search changes by name, UID, field or club",
+    /** The name of the three buttons that choose which sessions' changes are listed, for assistive technology. */
+    sessionGroup: "Session",
+    sessions: { all: "All", this: "This session", earlier: "Earlier sessions" } satisfies Record<SessionChoice, string>,
+    /** The check boxes: only changes still in place, and only earlier ones the game did not hold; their hover text. */
+    notUndone: "Not undone",
+    notUndoneTitle: "Only the changes that are still in place",
+    notInGameFilterTitle: "Only the earlier changes the game did not hold when the data was last read",
+    /** Takes the search text and every choice away. */
+    clearFilter: "Clear filter",
+    /** The line beside the title while a search or a filter is on: `matching` of the `total` changes, `undone` of those undone. */
+    filteredCount: (matching: number, total: number, undone: number) => {
+      const count = `${format(matching)} of ${changeCount(total)}`;
+      return undone === 0 ? count : `${count} · ${format(undone)} undone`;
+    },
+    /** Under a mass edit while a search or a filter is on: how many of its changes they leave. */
+    batchMatching: (matching: number, total: number) => `${format(matching)} of ${format(total)} match`,
+    /** In the place of the list when the search and the filters leave no change. */
+    noMatches: "No change matches the search and the filters.",
   },
 
   /** Exporting players or clubs to a file: the button in the toolbar of the player and club lists and its dialog. */
@@ -1419,13 +1831,17 @@ export const en = {
     button: "Export",
     buttonTitle: {
       player: "Write the players the list shows to a CSV or JSON file, for a spreadsheet or a script",
+      staff: "Write the staff the list shows to a CSV or JSON file, for a spreadsheet or a script",
       club: "Write the clubs the list shows to a CSV or JSON file, for a spreadsheet or a script",
     } satisfies Record<ExportEntity, string>,
-    title: { player: "Export players", club: "Export clubs" } satisfies Record<ExportEntity, string>,
+    title: { player: "Export players", staff: "Export staff", club: "Export clubs" } satisfies Record<
+      ExportEntity,
+      string
+    >,
     /** What the export covers: everything the list's search and filters select, in its order. */
     scope: (entity: ExportEntity, count: number) =>
       count === 0
-        ? `No ${entity} matches the search and the filters.`
+        ? `No ${entity === "staff" ? "member of staff" : entity} matches the search and the filters.`
         : `${entityCount[entity](count)}: what the list's search and filters select, in its order.`,
     formatLabel: "Format",
     formats: {
@@ -1438,6 +1854,7 @@ export const en = {
       csvSemicolon: "For Excel where decimals are written with a comma: in Turkish, Spanish or German, say",
       json: {
         player: "For scripts: the positions, attributes and personality as objects of their own",
+        staff: "For scripts: the attributes, personality and contract as objects of their own",
         club: "For scripts: the supporters, facilities, stadium and finances as objects of their own",
       } satisfies Record<ExportEntity, string>,
     },
@@ -1446,8 +1863,13 @@ export const en = {
         "Each player's abilities, positions and position ratings, attributes on the 1–20 scale (the hidden ones " +
         "too), personality, reputation, caps, and contract with its clauses, with the in-game date. Money is in " +
         "pounds, as the game keeps it. Nothing in the game changes.",
+      staff:
+        "Each member of staff's job and employer, abilities, attributes on the 1–20 scale, personality, reputation, " +
+        "and contract (wage and dates), with the in-game date. Money is in pounds, as the game keeps it. Nothing in " +
+        "the game changes.",
       club:
-        "Each club's reputation, founding year, season tickets, social media followers, supporter mix and traits, " +
+        "Each club's nation, league, reputation, founding year, season tickets, social media followers, supporter " +
+        "mix and traits, " +
         "facilities, stadium, and finances: balance, transfer budget, weekly wage spend and wage budget, and ticket " +
         "price, with the in-game date. FM keeps finances only for clubs in the leagues being played. Money is in " +
         "pounds, as the game keeps it. Nothing in the game changes.",
@@ -1458,7 +1880,7 @@ export const en = {
     done: (entity: ExportEntity, count: number, file: string) => `Exported ${entityCount[entity](count)} to ${file}`,
     folder: (folder: string) => `in ${folder}`,
     skipped: (entity: ExportEntity, count: number) => {
-      const pronoun = count !== 1 ? "they were" : entity === "player" ? "he was" : "it was";
+      const pronoun = count !== 1 || entity === "staff" ? "they were" : entity === "player" ? "he was" : "it was";
       return (
         `${entityCount[entity](count)} changed in the game while ${pronoun} read, and ` +
         `${count === 1 ? "was" : "were"} left out.`
@@ -1469,6 +1891,24 @@ export const en = {
     show: "Show in folder",
     showTitle: "Show the file in its folder",
     close: "Close",
+
+    /** The export of the Changes view: a CSV file of the changes its search and filters show. */
+    changes: {
+      buttonTitle: "Write the changes the list shows to a CSV file, for a spreadsheet or a script",
+      title: "Export changes",
+      /** What the export covers: everything the list's search and filters select, or, with none on, the whole history. */
+      scope: (count: number, filtering: boolean) =>
+        count === 0
+          ? "No change matches the search and the filters."
+          : filtering
+            ? `${changeCount(count)}: what the search and the filters select, newest first.`
+            : `${changeCount(count)}: the whole history of this career, newest first.`,
+      contents:
+        "Each change's time (local, with its offset from UTC), name and UID, the field, its old and new value as " +
+        "the game stores them and as shown here, what the list says under them, the mass edit it was part of, when " +
+        "it was undone, and whether it is from an earlier session and in the game. Nothing in the game changes.",
+      done: (count: number, file: string) => `Exported ${changeCount(count)} to ${file}`,
+    },
   },
 
   /** Mass editing: the button in the toolbar of a list and the dialog it opens. */
@@ -1529,9 +1969,15 @@ export const en = {
     row: (position: number) => `Change ${position}`,
     field: "Field",
     operation: "Operation",
-    operations: { set: "Set to", add: "Add", scale: "Scale to %" } satisfies Record<MassOperationKind["op"], string>,
+    operations: { set: "Set to", add: "Add", scale: "Scale to %", addYears: "Add years" } satisfies Record<
+      MassOperationKind["op"],
+      string
+    >,
     /** The name of the value input, by operation. */
-    values: { set: "Value", add: "Amount", scale: "Percent" } satisfies Record<MassOperationKind["op"], string>,
+    values: { set: "Value", add: "Amount", scale: "Percent", addYears: "Years" } satisfies Record<
+      MassOperationKind["op"],
+      string
+    >,
     /** Hover text of the amount of an Add. */
     addTitle: "Added to every value as shown; a negative number takes away",
     /** The same for a percentage: the amount is in percentage points, not a percent of the value (that is Scale). */
@@ -1543,11 +1989,18 @@ export const en = {
     /** After the input of a Scale: the number is a percent of the value the game has now. */
     ofCurrent: "% of current",
     percentTitle: "A percent of the current value: 100 keeps it, 110 raises it by a tenth, 50 halves it",
+    /** Hover text of the years of an Add years, and the word after its input. */
+    addYearsTitle:
+      "Years added to every date, which keeps its day and month; a negative number moves it back. " +
+      "29 February becomes 28 February in a year without one",
+    years: "years",
     /** Hover text of an amount that cannot be applied; `min` and `max` are what it takes. */
     invalidAdd: (min: number, max: number) => `Enter a whole number from ${format(min)} to ${format(max)}`,
     invalidPercent: (min: number, max: number) => `Enter a whole percent from ${min} to ${max}`,
-    /** A date cannot be added to or scaled. */
-    dateSetOnly: "A date can only be set",
+    invalidYears: (min: number, max: number) => `Enter a whole number of years from ${format(min)} to ${format(max)}`,
+    /** A date cannot be added to or scaled, only set or moved by years; and nothing else is moved by years. */
+    dateSetOnly: "A date can only be set or moved by years",
+    yearsDateOnly: "Only a date can be moved by years",
     addField: "Add a field",
     /** Hover text of Add a field when the rows are full; `max` is how many fields one mass edit changes. */
     addFieldFull: (max: number) => `A mass edit changes up to ${max} fields`,
@@ -1654,11 +2107,43 @@ export const en = {
     from: "From",
     to: "To",
 
-    // The switch at the top of the dialog: a move to a club, or a swap with one of its players.
+    // The switch at the top of the dialog: a transfer the game makes the next day, a move to a club now, or a swap with
+    // one of its players.
     /** Its name for assistive technology. */
-    modeLabel: "Transfer or swap",
-    modeMove: "Transfer to a club",
+    modeLabel: "Transfer, move now or swap",
+    modeArrange: "Transfer",
+    modeMove: "Move now",
     modeSwap: "Swap with a player",
+    /** Under the switch: what each of the first two does, and why Transfer is missing where it is. */
+    arrangeNote:
+      "The game makes the transfer on its next day, as it makes its own: his history keeps this season's matches " +
+      "with his old club, lists the new club with the fee, and the game pays the fee.",
+    moveNote:
+      "The editor moves him at once. The game's history does not list it: this season shows under the new club, " +
+      "with no fee.",
+    arrangeUnavailable:
+      "This version of the game, or this system, does not let the editor arrange a transfer for the game to make: " +
+      "Move now moves him at once.",
+
+    // A transfer the game makes the next day
+    /** While the plan is worked out: the first time, finding the game's transfers takes a few seconds. */
+    arrangeChecking: "Checking the transfer… the first time, finding the game's transfers takes a few seconds.",
+    /** The day the game makes the move, in the plan. */
+    movesOn: (date: string) => `The game makes the move on ${date}`,
+    /** The fee in the plan: the game pays it on the day. */
+    arrangeFee: (amount: string) => `Fee ${amount}, paid by the game on the day`,
+    /** The contract in the plan: the wage per week and the end date, written out. */
+    arrangeContract: (wage: string, expires: string) => `Contract: ${wage} a week, until ${expires}`,
+    /** What arranging the transfer does, one line each, in the place of `does`. */
+    arrangeDoes: [
+      "Agreed now: the game makes the move when it reaches its next day",
+      "His history keeps this season's matches with his old club, and lists the new club with the fee",
+      "The game pays the fee on the day, as it pays for its own transfers",
+      "Contract with the new club from that day; wage and contract end change only if you set new ones",
+      "Listed under Changes, where one undo takes it back until the day",
+    ],
+    /** The button of the foot. */
+    arrangeButton: "Arrange transfer",
 
     // Choosing the club
     /** The name of the search box, and of the list of clubs under it, for assistive technology. */
@@ -1855,6 +2340,9 @@ export const en = {
     // The foot
     /** Nothing changes in the game until Transfer, or Swap. */
     hint: "Nothing changes in the game until you press Transfer.",
+    /** The same for a transfer arranged for the game, and for a player moved now. */
+    arrangeHint: "Nothing changes in the game until you press Arrange transfer.",
+    moveNowHint: "Nothing changes in the game until you press Move now.",
     move: "Transfer",
     moving: "Transferring…",
     cancel: "Cancel",
@@ -1960,6 +2448,9 @@ export const en = {
     button: "Release",
     buttonTitle: "Release this player from their club in the game: they become a free agent",
 
+    /** The same button in a member of staff's profile: its hover text. */
+    staffButtonTitle: "Release this member of staff from their club in the game: they are left without a club",
+
     // The dialog
     title: "Release",
     /** The club the player leaves. */
@@ -1967,6 +2458,8 @@ export const en = {
     checking: "Checking the release…",
     /** The player can be released; `club` is the name of their club. */
     ready: (club: string) => `${club} → free agent`,
+    /** A member of staff can be released; `club` is the name of their club. */
+    staffReady: (club: string) => `${club} → unemployed`,
     doesHeading: "What the release does",
     /** What the game does to the player, one line each. */
     does: [
@@ -1976,12 +2469,57 @@ export const en = {
       "The game's transfer history does not list it",
       "Listed under Changes, where one undo brings the player back on the same contract",
     ],
+    /** What the release does to a member of staff, one line each. */
+    staffDoes: [
+      "Leaves the club's staff at once, and the contract ends: unemployed, as the game's own staff without a club are",
+      "No one is paid anything",
+      "A place as manager or director of football is left empty, for the club to fill",
+      "Listed under Changes, where one undo brings them back on the same contract",
+    ],
 
     // The foot
     /** Nothing changes in the game until Release. */
     hint: "Nothing changes in the game until you press Release.",
     release: "Release",
     releasing: "Releasing…",
+    cancel: "Cancel",
+  },
+
+  /** Changing a player's names: the button beside Release and its dialog. */
+  rename: {
+    /** The button in the header of a player's profile, beside Release. */
+    button: "Rename",
+    buttonTitle: "Change this player's names in the game",
+
+    // The dialog
+    title: "Rename",
+    loading: "Reading the names…",
+    first: "First name",
+    last: "Last name",
+    common: "Common name",
+    commonHint:
+      "The name the game shows instead of the first and last name, as with Pedri or Vinícius Júnior. Leave it empty for none",
+    full: "Full name",
+    fullHint: "The name in full, as the profile gives it. Leave it empty for none",
+    /** The placeholder of a name that can be left empty. */
+    none: "None",
+    required: "Cannot be empty",
+    tooLong: (max: number) => `Too long: at most ${max} bytes`,
+    noRoom:
+      "The game has no room for another new name of this kind just now: save the game, load the save again, and try again",
+    unavailable: "The editor cannot change names in this version of the game",
+    doesHeading: "What it does",
+    does: [
+      "The game shows the new name once you press Continue in it",
+      "The name stays when you save the game",
+      "A new first, last or common name goes into the game's tables of names, where the game uses it for this player only",
+      "Listed under Changes, one line per name, where Undo puts the old name back",
+    ],
+
+    // The foot
+    hint: "Nothing changes in the game until you press Rename.",
+    rename: "Rename",
+    renaming: "Renaming…",
     cancel: "Cancel",
   },
 
@@ -2044,6 +2582,24 @@ export const en = {
     cancel: "Cancel",
   },
 
+  /** Batch traits: the dialog of a club's Squad tab that adds or removes traits for every player of a team. */
+  batchTraits: {
+    title: "Batch team traits",
+    addMode: "+ Add to squad",
+    removeMode: "- Remove from squad",
+    addHint: "Applies selected traits to players in this team who don't have them. Existing traits are preserved.",
+    removeHint: "Removes selected traits from players in this team who have them. Other traits are left untouched.",
+    noneSelected: "No traits selected in this mode",
+    selectedCount: (count: number) => (count === 1 ? "1 trait selected" : `${format(count)} traits selected`),
+    deselectAll: "Deselect all",
+    oppositeModeNote: "Selected in opposite mode",
+    applyNote: (players: number) => `Applies to ${format(players)} players · Can be undone in 1 click`,
+    emptySquad: (players: number) => `Squad of ${format(players)} players`,
+    cancel: "Cancel",
+    apply: "Apply",
+    applying: "Applying…",
+  },
+
   /**
    * A club's squad: the tab of the club profile that lists the players of each of its teams, with the actions on a
    * whole team and the captains.
@@ -2091,11 +2647,75 @@ export const en = {
     liftNone: "Nobody in this team is banned",
     inspireAll: "Inspire all",
     inspireAllTitle: "Set the morale of every player in this team to 20, the highest, and remove their reasons to be unhappy",
+    maxCohesion: "Max cohesion",
+    maxCohesionTitle:
+      "Set the cohesion with the club of every player in this team to 100, the highest. The game shows the team's cohesion on its Dynamics page once it moves on: press Continue in the game",
+    /** Hover text of Max cohesion while no player's cohesion with the club can be read. */
+    cohesionNone:
+      "The editor cannot read this team's cohesion: this version of the game has not been checked for it, or none of its players has an entry for the club",
+    /** After Max cohesion: how many players of the team have no entry for the club yet, and were left out. */
+    cohesionWithout: (count: number) =>
+      count === 1
+        ? "1 player has no cohesion with the club yet"
+        : `${format(count)} players have no cohesion with the club yet`,
+    maxTactics: "Max tactics",
+    maxTacticsTitle:
+      "Have every player in this team know the tactic it plays at its best, in the eight areas of the Tactical Effectiveness screen, as weeks of training on it would. Attributes stay as they are. The areas fall again as the training ages, after some six weeks, and another tactic needs another press. The game shows them once it moves on: press Continue in the game",
+    /** Hover text of Max tactics while no player's familiarity with the team's tactic can be read. */
+    tacticsNone:
+      "The editor cannot read how well this team knows its tactic: this version of the game has not been checked for it, or the team does not play a tactic you pick",
+    /** After Max tactics: how many players of the team do not train, whose history of training was left as it is. */
+    tacticsUntrained: (count: number) =>
+      count === 1
+        ? "1 player does not train (as when injured): his history of training stays as it is"
+        : `${format(count)} players do not train (as when injured): their history of training stays as it is`,
     refreshAll: "Refresh all",
     refreshAllTitle: "Set the energy and match sharpness of every player in this team to 100%, and rest them fully (jadedness -500)",
+    batchTraits: "Batch traits",
+    batchTraitsTitle: "Add or remove preferred moves for players in this team",
     maxAll: "Max attributes",
     maxAllTitle:
       "Set every attribute of every player in this team to its best: 20, and 1 for injury proneness and dirtiness",
+    atItsBest: "Team at its best",
+    atItsBestTitle:
+      "Heal all, Inspire all, Refresh all, Max cohesion and Max tactics in one press, which one Undo takes back. " +
+      "Attributes and bans stay as they are. A step that cannot run, such as Heal all while nobody is injured, is " +
+      "skipped, and the result says so. The areas of the tactic fall again as the training ages, after some six weeks, " +
+      "and another tactic needs another press. The game shows the changes once it moves on: press Continue in the game",
+    /** After Team at its best or Destroy: a step it left out, by its name, and why. */
+    atItsBestSkipped: (step: string, reason: string) => `${step} skipped: ${reason}`,
+    /** The red button that takes the team to its worst, after asking (see `destroyDialog`). */
+    destroy: "Destroy",
+    destroyTitle:
+      "Take every player in this team to his worst: morale and happiness, energy, match sharpness and jadedness, " +
+      "cohesion with the club and, where you pick the team's tactic, how well he knows it. Nothing is made better " +
+      "than it is; attributes, injuries and bans stay. It asks first, and one Undo takes it all back",
+    /** The names of Destroy's steps, for one it left out (see `atItsBestSkipped`). */
+    destroySteps: {
+      demoralize: "Morale and happiness",
+      exhaust: "Energy and sharpness",
+      minCohesion: "Cohesion",
+      minTactics: "Tactics",
+    },
+    /** The menu with the actions on the whole team one at a time: Heal all to Max tactics. */
+    moreActions: "More actions",
+    moreActionsTitle: "The actions on the whole team, one at a time",
+    /** Destroy's question, asked before anything is written. */
+    destroyDialog: {
+      title: "Destroy this team?",
+      doesHeading: "For every player in the list, those out on loan too",
+      does: [
+        "Morale to 1, the lowest; happiness and playing time happiness to -100",
+        "Energy to 0%, match sharpness to 35% and jadedness to 1000",
+        "Cohesion with the club to 1, for those who have it",
+        "How well he knows the tactic to its least, where you pick the team's tactic",
+      ],
+      keeps: "No value is made better than it is. Attributes, injuries and bans stay as they are.",
+      /** When a manager of the user's runs the club. */
+      ownClub: "This is a team of your own club.",
+      hint: "One Undo takes it all back, before the game moves on.",
+      cancel: "Cancel",
+    },
     /** Beside the buttons: whom they cover, and where undoing is. */
     hint: "The actions cover every player in the list, those out on loan too. Undo is in the Changes view as well.",
 
@@ -2173,6 +2793,8 @@ export const en = {
       matchSharpness: "Sharpness",
       jadedness: "Jaded.",
       morale: "Morale",
+      cohesion: "Cohesion",
+      tactics: "Tactics",
       /** The last column has no heading but this one, for assistive technology: it holds the captaincy menus. */
       actions: "Captaincy",
     } satisfies Record<SquadSort | "actions", string>,
@@ -2188,6 +2810,8 @@ export const en = {
       matchSharpness: "match sharpness",
       jadedness: "jadedness",
       morale: "morale",
+      cohesion: "cohesion",
+      tactics: "tactical familiarity",
     } satisfies Record<SquadSort, string>,
 
     // The tags after a name, with what each means as hover text
@@ -2197,6 +2821,12 @@ export const en = {
     banned: "Banned",
     /** `count` is how many bans he has. */
     bannedTitle: (count: number) => (count === 1 ? "1 ban" : `${format(count)} bans`),
+    /** A player his teammates hold reasons to be unhappy about; `count` is how many of them do. */
+    unrest: "Unrest",
+    unrestTitle: (count: number) =>
+      count === 1
+        ? "1 teammate has a reason to be unhappy about him. Remove all, in his profile, settles it once the game moves on"
+        : `${format(count)} teammates have a reason to be unhappy about him. Remove all, in his profile, settles them once the game moves on`,
     onLoan: "On loan",
     onLoanTitle: "Out on loan to another club",
     loanee: "Loanee",
@@ -2254,8 +2884,11 @@ export const en = {
     tabs: {
       label: "Scouting sections",
       recommend: "Transfer advice",
+      opportunities: "Opportunities",
+      similar: "Similar players",
       depth: "Squad depth",
       departures: "Players to let go",
+      youth: "Youth intake",
     },
     /** The depth statuses: the dots on the pitch and the badges of the cards. */
     status: {
@@ -2336,7 +2969,7 @@ export const en = {
     how: {
       label: "How is this list made?",
       note: (rule: string, count: string) =>
-        `The scout looks at every player who can play this position (rated 10 or more there), leaving out your own club's players and those of other human managers. Of those he keeps the ones who ${rule}. For the 400 who fit best he works out how likely each is to join you, then recommends the best ${count} by fit and probability together. Recommended order: 70% fit and 30% probability, a little less for players past 30; Rotation weighs the two alike and Future counts potential too. Click a column title to sort the list; # is the scout's own order.`,
+        `Players rated 10 or more at this position (not yours or other human managers') who ${rule}. The best ${count} are shown by fit (70%) and probability (30%); Rotation weighs both alike, Future counts potential too. Click a column title to sort.`,
     },
     purposeRules: {
       firstTeam: "fit the position better than your best player there",
@@ -2354,6 +2987,7 @@ export const en = {
       fit: "fit",
       probability: "probability",
       fee: "fee",
+      similarity: "similarity",
     },
     backToScoutOrder: "Back to the scout's order",
     showMore: (count: number) => `Show ${format(count)} more`,
@@ -2417,6 +3051,13 @@ export const en = {
       },
       attention: "Needs a look:",
       allFine: "Every line looks balanced.",
+      /** The switch between the pitch and the table. */
+      views: { label: "Show the squad as", pitch: "Pitch", table: "Table" },
+      pitchLabel: "The squad on the pitch, line by line",
+      /** Under a line on the pitch: how many players of other lines can play there. */
+      coverCount: (count: number) => `${format(count)} can cover`,
+      /** The button under a line picked on the pitch. */
+      adviceFor: (position: string) => `Transfer advice for ${position}`,
     },
     departures: {
       intro: "Players your scout would let go, most pressing first.",
@@ -2450,6 +3091,253 @@ export const en = {
         const suffix = (tens >= 11 && tens <= 13) || rank % 10 > 3 ? "th" : ["th", "st", "nd", "rd"][rank % 10];
         return `${line} · ${rank}${suffix}`;
       },
+    },
+    /** The actions at the end of a row of players the scout found, and on a player he would let go. */
+    actions: {
+      column: "Actions",
+      compare: "Compare with your squad",
+      compareLabel: (name: string) => `Compare ${name} with your squad`,
+      similar: "Find similar players",
+      similarLabel: (name: string) => `Find players like ${name}`,
+      report: "Scout report",
+      reportLabel: (name: string) => `Scout report on ${name}`,
+      replacement: "Find a replacement",
+      replacementLabel: (name: string) => `Find a replacement for ${name}`,
+      replacementTitle: "Players like him, who could take his place",
+    },
+    /**
+     * What makes a player an opportunity, by code: `value` is the reason's value as text (days, an amount, a count,
+     * a potential), `against` his value for a release clause (null when he is not for sale).
+     */
+    why: {
+      freeAgent: () => "Free agent",
+      expiring: (value: string) => `Contract ends in ${value} days`,
+      releaseClause: (value: string, against: string | null) =>
+        against === null ? `Release clause ${value}` : `Release clause ${value} (value ${against})`,
+      unhappy: (value: string) => (value === "1" ? "Unhappy at his club" : `Unhappy at his club (${value} reasons)`),
+      inTheRed: (value: string) => `His club is in the red (${value})`,
+      listed: () => "Transfer listed",
+      loanListed: () => "Available for loan",
+      wonderkid: (value: string) => `Potential ${value}`,
+    } as Record<string, (value: string, against: string | null) => string>,
+    /** How a player the scout found compares with the club's best player at his position. */
+    verdicts: {
+      better: "Better than your no. 1",
+      close: "Close to your no. 1",
+      below: "Below your no. 1",
+      none: "Nobody in your squad plays here",
+    },
+    /** How likely a player is to join, in words, by the probability: 70% and above, 50% and above, below. */
+    chances: { likely: "Likely to join", possible: "Could join", hard: "Hard to sign" },
+    opportunities: {
+      kindsLabel: "Lists of opportunities",
+      kinds: {
+        bosman: "Bosman",
+        releaseClause: "Release clauses",
+        unhappy: "Unhappy",
+        inTheRed: "Clubs in the red",
+        listed: "Transfer list",
+        loanListed: "Loan list",
+        wonderkid: "Wonderkids",
+      } satisfies Record<OpportunityKind, string>,
+      hints: {
+        bosman: "Free agents, and contracts that end within six months",
+        releaseClause: "A release clause below his value",
+        unhappy: "Unhappy at his club",
+        inTheRed: "His club needs the money",
+        listed: "His club would sell him",
+        loanListed: "His club would lend him out",
+        wonderkid: "19 or younger, with a great future",
+      } satisfies Record<OpportunityKind, string>,
+      countLabel: "Players on this list",
+      /** "34", or "300+" for a list that holds more. */
+      count: (count: number, more: boolean) => (more ? `${format(count)}+` : format(count)),
+      position: "Position",
+      anyPosition: "Any position",
+      maxAge: "Max age",
+      maxFee: "Max fee",
+      betterOnly: "Better than my no. 1",
+      betterOnlyTitle: "Only players who fit their position better than your best player there",
+      summary: (kind: string, lowest: string, highest: string, pool: string) =>
+        `${kind} · players of ability ${lowest}–${highest}, around your squad's level · ${pool} looked at`,
+      how: {
+        label: "How are these lists made?",
+        note: "Players near your best eleven's level (30 below to 45 above), not yours or other human managers', each measured at his best position or the one you pick. Each list is sorted by fit and probability together.",
+      },
+      empty: "Nobody on this list with these filters.",
+      emptyWonderkids: "No wonderkids with these filters.",
+      better: "Better than your no. 1 here",
+      columns: { position: "Pos", why: "Why" },
+    },
+    similar: {
+      intro: "Pick a player to find others like him: their attributes are compared where his position needs them.",
+      search: "Player to compare with",
+      searchPlaceholder: "Search a player by name…",
+      noMatch: "No player by that name.",
+      quickPicks: "Or start from one of your players:",
+      change: "Choose another player",
+      reference: "Players like",
+      position: "Compare at",
+      cheaper: "Cheaper",
+      cheaperTitle: "Only players worth less than him",
+      younger: "Younger",
+      youngerTitle: "Only players younger than him",
+      maxFee: "Max fee",
+      value: "Value",
+      notForSale: "Not for sale",
+      doesNotPlay: (position: string) => `He does not play ${position}: only his attributes are compared.`,
+      summary: (candidates: string, shown: string, position: string) =>
+        `${candidates} players play ${position} · the ${shown} most alike`,
+      how: {
+        label: "How is similarity measured?",
+        note: "The scout compares the attributes the position's roles rely on, the key ones most. Where a player is strong and where he is weak counts more than his level, so a cheaper or younger player can still be very alike.",
+      },
+      empty: "Nobody alike with these settings.",
+      columns: { similarity: "Alike", value: "Value" },
+      similarityTitle: (value: number) => `${format(value)}% alike`,
+    },
+    compare: {
+      title: "Compare with your squad",
+      hint: (position: string, name: string) =>
+        `Against ${name}, your best player at ${position}. The role's key attributes come first.`,
+      noStarter: "Nobody in your squad plays this position.",
+      starter: "Your no. 1",
+      candidate: "Candidate",
+      inPossession: "In possession",
+      outOfPossession: "Out of possession",
+      add: "Add a player",
+      addNone: "Pick from the list…",
+      remove: (name: string) => `Take ${name} out of the comparison`,
+      removeShort: "Remove",
+      scoutView: "Scout's view",
+      rows: {
+        fit: "Fit",
+        position: (position: string) => `At ${position}`,
+        roleRating: (role: string) => `As ${role}`,
+        probability: "Probability",
+        fee: "Est. fee",
+        wage: "Wage",
+        contract: "Contract until",
+        verdict: "Verdict",
+      },
+      ownPlayer: "Your player",
+      roleAttributes: (roles: string) => `The role's attributes: ${roles}`,
+      keyAttribute: "A key attribute of the role",
+      versus: (difference: string) => `${difference} against your no. 1`,
+      best: "the best",
+      age: (age: number) => `Age ${format(age)}`,
+      allAttributes: "All attributes",
+      loading: "Reading the players…",
+      close: "Close",
+    },
+    report: {
+      title: (name: string) => `Scout report: ${name}`,
+      hint: "Save it as a picture or copy it to share.",
+      making: "Writing the report…",
+      failed: (reason: string) => `Could not make the report: ${reason}`,
+      alt: (name: string) => `The scout report on ${name}`,
+      save: "Save as image",
+      savePdf: "Save as PDF",
+      saving: "Saving…",
+      copy: "Copy image",
+      copied: "Copied to the clipboard.",
+      copyFailed: (reason: string) => `Could not copy the image: ${reason}`,
+      similar: "Find similar players",
+      saved: (file: string) => `Saved as ${file}.`,
+      open: "Open",
+      show: "Show in folder",
+      close: "Close",
+      /** The texts on the picture itself. */
+      heading: "Scout report",
+      age: (age: number) => `Age ${format(age)}`,
+      freeAgent: "Free agent",
+      contract: "contract until",
+      fit: "Fit",
+      probability: "Probability",
+      fee: "Est. fee",
+      abilities: "CA / PA",
+      value: "Value",
+      role: "Role",
+      strengths: "Strengths",
+      weaknesses: "Weaknesses",
+      profile: "Character",
+      note: "Scout's note",
+      similarity: (value: number) => `${format(value)}% alike`,
+      footer: "FMLibreEditor scout report · fees, wages and probabilities are estimates",
+      traits: {
+        consistent: "Consistent",
+        inconsistent: "Inconsistent",
+        bigGames: "Big-game player",
+        nervous: "Nervous in big games",
+        injuryProne: "Injury prone",
+        robust: "Rarely injured",
+        versatile: "Versatile",
+        professional: "Model professional",
+        ambitious: "Ambitious",
+        loyal: "Loyal",
+        hotHeaded: "Hot-headed",
+      },
+    },
+    /** "Youth intake": the players the game made at a club's youth intakes, by the day they joined it, and their edits. */
+    youth: {
+      intro: "The players the game made at the club's youth intakes who are still there, by the day they joined it.",
+      otherClub: "Look at another club",
+      searchLabel: "Club to look at",
+      mine: "Back to my club",
+      intakesLabel: "Youth intakes",
+      /** A day nothing says. */
+      noDay: "Day not known",
+      /** `best` is a name and the potential in brackets. */
+      summary: (count: number, average: string, best: string) =>
+        `${count === 1 ? "1 player" : `${format(count)} players`} · average potential ${average} · best: ${best}`,
+      lent: (count: number) => (count === 1 ? "1 out on loan" : `${format(count)} out on loan`),
+      how: {
+        label: "How is this list made?",
+        note: "Players the game made who joined this club at 17 or younger and were trained at no other club, by the day they joined. Those out on loan are listed; those sold or let go are not.",
+      },
+      unmarked:
+        "The editor does not know how this version of the game marks the players it makes: the club's own young players from the game's database are listed too.",
+      empty: (club: string) => `${club} has no youth intake players at the moment.`,
+      emptyHint: "An intake's players show here for as long as they are at the club. Look at another club to see its youth intake.",
+      columns: {
+        player: "Player",
+        position: "Pos",
+        born: "Born",
+        nation: "Nationality",
+        city: "City of birth",
+        ca: "CA",
+        pa: "PA",
+        actions: "Edit",
+      },
+      age: (age: number) => `age ${format(age)}`,
+      joinedAt: (age: number) => `joined at ${format(age)}`,
+      onLoan: (club: string) => `On loan at ${club}`,
+      youthContract: "Youth contract",
+      edit: (name: string) => `Edit ${name}`,
+      editor: {
+        label: (name: string) => `Editing ${name}`,
+        reading: "Reading his values…",
+        dateOfBirth: "Date of birth",
+        nation: "Nationality",
+        city: "City of birth",
+        /** The city select of a player without a city: the game keeps none for him, and the editor sets none. */
+        noCity: "None in the game",
+        /** Above the cities of the nation picked: they are the ones people of the save were born in. */
+        cityHint: "Cities people of this save were born in",
+        ca: "Current ability",
+        pa: "Potential ability",
+        save: "Save",
+        saving: "Saving…",
+        cancel: "Cancel",
+        profile: "Full profile",
+        profileTitle: "Positions, attributes and the rest, in the player's profile",
+        nothing: "Nothing to save: no value was changed.",
+        saved: (count: number) => (count === 1 ? "1 change saved." : `${format(count)} changes saved.`),
+        failed: (field: string, reason: string) => `${field}: ${reason}`,
+        invalid: (field: string) => `${field}: not a value it can take.`,
+      },
+      loading: "Reading the youth intakes…",
+      failed: (reason: string) => `Could not read the youth intakes: ${reason}`,
     },
     roles: {
       bgk: "Ball-Playing Goalkeeper",
@@ -2529,6 +3417,200 @@ export const en = {
       unwanted: () => "Squad status: surplus to requirements",
       listed: () => "Already transfer listed",
     } as Record<string, (value: string) => string>,
+  },
+
+  /** "My club" (`MyClub`): the page the app opens on, about the club the user manages in the save. */
+  home: {
+    /** The tab's name. */
+    nav: "My club",
+    loading: "Looking for your club…",
+    failed: (reason: string) => `Could not look for your club: ${reason}`,
+    /** Under the club's name: who manages it, or that it is a club picked to follow. */
+    manager: (name: string) => `Manager: ${name}`,
+    following: "A club you follow",
+    /** The name of the switch between the clubs, in a save with several managers of the user's. */
+    clubsLabel: "Your clubs",
+    /** The button that opens the club in the Clubs tab, and its hover text. */
+    openProfile: "Club profile",
+    openProfileTitle: "Open this club in the Clubs tab: facilities, finances, stadium and more",
+    /** When the user's manager has no club: a club can be picked to follow instead. */
+    noClubTitle: "You manage no club in this save",
+    noClubText: "Pick a club to follow here instead: its squad, who needs a look, and the actions on a whole team.",
+    chooseAnother: "Choose another club",
+    /** The name of the search that picks the club to follow. */
+    searchLabel: "Club to follow",
+    /** The name of the page's squad part. */
+    squad: "Squad",
+    /** The cards over the squad: who in the shown team needs a look. Injured, Banned and Unrest take the squad's tags. */
+    cards: {
+      label: "Who needs a look",
+      lowMorale: "Low morale",
+      tired: "Tired",
+      contracts: "Contracts ending",
+      /** The hover texts of the cards' titles: what each one counts. `below` is a morale or a percentage as shown. */
+      injuredHint: "Players with an injury",
+      bannedHint: "Players with a ban",
+      lowMoraleHint: (below: string) => `Players whose morale is below ${below}`,
+      tiredHint: (below: string) => `Players whose energy is below ${below}`,
+      unrestHint: "Players some of their teammates are unhappy about",
+      contractsHint: (months: number) => `Players whose contracts end within ${months} months`,
+      /** In a card that counts nobody. */
+      none: "None",
+      /** After the first few names. */
+      more: (count: number) => `and ${format(count)} more`,
+    },
+  },
+
+  /**
+   * The command palette (`CommandPalette`): one box that finds players, staff, clubs and the app's commands. The
+   * keyboard shortcuts (`shortcuts.ts`) take their key names from here.
+   */
+  palette: {
+    /** The button in the masthead that opens it. */
+    button: "Search",
+    /** The button's hover text, and the name of the box. */
+    title: "Search or run a command",
+    /** In the box while connected, and while not: then it finds commands only. */
+    placeholder: "Search players, staff, clubs and commands",
+    placeholderCommands: "Search commands",
+    /** The heading over the commands; the names of the lists head the people and the clubs found. */
+    commands: "Commands",
+    /** The command that shows one of the app's lists; `list` is the name of its tab. */
+    goTo: (list: string) => `Go to ${list}`,
+    /** The command that puts the caret in the search box of the list on show. */
+    searchList: "Search this list",
+    /** The commands for the profile on show: they press its Edit button (to start, and to end) and its Apply button. */
+    editProfile: "Edit this profile",
+    doneEditing: "Finish editing this profile",
+    applyChanges: "Apply the changes to this profile",
+    /** Under the people or the clubs found, when the list has more: opens that list with the same search. */
+    showAll: (count: number, list: string) => `Show all ${format(count)} in ${list}`,
+    searching: "Searching…",
+    /** When nothing matches what is typed. */
+    empty: (query: string) => `Nothing matches “${query}”.`,
+    /** Under the commands while not connected. */
+    notConnected: "Connect to the game to search its players, staff and clubs.",
+    failed: (reason: string) => `The search failed: ${reason}`,
+    /** The foot of the box: what the arrow keys, Enter and Escape do. */
+    hintMove: "Move",
+    hintOpen: "Open",
+    hintClose: "Close",
+    /** The names of the keys as Windows keyboards have them ("Ctrl+K"); macOS shows the keys' signs instead. */
+    keys: { ctrl: "Ctrl", shift: "Shift", enter: "Enter", escape: "Esc" },
+  },
+
+  /**
+   * What's new (`WhatsNewDialog`): what a version brings. It opens by itself the first time the app starts after an
+   * update, and from the foot of the window or the palette when asked.
+   */
+  whatsNew: {
+    title: (version: string) => `What's new in ${version}`,
+    /** Under the title when the dialog opened by itself. */
+    updated: "FMLibreEditor has been updated.",
+    /** Over each version's list, when the dialog tells about more than one. */
+    version: (version: string) => `Version ${version}`,
+    /** `names` is a list the language's own way ("a, b and c"). */
+    thanks: (names: string) => `Thanks to ${names}.`,
+    /** Opens the release's notes on GitHub. */
+    allChanges: "All changes",
+    allChangesTitle: "Open this version's notes in full on GitHub",
+    /** Closes the dialog, which does not open by itself again for this version. */
+    close: "Got it",
+    /** The link at the foot of the window that opens it again, and the palette's command. */
+    link: "What's new",
+    command: "What's new in this version",
+    /**
+     * What each version brings, newest first: a few words in bold, then a sentence. Where a language lacks a version,
+     * the dialog shows it in English. A release adds its version here (see docs/DEVELOPING.md).
+     */
+    versions: {
+      "0.5.4": [
+        {
+          title: "Transfers in the player's history.",
+          text: "Transfer, now the first choice when you move a player, arranges the move for the game's next day. The game makes it as one of its own: it pays the fee and keeps the move in his career history, with this season's matches at his old club in a row of their own. Move now still moves him at once.",
+        },
+        {
+          title: "Team at its best, and Destroy.",
+          text: "In a club's Squad tab, one press heals, inspires and refreshes the whole team and takes its cohesion and tactic to the top; Destroy, after a question, does the opposite. One Undo takes either back, and the single actions are under More actions.",
+        },
+        {
+          title: "Batch traits.",
+          text: "Under More actions in a club's Squad tab, Batch traits gives every player of the team the traits you pick, or takes them away, and leaves the rest of their traits as they are. One Undo takes it back.",
+        },
+        {
+          title: "Move all staff.",
+          text: "A club's Staff tab moves its whole staff to another club at once, each in the same job, and one Undo brings them all back.",
+        },
+        {
+          title: "National teams.",
+          text: "A national team's senior squad gets Heal all, Inspire all and Refresh all, and its table shows energy, sharpness and morale.",
+        },
+        {
+          title: "Sponsorship deals.",
+          text: "A club's finances list its sponsorship deals, read only: what each pays per season and in all, its term, and what a relegation changes. On Game Pass 0.9.2524.0 so far.",
+        },
+        {
+          title: "Fix.",
+          text: "On some careers the staff check failed although the staff read right, which left staff read-only and refused healing, Max cohesion and Max tactics. It now passes.",
+        },
+      ],
+      "0.5.3": [
+        {
+          title: "FM27's update of 17 November.",
+          text: "On Windows and macOS, Game Pass 0.9.2524.0 and Steam build 26620374 are known builds, and the clubs' finances and the tactic your team plays are read again where the update moved them.",
+        },
+        {
+          title: "National teams.",
+          text: "The switch over the club list shows every nation's men's and women's teams: a team's squad, its youth teams (Under 21, Under 20 and the others) with theirs, and the reputation of each, which you can edit.",
+        },
+        {
+          title: "League prize money.",
+          text: "A club's overview shows what its league pays this season, by final position and per match, and the amounts can be changed for every club in the league until the season ends.",
+        },
+        {
+          title: "Fix.",
+          text: "A save whose youth players were born after 2020 no longer fails the check the editor makes before it writes.",
+        },
+      ],
+      "0.5.2": [
+        {
+          title: "My club.",
+          text: "The app opens on the club you manage: who needs a look, its money and the squad's actions, in one place. Without a club of your own, you can follow one.",
+        },
+        {
+          title: "Command palette.",
+          text: "Ctrl+K (⌘K on a Mac) finds a player, a member of staff, a club or a command, and shortcuts move between the tabs.",
+        },
+        {
+          title: "Scouting.",
+          text: "Opportunities in the market, players like one you would let go, a comparison with your no. 1 at his position, scout reports to save as a picture or a PDF, the squad on a pitch and the youth intakes.",
+        },
+        {
+          title: "Rename a player.",
+          text: "First, last, common and full name. The game keeps the new name in its saves.",
+        },
+        {
+          title: "Contracts and staff.",
+          text: "Extend a contract by five years in one click, or add years to many in a mass edit. Release a member of staff, or a club's whole staff, and bring them back with one Undo.",
+        },
+        {
+          title: "Max tactics.",
+          text: "In a club's Squad tab, it brings the team's tactical familiarity to the top. Reasons to be unhappy are now worded as the game words them.",
+        },
+        {
+          title: "Your changes, kept.",
+          text: "Each career's changes stay in the Changes tab after a restart, and you can search, filter and export them.",
+        },
+        {
+          title: "Club filters.",
+          text: "Nation, league and reputation; Mass edit and Export take the clubs the list shows.",
+        },
+        {
+          title: "Russian and Japanese.",
+          text: "Two more languages. Steam's update of 12 November is a known build too.",
+        },
+      ],
+    } as Record<string, { title: string; text: string }[]>,
   },
 
   errors,

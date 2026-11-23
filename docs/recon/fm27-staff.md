@@ -123,6 +123,81 @@ department (grown when full) or the club's place for a director of football (if 
 Right after a save is loaded the pool has no free slot (70,826 used, 0 free on this save), and the signing is refused
 until the game makes a contract itself, as it does when the days go by.
 
+## Releasing staff
+
+Read on the Windows Steam build 26577676, on the test save of October 2027 (28,250 staff, 13,522 of them without a
+club), whose human manager runs Monza, for issue #170.
+
+**A contract's end moved to the game's date does not release.** On 3 October 2027 the end of four coaches' contracts
+was set with the probe: three of Brentford's (Jon-Paul Pittman to that day, Jack Lester to the day before, Mehmet Ali
+to the day after) and one of Monza's (Riccardo Terrinoni, to that day). One Continue took the game to 9 October. It
+ended none of them: all four were still in their clubs' coaching lists under their contracts, and the game's own
+screen showed Terrinoni's contract as ending on 3 October. No member of staff at all had changed clubs in those six
+days. (On the Mac, a contributor saw three such Brentford coaches without a club a week on, on 26385295; when the game
+gets to them is not known.) The four ends were written back.
+
+**What a member of staff without a club is.** His object's contract (`+0x1A8`) is null, and no department list holds
+him. The pointer at `+0x90`, which most employed staff have, is no sign of it: 788 staff without a contract have one
+and 5,640 under contract do not. Only the member of staff points at his contract (`refs` over Pittman's and Mehmet
+Ali's found one pointer each, at their `+0x1A8`).
+
+**What else points at a member of staff** (`staff-refs`). At a club no human runs, little: Pittman (coach) is held by
+the coaching list, his contract's owner, the game's arrays of people and one 40-byte record that starts with a date
+and holds a figure out of 100, a person and him (records like it list Bradford City's and Brentford's staff, and a
+scout's reports of players); Brentford's director of football, chief scout, head performance analyst and technical
+director the same, beside their club's places. At the human manager's club much more: Jürgen Klopp, Monza's assistant
+coach, by 48 objects of the assistant's advice (`backroom_advice_*::*_ADVICE_SUGGESTION`, `+0x08`), inbox items
+(`STAFF_RESPONSIBILITIES_CHANGE_RESPONSE`, match previews and roundups), match records, a national team he manages too
+(`NATIONAL_TEAM +0x80`, with a manager's contract of its own), and a list of Monza's coaches that holds him six times
+(the coaches of the training's parts, it seems); the chief scout by hundreds of records and, at that moment, by a
+thread's stack. As the game's own release of a player leaves the advice pointing at him (see `fm27-transfers.md`),
+such pointers are not in the way, provided the game copes with the rest.
+
+**The editor's release** (`Session::plan_staff_release`, the probe's `staff-release`) takes him out of every department
+list of his club that holds him, and out of its place for a director of football or a team's place for a manager
+(left empty, as a move leaves it), and only then clears his contract pointer. The contract is left as it was. It is
+refused as a move is: the human manager (`staff.you`), the board and jobs the editor does not give (`staff.job`),
+player-coaches, and one the club or its teams point at in another way (`staff.role`). Release all staff releases each
+one of the club's staff the list has, one after another, each worked out from the game as the one before left it, and
+leaves those refused that way; it is logged as one batch, which `undo_batch` undoes from the last.
+
+**In the game** (the same save on 9 October, with the probe, not undone): Pittman, Chris Bradley (chief scout), Keith
+Andrews (manager) and Charlie McPhee (chief doctor, basic contract) of Brentford, and Klopp, Giovanni Vallelonga
+(chief scout) and Vincenzo Costa (doctor, basic contract) of Monza, released. The user looked at both clubs' Staff
+screens, Klopp's profile and Monza's responsibilities and training, and found nothing wrong; then one Continue (10
+October), a save under another name and its load (every object at a new address). The seven were still without a club
+or a contract. The list that had held Klopp six times held him no more, nor did anything else of Monza's; his Monza
+contract was gone from memory, and so was Pittman's, while his national team's still owned him. Brentford's
+senior team had no manager a day on, as a club the editor's move leaves without one has until the game fills the place.
+
+## Moving a whole staff
+
+The rest of issue #170: a club's whole staff to another club at once. **Move all staff** (`move_club_staff`, the
+probe's `staff-move-all`) moves each one of the club's staff the list has as a move of one does
+(`Session::plan_staff_move`, his own job, his contract dated from today), one after another, each worked out from the
+game as the move before left it, and logs them as one batch, which `undo_batch` undoes from the last. Those a release
+leaves stay (the human manager, the board, player-coaches, `staff.role`), and so does a manager or a director of
+football whose place at the new club is taken (`staff.managerTaken`, `staff.directorTaken`) or is the human manager's
+(`staff.yourClub`). The new club's department lists are grown as for a move of one, as often as it takes.
+
+**Who takes an empty place.** A youth or reserve team's manager has a manager's job too, and a move gives him the new
+club's senior team's place when it is empty, as for one moved alone. So the senior team's manager goes first
+(`Session::manager_first`): an empty place at the new club becomes his, and the youth teams' managers after him are
+refused for it. The dialog's list (`plan_club_staff_move`) works each one out from the game as it is, and gives a place
+that one of them takes to him alone: those after him for it stay, as the batch will find.
+
+**Refused as a whole**: the club itself (`move.sameClub`), and a men's club's staff for a women's club or the other way
+round (`move.menAndWomen`); the dialog's search offers neither.
+
+**In the game** (Mac, Steam 26620374, a save of 14 July 2027 whose human manager runs Arsenal; with the probe, not
+undone): Real Madrid's staff moved to Barcelona, 63 of its 72. José Mourinho and Álvaro, the under-19s' manager, stayed
+(`staff.managerTaken`: Barcelona has Hans-Dieter Flick), and so did the board (`staff.job`); Barcelona's 58 staff became
+121, its department lists grown several times. Real Madrid's All Staff screen showed the change at once: those who
+stayed, and the staff of R. Madrid B and R. Madrid C, which the game keeps as clubs of their own, so a move of Real
+Madrid's staff leaves theirs where they are. Two days played, a save under another name and its load: the user found
+nothing wrong, the 63 were still at Barcelona in the same jobs, the game had let none of Barcelona's staff go, and both
+clubs kept their managers.
+
 ## In the game
 
 The game shows doctors only in a club's Staff screen: their profiles do not open and the search does not find them,

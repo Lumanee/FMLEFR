@@ -89,6 +89,11 @@ export interface ConnectionInfo {
   knownBuild: boolean;
   /** Whether the game's layout tells women from men, players and staff alike: the lists offer that filter only then. */
   genderKnown: boolean;
+  /**
+   * Whether a transfer can be arranged for the game to make the next day (`arrange_transfer`): the game's layout places
+   * its transfers, and the editor can take memory of the game's own (Windows).
+   */
+  arrangesTransfers: boolean;
   /** What the checks the editor makes before it writes found on this game. */
   health: Health;
   /** Only from `connect`: what it froze again of what was frozen in this save before, when there was any. */
@@ -110,23 +115,55 @@ export interface ReloadInfo {
 }
 
 /**
- * How an export writes the players or clubs (`ExportFormat` in export.rs): CSV with commas or with semicolons (what
+ * How an export writes the players, staff or clubs (`ExportFormat` in export.rs): CSV with commas or with semicolons (what
  * Excel takes where decimals are written with a comma), or JSON.
  */
 export type ExportFormat = "csv" | "csvSemicolon" | "json";
 
-/** What can be exported: the player list and the club list. */
-export type ExportEntity = Extract<Entity, "player" | "club">;
+/** What can be exported: the player, staff and club lists. */
+export type ExportEntity = Entity;
+
+/** Which changes the Changes view lists: all of them, those of this connection, or the earlier ones from the history. */
+export type SessionChoice = "all" | "this" | "earlier";
 
 /** What an export wrote, and where: the file, its name and its folder. */
 export interface ExportReport {
   path: string;
   file: string;
   folder: string;
-  /** The players or clubs written. */
+  /** The players, staff, clubs or changes written. */
   count: number;
-  /** Players or clubs whose objects changed while they were read: left out. */
+  /** Players, staff or clubs whose objects changed while they were read: left out. */
   skipped: number;
+}
+
+/**
+ * One change of the Changes view as its export to CSV sends it (`ChangeRow` in export.rs): what the log holds of it,
+ * and the texts only this window has, since they depend on its language, its currency and its time zone.
+ */
+export interface ChangeExportRow {
+  /** When it was written: the local time with its offset from UTC, ISO 8601 ("2026-11-13T16:06:09+03:00"). */
+  time: string;
+  name: string;
+  uid: number;
+  entity: EditEntity;
+  /** The field's key. */
+  field: string;
+  /** The field's name in the language of the window. */
+  fieldLabel: string;
+  /** The values as stored. */
+  old: number;
+  new: number;
+  /** The same values as the Changes view shows them. */
+  oldShown: string;
+  newShown: string;
+  /** What the view says under them, apart by " | ": the other player of a swap, a fee. */
+  notes: string;
+  batch: number | null;
+  /** When it was undone, written as `time` is. */
+  undoneAt: string | null;
+  earlier: boolean;
+  inGame?: boolean;
 }
 
 /**
@@ -170,7 +207,9 @@ export type CheckKey =
   | "contracts"
   | "teams"
   | "staff"
-  | "clubs";
+  | "clubs"
+  | "cohesion"
+  | "tactics";
 
 /** What one check found: how many of the players, staff or clubs it looked at fit. */
 export interface CheckResult {
@@ -195,6 +234,157 @@ export interface ClubSummary {
   /** 0–10000. */
   reputation: number | null;
   founded: number | null;
+  /** The nation the club is from, as its profile in the game names it (Wales for Cardiff City), and its UID. */
+  nation: string | null;
+  nationUid: number | null;
+  /** The league its first team plays in this season, its UID and the nation whose league it is; none outside them. */
+  league: string | null;
+  leagueUid: number | null;
+  leagueNation: string | null;
+}
+
+/** A nation's men's or women's national team, as the National teams list shows it (see `search_national_teams`). */
+export interface NationalTeamSummary {
+  /** The UID of its container: the nation's for a men's team, a number of its own for a women's. */
+  uid: number;
+  /** The nation's name, in the game's language, and its three-letter code. */
+  name: string;
+  code: string | null;
+  nationUid: number;
+  /** A women's team. */
+  women: boolean;
+  /** 0–10000, from the senior team; null for the one team the game gives none. */
+  reputation: number | null;
+  /** How many players the senior team lists. */
+  players: number;
+}
+
+/**
+ * One of the teams of a nation's men's or women's national team: its senior team or one of its youth teams (see
+ * `national_squad`).
+ */
+export interface NationalSide {
+  /** Where it is in the game's list of the nation's teams; 0 is the senior team. */
+  index: number;
+  /**
+   * The game's code for the kind of team, the same as a club team's: 0 the senior team, 10 the under-21s (see
+   * `nationalTeamLabel`). No two teams of a nation share one.
+   */
+  kind: number;
+  /** The oldest its players may be; null for a team without a limit. */
+  ageLimit: number | null;
+  /** 0–10000. */
+  reputation: number;
+  /** How many players it lists. */
+  players: number;
+}
+
+/**
+ * A national team as its profile shows it (see `national_squad`): its list row, its teams, and the one asked for with
+ * its players (`squad.kind`).
+ */
+export interface NationalProfile {
+  team: NationalTeamSummary;
+  teams: NationalSide[];
+  squad: ClubTeam;
+}
+
+/**
+ * Whether this build of the game has national teams the editor can show: when it has not, `reason` says "build" (nobody
+ * has found where this build keeps them) or "unreadable" (the profile places them, but what is there does not read as
+ * the game's).
+ */
+export interface NationalStatus {
+  available: boolean;
+  reason?: "build" | "unreadable";
+  teams: number;
+}
+
+/** A league the clubs play in, for the club list's filter (see `club_leagues`). */
+export interface League {
+  uid: number;
+  /** In the game's language. */
+  name: string;
+  /** The nation whose league it is. */
+  nation: string | null;
+  /** How many of the clubs play in it. */
+  clubs: number;
+  /** The highest reputation among them, 0–10000. */
+  reputation: number;
+}
+
+/** Why a club's finances show no prize money on this version of the game (`league_prizes`). */
+export type PrizeUnavailable = "build" | "unreadable";
+
+/** One sponsorship deal a club holds (`club_sponsorships`), amounts in pounds. */
+export interface Sponsorship {
+  /** The game's number for the kind of deal. */
+  kind: number;
+  /** As the game's Sponsorship screen names the kind, in English; none where no name is known. */
+  name: string | null;
+  start: FmDate | null;
+  end: FmDate | null;
+  /** Whole years the deal runs. */
+  years: number | null;
+  total: number;
+  perSeason: number;
+  /** The percentage the amount falls by on relegation (or, where `rises`, rises by on promotion): 0 for none. */
+  percent: number;
+  rises: boolean;
+  reputation: number;
+  /** Whether it ended before the game's date; none where the date is not known. */
+  ended: boolean | null;
+}
+
+/** A club's sponsorship deals, or why this version of the game shows none (`club_sponsorships`). */
+export interface ClubSponsorships {
+  /** "build": nobody has checked the deals on this build yet; "unreadable": it was checked, but what the editor found does not read as the game's. */
+  unavailable: PrizeUnavailable | null;
+  deals: Sponsorship[];
+}
+
+/** What the league of a club pays, or why this version of the game shows none (`league_prizes`). */
+export interface LeaguePrizes {
+  unavailable: PrizeUnavailable | null;
+  /** None where the club plays in no league, or its league pays nothing. */
+  league: CompetitionPrizes | null;
+}
+
+/** An amount of prize money to set, in pounds (`set_league_prizes`). */
+export type PrizeInput =
+  | { kind: "place"; place: number; pounds: number }
+  | { kind: "win" | "draw" | "loss"; pounds: number };
+
+/** The changes `set_league_prizes` logged, and what the league pays now. */
+export interface LeaguePrizesSet {
+  changes: LoggedChange[];
+  league: CompetitionPrizes | null;
+}
+
+/** A competition that pays prize money, and what its stages pay. */
+export interface CompetitionPrizes {
+  uid: number;
+  /** In the game's language. */
+  name: string;
+  shortName: string | null;
+  /** The nation whose competition it is; none for a continent's. */
+  nationUid: number | null;
+  nation: string | null;
+  /** A stage being played before one that has not started yet, then the longest list first. */
+  stages: StagePrizes[];
+}
+
+/** What one or more settings of a competition's stages pay, alike in every amount, in pounds. */
+export interface StagePrizes {
+  /** Whether the stage has not started yet. */
+  future: boolean;
+  /** How many settings pay these amounts: one per group of a group stage. A change is written to each of them. */
+  count: number;
+  /** By final position, the first place first; empty where the stage pays only per match. */
+  byPosition: number[];
+  win: number;
+  draw: number;
+  loss: number;
 }
 
 export interface ClubPage {
@@ -253,6 +443,28 @@ export interface StadiumName {
   renamable: boolean;
   minBytes: number;
   maxBytes: number;
+}
+
+/**
+ * Which of a person's names (`NameKind` in `names.rs`): his first, last or common name, each an entry of one of the
+ * game's tables of names, or his full name, a text of his own.
+ */
+export type NameKind = "first" | "last" | "common" | "full";
+
+/**
+ * A player's names as `player_names` reads them. A common or full name is null when he has none; first and last names
+ * are always there. `room` is how many more new first, last and common names the game's tables take before the game
+ * makes room itself (it does when it names new players and staff, and a save loaded again has some): a new name of a
+ * kind with no room is refused (`names.noRoom`). It is null where the editor cannot change names in this game. A
+ * name takes at most `longest` bytes of UTF-8.
+ */
+export interface PersonNames {
+  first: string | null;
+  last: string | null;
+  common: string | null;
+  full: string | null;
+  room: [number, number, number] | null;
+  longest: number;
 }
 
 /** A manager, coach, scout, director or other non-playing person. */
@@ -418,6 +630,13 @@ export interface StaffOrder {
 export interface ClubFilter {
   /** true: women's clubs only; false: men's clubs only. */
   women?: boolean;
+  /** Part of the name of the nation the club is from, accents and case ignored. */
+  nation?: string;
+  /** The UID of the league the club's first team plays in this season. */
+  leagueUid?: number;
+  /** Bounds on the reputation, 0–10000. */
+  minReputation?: number;
+  maxReputation?: number;
 }
 
 /** An attribute as stored (`raw`, 0–100) and as FM shows it (`value`, 1–20). */
@@ -470,10 +689,21 @@ export interface Concern {
   started: FmDate | null;
   /** When it was over; null while it lasts. */
   ended: FmDate | null;
-  /** The game's code for what it is about; `concernMotive` names the known ones. */
+  /** The game's code for what it is about; `concernMotive` words it with the game's sentence for it. */
   motive: number;
   /** 1 concerned, 2 internal. */
   kind: number;
+  /**
+   * The value the game picks the sentence of some motives by, and the entry's flags (see `reasons.ts`); null where
+   * the layout does not place them.
+   */
+  wording: number | null;
+  flags: number | null;
+  /**
+   * The teammate it is about, for a reason held about one: null for any other reason, and for a teammate the lists do
+   * not know.
+   */
+  about: { uid: number; name: string } | null;
 }
 
 /** One of a contract's clauses or bonuses: a release clause, an appearance fee, a yearly wage rise... */
@@ -625,6 +855,9 @@ export interface Ban {
 /** What an edit is for. */
 export type Entity = "player" | "staff" | "club";
 
+/** What a change can be made to: the lists' entities, and a nation's national team (its senior team's reputation). */
+export type EditEntity = Entity | "nationalTeam";
+
 /** A value of a player, member of staff or club that the editor can change, from `edit_fields`. */
 export interface EditField {
   /**
@@ -637,7 +870,7 @@ export interface EditField {
    * "finance.wage_budget", "finance.total_wage_budget".
    */
   key: string;
-  entity: Entity;
+  entity: EditEntity;
   /**
    * "date": values are numbers like 20290630 (see `dateFromNumber` in editing.ts); "i32": money in pounds; "u32": a
    * count, such as a stadium's capacity; "flag": 0 or 1, a yes-or-no such as being on the transfer list; "pointer":
@@ -677,14 +910,17 @@ export interface FieldEdit {
   value: number;
 }
 
-/** A change written to the game this session, from `apply_edits` and `change_log`. */
+/**
+ * A change written to the game, from `apply_edits` and `change_log`: by this connection, or earlier, listed from the
+ * history the app keeps of each career.
+ */
 export interface LoggedChange {
   id: number;
   /** When it was written, in milliseconds since 1970. */
   at: number;
   /** The person's name when it was written. */
   name: string;
-  entity: Entity;
+  entity: EditEntity;
   uid: number;
   /** The field's key. */
   field: string;
@@ -696,6 +932,35 @@ export interface LoggedChange {
   undoneAt: number | null;
   /** The mass edit it was part of (see `undo_batch`); null for an edit made in a profile. */
   batch: number | null;
+  /**
+   * Whether it was written before this connection: by this app before it was closed or connected again, or by another
+   * copy of it. Such changes are listed from the history the app keeps of each career (a file per career in its data
+   * folder), so that they are listed again after a restart.
+   */
+  earlier: boolean;
+  /**
+   * Whether Undo can take it back: always, for a change of this connection. An earlier change is written back as a new
+   * edit would be, with every check, so only one that changed a value the editor would write back now: a move, healing,
+   * a tie, a clause, a name and the like needed the game's memory as it was when they were made, and stay in the list as
+   * history.
+   */
+  undoable: boolean;
+  /**
+   * For an earlier change that is not undone: whether the game held the value it wrote when the data was last read
+   * (connecting, or Reload data). False when the game was not saved after the change, or has changed the value since.
+   * Absent where the app does not look: healing, bans, cohesion, tactics, retirement, ties, clauses and captaincies.
+   */
+  inGame?: boolean;
+  /**
+   * For a change of a nation or a city of birth, which is logged with the objects' addresses as its values: their
+   * names, which outlive the addresses; null where no name was found.
+   */
+  objects?: { from: string | null; to: string | null };
+  /**
+   * For an amount of prize money a club's league pays, logged as a change of the club's `prize.place.N`, `prize.win`,
+   * `prize.draw` or `prize.loss` in pounds: the league, and how many of its settings were changed alike.
+   */
+  prize?: { league: string; leagueUid: number; settings: number };
   // Healing (`heal_player`) is logged as a change of the player's field "injuries" from how many he had to 0, and
   // lifting his bans (`lift_bans`) as a change of his field "bans", and keeping him from retiring (`keep_playing`) as
   // a change of his field "retirement" from the date he was to retire on (a number like 20270630; 0 for none) to 0.
@@ -718,6 +983,11 @@ export interface LoggedChange {
     released?: string;
     /** The fee the buying club paid the selling one, in pounds, if any. */
     fee?: number;
+    /**
+     * For a transfer arranged for the game to make (`arrange_transfer`): the day of the move, as a number like
+     * 20261019. The game moves him and pays the fee on that day; until then he is at his club.
+     */
+    arranged?: number;
   };
   /**
    * Set for a change to a player's ties, which is logged as a change of his field `tie.nationality`,
@@ -744,6 +1014,15 @@ export interface LoggedChange {
   stadium?: {
     from: string;
     to: string;
+  };
+  /**
+   * Set for a player given another name (`rename_player`), logged as a change of his field `name.first`, `name.last`,
+   * `name.common` or `name.full` from one length in bytes to the other (0 for none): the names, null for a common or
+   * full name he did not have, or no longer has.
+   */
+  personName?: {
+    from: string | null;
+    to: string | null;
   };
   /**
    * Set for a recall from loan (`recall_loan`, logged as a change of `loan.expires`) that took the loan's option to buy
@@ -785,6 +1064,8 @@ export interface ClubTeam {
   /** UIDs of the captain and the vice-captain; null when the team has none. */
   captain: number | null;
   viceCaptain: number | null;
+  /** Whether a manager of the user's runs the club: Destroy's question then says it is the user's own. */
+  humanClub: boolean;
   players: SquadPlayer[];
 }
 
@@ -799,6 +1080,24 @@ export interface SquadPlayer extends PlayerSummary {
   matchSharpness: number;
   jadedness: number;
   morale: number;
+  /**
+   * His cohesion with the club, 1–100; null where this version of the game has not been checked for it, or he has no
+   * entry for the club: the game gives one when it signs a player, and some moved by an editor have none.
+   */
+  cohesion: number | null;
+  /**
+   * How well he knows the tactic the team plays, 0–100: the mean over its areas of what his record and his history of
+   * training say, as the Tactical Effectiveness screen's circles look. Null where this version of the game has not been
+   * checked for it, no human manager picks the team's tactic, or he has no record yet.
+   */
+  tactics: number | null;
+  /** Whether the game keeps a history of training for him: not for one who does not train, as when injured. */
+  trains: boolean;
+  /**
+   * How many of the club's other players hold a reason to be unhappy about him that is not over: once he has none of
+   * his own, the game ends theirs.
+   */
+  concernedTeammates: number;
   /** How many current injuries he has. */
   injuries: number;
   /** How many current bans he has. */
@@ -814,9 +1113,30 @@ export type CaptainRole = "captain" | "viceCaptain";
 
 /**
  * What a team-wide action does to every player of the team, those out on loan too: "heal" heals every injury,
- * "liftBans" lifts every ban, "inspire" sets morale to 20, "refresh" sets energy and match sharpness to 100%.
+ * "liftBans" lifts every ban, "inspire" sets morale to 20, "refresh" sets energy and match sharpness to 100%,
+ * "maxCohesion" sets cohesion with the club to 100 for those who have one, "maxTactics" has the players know the
+ * tactic the team plays at its best, and "atItsBest" does Heal all, Inspire all, Refresh all, Max cohesion and Max
+ * tactics in that order, as one batch. "destroy" does the other way, as one batch too and never making a value better:
+ * "demoralize" (morale 1, happiness and happiness with playing time -100), "exhaust" (energy 0%, match sharpness 35%,
+ * jadedness 1000), "minCohesion" (cohesion 1) and "minTactics" (the tactic known at its least, where a human picks it).
  */
-export type TeamAction = "heal" | "liftBans" | "inspire" | "refresh" | "maxAttributes";
+export type TeamAction =
+  | "heal"
+  | "liftBans"
+  | "inspire"
+  | "refresh"
+  | "maxAttributes"
+  | "maxCohesion"
+  | "maxTactics"
+  | "atItsBest"
+  | "demoralize"
+  | "exhaust"
+  | "minCohesion"
+  | "minTactics"
+  | "destroy";
+
+/** The actions a national team's senior team has: Heal all, Inspire all and Refresh all. */
+export type NationalTeamAction = Extract<TeamAction, "heal" | "inspire" | "refresh">;
 
 /** The columns that sort a squad table. */
 export type SquadSort =
@@ -828,7 +1148,9 @@ export type SquadSort =
   | "condition"
   | "matchSharpness"
   | "jadedness"
-  | "morale";
+  | "morale"
+  | "cohesion"
+  | "tactics";
 
 /** The contract a move to another club gives the player, as stored; what is left out stays as it is. */
 export interface MoveTerms {
@@ -848,6 +1170,14 @@ export interface RoomMaker extends PlayerSummary {
   captain: boolean;
 }
 
+/**
+ * A member of staff of a club, as its Staff tab lists them (`club_staff`): why Release all staff leaves them at the
+ * club (the human manager, the board, a player-coach, ...), none for one it releases.
+ */
+export interface ClubStaffRow extends StaffSummary {
+  stays: Failure | null;
+}
+
 /** From `plan_club_move`: the move can be made, between these clubs. */
 /** A club by its UID and name, as a plan names it. */
 export interface ClubName {
@@ -865,6 +1195,18 @@ export interface MovePreview {
   contract?: NewContract;
   /** For a member of staff who has no club, the contract the editor makes for him. */
   staffContract?: NewStaffContract;
+}
+
+/** A transfer the game is to make the next day, as the plan has it (`plan_arranged_transfer`). */
+export interface ArrangedPreview {
+  from: ClubName;
+  to: ClubName;
+  /** Pounds; the game pays it on the day. */
+  fee: number;
+  /** The day the game makes the move, as a number like 20261019. */
+  moveDay: number;
+  /** The contract he is to have. */
+  contract: NewContract;
 }
 
 /** The contract the editor makes for a member of staff who has no club, as the plan has it. */
@@ -928,9 +1270,14 @@ export type MassOperationKind =
   /** May be negative; the result stays within the field's range. */
   | { op: "add"; amount: number }
   /** Multiplies by percent / 100, rounded; the result stays within the field's range. */
-  | { op: "scale"; percent: number };
+  | { op: "scale"; percent: number }
+  /**
+   * Moves a date by whole years (back, for a negative count), keeping its day: 29 February is 28 February in a year
+   * without one. Only for dates; a date it would take out of the field's range is left as it is.
+   */
+  | { op: "addYears"; years: number };
 
-/** One field of a mass edit and what to do with it. Dates can only be set. */
+/** One field of a mass edit and what to do with it. Dates can only be set or moved by years. */
 export interface MassOperation {
   field: string;
   operation: MassOperationKind;
@@ -988,6 +1335,11 @@ export interface MassReport {
   applied: number;
   /** Changes not written, e.g. because the game changed the value after the preview. */
   failed: { uid: number; name: string; field: string; error: Failure }[];
+}
+
+/** From `team_action`: a mass report, and the steps of Team at its best it left out (none for any other action). */
+export interface TeamReport extends MassReport {
+  skipped: { action: TeamAction; reason: Failure }[];
 }
 
 /** From `undo_batch`. */
@@ -1205,4 +1557,167 @@ export interface Scouted {
   examined: number;
   candidates: number;
   eligible: number;
+}
+
+/** A list of opportunities: what the market makes easier to sign than a player's ability says. */
+export type OpportunityKind =
+  | "bosman"
+  | "releaseClause"
+  | "unhappy"
+  | "inTheRed"
+  | "listed"
+  | "loanListed"
+  | "wonderkid";
+
+/** What `scouting_opportunities` looks for; omitted fields are open. */
+export interface OpportunityRequest {
+  /** The list whose players to return; every list is counted. */
+  kind: OpportunityKind;
+  /** A position key from `ScoutingOverview.positions`; null for any, each player measured where he plays best. */
+  position?: string | null;
+  minAge?: number | null;
+  maxAge?: number | null;
+  /** Pounds. */
+  maxFee?: number | null;
+  /** Only players who fit their position better than the club's best player there (not for wonderkids). */
+  betterOnly?: boolean;
+  limit?: number;
+}
+
+/**
+ * What makes a player an opportunity: `freeAgent`, `expiring` (value: days left), `releaseClause` (value: the fee it
+ * lets a club pay; against: his value, null when he is not for sale), `unhappy` (value: his reasons), `inTheRed`
+ * (value: his club's balance), `listed`, `loanListed`, `wonderkid` (value: his potential ability). Amounts in pounds.
+ */
+export interface Why {
+  code: string;
+  value: number | null;
+  against: number | null;
+}
+
+export interface Opportunity extends Suggestion {
+  /** The position he was measured for: the one asked for, or the one he plays best. */
+  position: string;
+  why: Why;
+  /** He fits his position better than the club's best player there. */
+  better: boolean;
+}
+
+/** How many players a list holds with the filters: at most 300, `more` when it holds more. */
+export interface KindCount {
+  kind: OpportunityKind;
+  count: number;
+  more: boolean;
+}
+
+/** The club's best player at a position. */
+export interface Starter extends Fitting {
+  position: string;
+}
+
+/** What `scouting_opportunities` returns. */
+export interface Opportunities {
+  kind: OpportunityKind;
+  items: Opportunity[];
+  counts: KindCount[];
+  starters: Starter[];
+  /** The average ability of the club's best eleven, and the abilities looked at around it. */
+  level: number;
+  lowest: number;
+  highest: number;
+  /** Players looked at, and those near the club's level sorted into the lists. */
+  examined: number;
+  pool: number;
+  transferBudget: number | null;
+  wageRoom: number | null;
+}
+
+/** What `scouting_similar` looks for. */
+export interface SimilarRequest {
+  /** The player they should be like. */
+  uid: number;
+  /** A position key; null for the one he plays best. */
+  position?: string | null;
+  /** Only players worth less than him, or younger. */
+  cheaper?: boolean;
+  younger?: boolean;
+  /** Pounds. */
+  maxFee?: number | null;
+  limit?: number;
+}
+
+export interface SimilarPlayer extends Suggestion {
+  /** 0–100: how alike their attributes are where the position needs them. */
+  similarity: number;
+  /** He fits the position better than the club's best player there. */
+  better: boolean;
+}
+
+/** What `scouting_similar` returns. */
+export interface Similar {
+  /** The player they are like, measured for the position; null when he does not play it. */
+  reference: Fitting | null;
+  player: PlayerSummary;
+  /** His transfer value in pounds; null where the game keeps none or he is not for sale. */
+  value: number | null;
+  notForSale: boolean;
+  /** The position compared at, and the ones he plays well, best first. */
+  position: string;
+  positions: string[];
+  items: SimilarPlayer[];
+  /** The club's best player at the position. */
+  starter: Fitting | null;
+  examined: number;
+  candidates: number;
+}
+
+/** A city, as a player's city of birth points at it (`birth_cities`). */
+export interface City {
+  /** Where the game keeps it: the value of the city of birth field. */
+  address: number;
+  uid: number | null;
+  name: string;
+  /** The nation it is in. */
+  nationUid: number | null;
+}
+
+/** The team of the club that lists a player (named by `teamLabel`). */
+export interface IntakeTeam {
+  index: number;
+  kind: number;
+  ageLimit: number | null;
+}
+
+/** A player of a club's youth intake. */
+export interface IntakePlayer {
+  player: PlayerSummary;
+  city: City | null;
+  /** The day he joined the club: his intake's day. */
+  joined: FmDate | null;
+  /** How old he was then. */
+  joinedAge: number | null;
+  /** The kind of his contract (3: a youth contract); null where the game version does not place it. */
+  contractType: number | null;
+  team: IntakeTeam | null;
+  /** The club he is on loan at. */
+  onLoanAt: string | null;
+  onLoanAtUid: number | null;
+}
+
+/** The players of a club who joined it on one day: one of its youth intakes, best potential first. */
+export interface Intake {
+  joined: FmDate | null;
+  players: IntakePlayer[];
+}
+
+/** What `youth_intakes` returns: a club's youth intakes, the newest first. */
+export interface YouthIntakes {
+  clubUid: number;
+  club: string;
+  /**
+   * Whether the editor knows the game's mark of the players it made in this game version; when not, the club's players
+   * who joined it young and were trained nowhere else are listed, the database's own among them.
+   */
+  marked: boolean;
+  intakes: Intake[];
 }

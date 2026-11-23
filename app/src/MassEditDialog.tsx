@@ -24,6 +24,7 @@ import {
   judgeRow,
   MASS_LIMIT,
   MAX_OPERATIONS,
+  operationKinds,
   undoFailureLines,
   type FieldGroup,
   type OperationDraft,
@@ -118,9 +119,6 @@ interface Previewed {
   data: MassPreview;
   key: string;
 }
-
-/** The operation kinds the select offers, in order; a date offers only the first. */
-const KINDS: readonly OperationKind[] = ["set", "add", "scale"];
 
 function MassEditDialog({ entity, scope, onClose }: { entity: Entity; scope: MassScope; onClose: () => void }) {
   const { onEdited } = useContext(EditorContext);
@@ -244,10 +242,13 @@ function MassEditDialog({ entity, scope, onClose }: { entity: Entity; scope: Mas
 
   const setField = (id: number, key: string) =>
     change(id, (row) => {
-      // A date is typed in a date input and anything else in a number input: the text does not carry over.
+      // A date is set in a date input or moved by years; anything else takes the other operations. An operation the new
+      // field does not offer becomes Set, and between a date and a number the text does not carry over.
+      const field = byKey.get(key);
       const wasDate = byKey.get(row.field)?.kind === "date";
-      const isDate = byKey.get(key)?.kind === "date";
-      return { ...row, field: key, kind: isDate ? "set" : row.kind, text: wasDate === isDate ? row.text : "" };
+      const isDate = field?.kind === "date";
+      const kind = field === undefined || operationKinds(field).includes(row.kind) ? row.kind : "set";
+      return { ...row, field: key, kind, text: wasDate === isDate ? row.text : "" };
     });
   // The same number means something else for another operation: it is typed again.
   const setKind = (id: number, kind: OperationKind) => change(id, (row) => ({ ...row, kind, text: "" }));
@@ -569,7 +570,9 @@ interface OperationRowProps {
 function OperationRow(props: OperationRowProps) {
   const { entity, position, draft, field, groups, verdict, canRemove, onField, onKind, onText, onRemove } = props;
   const noteId = useId();
-  const date = field.kind === "date";
+  // A date is set in a date input; the years it is moved by are a number.
+  const date = field.kind === "date" && draft.kind === "set";
+  const years = draft.kind === "addYears";
   const range = inputRange(field, draft.kind);
   const message = verdict.ok ? null : verdict.message;
   // As wide as the longest number it takes, a minus sign included.
@@ -583,7 +586,9 @@ function OperationRow(props: OperationRowProps) {
         ? percent
           ? text.addPointsTitle
           : text.addTitle
-        : undefined;
+        : years
+          ? text.addYearsTitle
+          : undefined;
 
   return (
     <div className="mass-row" role="group" aria-label={text.row(position)} data-row={draft.id}>
@@ -610,7 +615,7 @@ function OperationRow(props: OperationRowProps) {
         value={draft.kind}
         onChange={(e) => onKind(draft.id, e.currentTarget.value as OperationKind)}
       >
-        {(date ? KINDS.slice(0, 1) : KINDS).map((kind) => (
+        {operationKinds(field).map((kind) => (
           <option key={kind} value={kind}>
             {text.operations[kind]}
           </option>
@@ -631,7 +636,11 @@ function OperationRow(props: OperationRowProps) {
           max={date ? isoFromNumber(field.max) : range.max}
           step={date ? undefined : 1}
           placeholder={
-            date ? undefined : draft.kind === "add" ? text.amountHint(range.max) : text.rangeHint(range.min, range.max)
+            date
+              ? undefined
+              : draft.kind === "add" || years
+                ? text.amountHint(range.max)
+                : text.rangeHint(range.min, range.max)
           }
           value={draft.text}
           aria-label={text.values[draft.kind]}
@@ -650,6 +659,11 @@ function OperationRow(props: OperationRowProps) {
         {percent && (
           <span className="mass-unit" aria-hidden="true">
             {editText.percent}
+          </span>
+        )}
+        {years && (
+          <span className="mass-unit" title={text.addYearsTitle}>
+            {text.years}
           </span>
         )}
       </span>

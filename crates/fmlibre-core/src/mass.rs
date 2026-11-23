@@ -7,8 +7,12 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::coded::Coded;
+use crate::date::FmDate;
 use crate::edit::{EditError, Field, Kind, Target};
 use crate::session::Session;
+
+/// The most years an Add years moves a date, either way; also the most a contract is extended by at once.
+pub const MOST_YEARS: i64 = 50;
 
 /// What to do with a field's value. Values are as stored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -20,27 +24,47 @@ pub enum Operation {
     Add { amount: i64 },
     /// Multiply it by `percent` / 100, rounded; the result stays within the field's range.
     Scale { percent: i64 },
+    /// Move a date by `years` whole years (back, for a negative count), keeping its day: 29 February becomes 28
+    /// February in a year that has none. Only for dates, at most [`MOST_YEARS`] either way; a date it would take out
+    /// of the field's range is left as it is.
+    AddYears { years: i64 },
+    /// Lower it to `value`, and leave one that is lower already as it is.
+    AtMost { value: i64 },
+    /// Raise it to `value`, and leave one that is higher already as it is.
+    AtLeast { value: i64 },
 }
 
 impl Operation {
-    /// Whether the operation suits `field`: dates can only be set, and a value set must
-    /// be one the field takes.
+    /// Whether the operation suits `field`: dates can only be set or moved by years, only dates are moved by years, and
+    /// a value set must be one the field takes.
     pub fn check(self, field: &Field) -> Result<(), EditError> {
         match self {
             _ if !field.mass => {
                 Err(EditError::Unsupported { field: field.key.clone(), reason: "it is changed one person at a time" })
             }
-            Operation::Set { value } if !field.takes(value) => {
+            Operation::Set { value } | Operation::AtMost { value } | Operation::AtLeast { value }
+                if !field.takes(value) =>
+            {
                 Err(EditError::OutOfRange { field: field.key.clone(), value, min: field.min, max: field.max })
             }
             Operation::Add { .. } | Operation::Scale { .. } if field.kind == Kind::Date => {
-                Err(EditError::Unsupported { field: field.key.clone(), reason: "a date can only be set" })
+                Err(EditError::Unsupported {
+                    field: field.key.clone(),
+                    reason: "a date can only be set or moved by years",
+                })
+            }
+            Operation::AddYears { .. } if field.kind != Kind::Date => {
+                Err(EditError::Unsupported { field: field.key.clone(), reason: "only a date can be moved by years" })
+            }
+            Operation::AddYears { years } if !(-MOST_YEARS..=MOST_YEARS).contains(&years) => {
+                Err(EditError::OutOfRange { field: field.key.clone(), value: years, min: -MOST_YEARS, max: MOST_YEARS })
             }
             _ => Ok(()),
         }
     }
 
-    /// The value the operation turns `old` into.
+    /// The value the operation turns `old` into. A date moved by years may leave the field's range, which the plan
+    /// checks; a value that is not a date stays as it is.
     pub fn apply(self, field: &Field, old: i64) -> i64 {
         match self {
             Operation::Set { value } => value,
@@ -49,6 +73,11 @@ impl Operation {
                 let scaled = (old as f64 * percent as f64 / 100.0).round() as i64;
                 scaled.clamp(field.min, field.max)
             }
+            Operation::AddYears { years } => {
+                FmDate::from_number(old).and_then(|date| date.plus_years(years)).map_or(old, FmDate::to_number)
+            }
+            Operation::AtMost { value } => old.min(value),
+            Operation::AtLeast { value } => old.max(value),
         }
     }
 }
@@ -135,6 +164,13 @@ impl Session {
                     continue;
                 }
                 let new = operation.apply(field, old);
+                // A date moved by years can leave the days the field takes, such as a contract's end past 2100.
+                if new != old && !field.takes(new) {
+                    let out =
+                        EditError::OutOfRange { field: field.key.clone(), value: new, min: field.min, max: field.max };
+                    plan.skipped.push(skip(field, &out));
+                    continue;
+                }
                 if new != old {
                     changed = true;
                     plan.planned.push(Planned {
@@ -176,6 +212,22 @@ mod tests {
     }
 
     #[test]
+    fn at_most_and_at_least_never_go_the_other_way() {
+        let sharpness = field(Entity::Player, "match_sharpness");
+        assert_eq!(Operation::AtMost { value: 3_500 }.apply(&sharpness, 9_200), 3_500);
+        // A youth intake below what the editor writes keeps his.
+        assert_eq!(Operation::AtMost { value: 3_500 }.apply(&sharpness, 2_100), 2_100);
+        let jadedness = field(Entity::Player, "jadedness");
+        assert_eq!(Operation::AtLeast { value: 1_000 }.apply(&jadedness, -500), 1_000);
+        assert_eq!(Operation::AtLeast { value: 1_000 }.apply(&jadedness, 1_400), 1_400);
+        // The value must be one the field takes, as for Set.
+        assert!(Operation::AtMost { value: 3_500 }.check(&sharpness).is_ok());
+        assert!(Operation::AtMost { value: 0 }.check(&sharpness).is_err());
+        assert!(Operation::AtLeast { value: 1_000 }.check(&jadedness).is_ok());
+        assert!(Operation::AtLeast { value: 2_000 }.check(&jadedness).is_err());
+    }
+
+    #[test]
     fn operations_are_checked_against_the_field() {
         let ca = field(Entity::Player, "current_ability");
         assert!(Operation::Set { value: 150 }.check(&ca).is_ok());
@@ -184,5 +236,24 @@ mod tests {
         assert!(Operation::Set { value: 20300630 }.check(&expires).is_ok());
         assert!(Operation::Add { amount: 10_000 }.check(&expires).is_err());
         assert!(Operation::Scale { percent: 110 }.check(&expires).is_err());
+        assert!(Operation::AddYears { years: 5 }.check(&expires).is_ok());
+        assert!(Operation::AddYears { years: -MOST_YEARS }.check(&expires).is_ok());
+        assert!(Operation::AddYears { years: MOST_YEARS + 1 }.check(&expires).is_err());
+        assert!(Operation::AddYears { years: 1 }.check(&ca).is_err());
+        let staff_expires = field(Entity::Staff, "contract.expires");
+        assert!(Operation::AddYears { years: 5 }.check(&staff_expires).is_ok());
+    }
+
+    #[test]
+    fn years_move_a_date_and_keep_its_day() {
+        let expires = field(Entity::Player, "contract.expires");
+        assert_eq!(Operation::AddYears { years: 5 }.apply(&expires, 20280630), 20330630);
+        assert_eq!(Operation::AddYears { years: -1 }.apply(&expires, 20280630), 20270630);
+        assert_eq!(Operation::AddYears { years: 1 }.apply(&expires, 20280229), 20290228);
+        // A date past the field's range is the plan's to leave alone; one that is no date stays as it is.
+        let past = Operation::AddYears { years: 5 }.apply(&expires, 20990630);
+        assert_eq!(past, 21040630);
+        assert!(!expires.takes(past));
+        assert_eq!(Operation::AddYears { years: 5 }.apply(&expires, 0), 0);
     }
 }

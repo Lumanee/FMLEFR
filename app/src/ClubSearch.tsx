@@ -1,6 +1,7 @@
 // A search for a club: a box that lists the best clubs by reputation until something is typed, then the best matches
 // of it. The arrows move through the list, Enter or a click picks the club, and Escape gives up. Focus stays in the box.
-// The Transfer dialog has a search of its own, which keeps to the clubs a player can move to; this one lists them all.
+// The Transfer dialog has a search of its own, which keeps to the clubs a player can move to; this one lists them all,
+// or the men's or the women's clubs, and can leave one out.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { call } from "./api";
@@ -25,9 +26,22 @@ interface ClubSearchProps {
   onPick: (club: ClubSummary) => void;
   /** Escape in the box. */
   onCancel: () => void;
+  /** Only women's clubs (true) or only men's clubs (false); all of them when left out. */
+  women?: boolean;
+  /** A club the search leaves out, such as the one the dialog is about. */
+  except?: number;
 }
 
-export function ClubSearch({ label, onPick, onCancel }: ClubSearchProps) {
+/** `page` without the club `except`, and no longer than the list: the search asks for one more to make up for it. */
+function without(page: ClubPage, except: number | undefined): ClubPage {
+  if (except === undefined) {
+    return page;
+  }
+  const rows = page.rows.filter((row) => row.uid !== except);
+  return { ...page, rows: rows.slice(0, RESULT_LIMIT), total: page.total - (page.rows.length - rows.length) };
+}
+
+export function ClubSearch({ label, onPick, onCancel, women, except }: ClubSearchProps) {
   const base = useId();
   const id = (part: string) => `${base}-${part}`;
   const input = useRef<HTMLInputElement>(null);
@@ -52,8 +66,9 @@ export function ClubSearch({ label, onPick, onCancel }: ClubSearchProps) {
     };
     const timer = setTimeout(
       () => {
-        call<ClubPage>("search_clubs", { query, limit: RESULT_LIMIT, filter: {} }).then(
-          (page) => answer({ query, page }),
+        const limit = RESULT_LIMIT + (except === undefined ? 0 : 1);
+        call<ClubPage>("search_clubs", { query, limit, filter: women === undefined ? {} : { women } }).then(
+          (page) => answer({ query, page: without(page, except) }),
           (e) => answer({ query, error: describeError(e) }),
         );
       },
@@ -64,7 +79,7 @@ export function ClubSearch({ label, onPick, onCancel }: ClubSearchProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, women, except]);
 
   useEffect(() => {
     if (keyboardMoved.current) {

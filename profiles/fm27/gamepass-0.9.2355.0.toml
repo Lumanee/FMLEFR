@@ -18,3 +18,6 @@ link_timestamp = 0x6ADFB161
 players = 0x5681DC0
 staff = 0x5681E08
 clubs = 0x5681F78
+
+# [national_teams] is not here: the places of the national teams were not read on this build, so the National teams
+# tab shows nothing on it (see docs/DEVELOPING.md, National teams).

@@ -1,20 +1,28 @@
 mod bridge;
+mod self_update;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::OnceCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fmlibre_core::{
-    ArraySource, Buyer, CaptainRole, CaptainSet, Change, Clause, ClauseSet, ClubDetails, ClubFilter, ClubIndex,
-    ClubMove, ClubSummary, Coded, EditError, Entity, EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan,
-    Field, FmDate, GAME_EXE, GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health,
-    Kind, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, MoveError, MovePlan, MoveTerms, Nation, NewContract,
-    NewStaffContract, Operation, Paid, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder,
-    PlayerSummary, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS, ScoutError, ScoutPosition, ScoutRequest,
-    Scouted, SearchIndex, Session, SessionError, Skipped, SquadReport, StadiumName, StadiumRename, StaffChange,
-    StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, Target, Tie, TieTarget, find_game, nations,
-    sort_players, sort_staff,
+    Arranged, ArrangedPlan, ArraySource, Buyer, COHESION_RANGE, CaptainRole, CaptainSet, Change, ChangeRow, Clause,
+    ClauseSet, ClubDetails, ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes,
+    DIRECTOR_OF_FOOTBALL, EditError, Entity, EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field,
+    FmDate, GAME_EXE, GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind,
+    LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MANAGER, MoveError, MovePlan, MoveTerms, NameChange,
+    NameKind, Nation, NationalIndex, NationalSide, NationalTeamSummary, NationalUnavailable, NewContract,
+    NewStaffContract, Operation, Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex,
+    PlayerOrder, PlayerSummary, PrizeAmount, PrizeChange, PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable,
+    ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest,
+    Scouted, SearchIndex, Session, SessionError, Skipped, Sponsorship, SponsorshipReadError, SponsorshipUnavailable,
+    SquadMember, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex,
+    StaffOrder, StaffPlan, StaffSummary, TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report,
+    find_game, nations, sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -26,11 +34,15 @@ use tauri::{Manager, State};
 const GRAPHICS_FOLDER: &str = "FMLIBRE_GRAPHICS";
 
 /// The environment variable that names the folder the app keeps its own files in, instead of its data folder
-/// (`%APPDATA%\io.github.tozmoz.fmlibreeditor` on Windows): for now, what was frozen in each save.
+/// (`%APPDATA%\io.github.tozmoz.fmlibreeditor` on Windows): what was frozen in each save, and the history of the
+/// changes written to each career.
 const DATA_FOLDER: &str = "FMLIBRE_DATA";
 
 /// The file in that folder that remembers what was frozen in each save (see `Remembered`).
 const FROZEN_FILE: &str = "frozen.json";
+
+/// The folder in that folder that keeps the history of the changes written to each career (see `History`).
+const HISTORY_FOLDER: &str = "history";
 
 /// The environment variable that names the folder exports are written to, instead of `FMLibreEditor\Exports` in the
 /// documents folder.
@@ -42,9 +54,15 @@ struct Connection {
     players: PlayerIndex,
     staff: StaffIndex,
     clubs: ClubIndex,
+    /// The nations' men's and women's national teams, or why there are none to show on this build of the game.
+    nationals: Result<NationalIndex, NationalUnavailable>,
     /// The clubs human managers run: a player who leaves one leaves its team selections too.
     human_clubs: Vec<u32>,
+    /// The changes written to the career the game has loaded: this connection's, after the earlier ones its history
+    /// lists.
     log: Vec<LoggedChange>,
+    /// Where the log is kept for the next connection to this career.
+    history: History,
     /// The mass edit last previewed, until it is applied or replaced.
     mass: Option<PendingMass>,
     /// The next id for a mass-edit preview or batch.
@@ -54,6 +72,11 @@ struct Connection {
     save: Option<String>,
     /// What the hold last found of the game's clubs, for the stadiums renamed in the editor.
     clubs_seen: ClubsSeen,
+    /// Whom the game's ids of people name among `players`, read when a profile first needs it (see `people`).
+    people: OnceCell<People>,
+    /// Every league's settings and what they pay, read the first time a club's finances show its league's prize
+    /// money (see `league_prizes`), and kept up to date as the editor changes them.
+    prizes: Option<Vec<PrizeMoney>>,
 }
 
 /// How often the balances of frozen clubs, the attributes, energy and sharpness of frozen players, the attributes of
@@ -71,6 +94,8 @@ const SAVE_RECHECK_LATER: Duration = Duration::from_secs(60);
 struct ClubsSeen {
     /// Where the array of clubs began.
     begin: u64,
+    /// How many saves the game had loaded (see `Session::loads`); none while that cannot be read.
+    loads: Option<u64>,
     /// Whether a club whose stadium was renamed was missing, or not where the lists found it.
     lost: bool,
     /// Whether the game had given a stadium renamed in the editor another name.
@@ -84,8 +109,8 @@ struct ClubsSeen {
 }
 
 impl ClubsSeen {
-    fn unknown(begin: u64) -> Self {
-        Self { begin, lost: false, off: false, since: Instant::now(), same_save: None, checked: None }
+    fn unknown(begin: u64, loads: Option<u64>) -> Self {
+        Self { begin, loads, lost: false, off: false, since: Instant::now(), same_save: None, checked: None }
     }
 }
 
@@ -239,6 +264,237 @@ impl Remembered {
     }
 }
 
+/// The changes written to one career, in a file of its own, so that the change log lists them again after the app, the
+/// game or the computer was restarted. A career is told by its human managers, as for what is frozen (see `save_of`):
+/// its saves share one history, and the app cannot know whether the game was saved after a change.
+///
+/// Each change and each undo is a line added to the end of the file as it is made (see `HistoryLine`): the file is never
+/// written whole, so a crash costs at most the line being written, and two copies of the app can add to it at once. It
+/// stays open while connected: opening it for each line took 0.2 ms here, as the antivirus looks at a file whenever it
+/// is closed, which the 10,000 changes of a mass edit would feel; a line added to an open file took 3 µs.
+struct History {
+    /// The file; none without a data folder or a known career.
+    path: Option<PathBuf>,
+    /// Open to add lines to, once the first is added.
+    file: Option<File>,
+    /// What tells the changes of this connection from the others in the file, as each connection numbers its own from
+    /// 1: those of another copy of the app, or of this one before a restart.
+    session: String,
+}
+
+impl History {
+    /// The history of the career `save` in `folder`, and the changes it lists in the order they were written, numbered
+    /// from 1 (see `read_history`). Nothing without a folder or a career.
+    fn open(folder: Option<&Path>, save: Option<&str>) -> (Self, Vec<LoggedChange>) {
+        let path = folder.zip(save).map(|(folder, save)| folder.join(history_file_name(save)));
+        let log = path.as_deref().map(read_history).unwrap_or_default();
+        let session = format!("{}-{}", now_ms(), std::process::id());
+        (Self { path, file: None, session }, log)
+    }
+
+    /// Adds `line` to the end of the file. A file that cannot be written only means that the history lacks the line.
+    fn add(&mut self, line: &HistoryLine) {
+        let Some(path) = &self.path else {
+            return;
+        };
+        if self.file.is_none() {
+            if let Some(folder) = path.parent() {
+                let _ = std::fs::create_dir_all(folder);
+            }
+            self.file = OpenOptions::new().create(true).append(true).open(path).ok();
+        }
+        let (Some(file), Ok(mut text)) = (self.file.as_mut(), serde_json::to_string(line)) else {
+            return;
+        };
+        text.push('\n');
+        // The whole line in one write, which the system adds to the end of the file at once: the lines of two copies of
+        // the app do not mix.
+        let _ = file.write_all(text.as_bytes());
+    }
+
+    /// Empties the file. It is not removed: another copy of the app may have it open, and goes on adding to it.
+    fn clear(&mut self) -> std::io::Result<()> {
+        self.file = None;
+        let Some(path) = &self.path else {
+            return Ok(());
+        };
+        match OpenOptions::new().write(true).truncate(true).open(path) {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        }
+    }
+
+    /// What the file calls the change `logged`: an earlier one by the name it was written under, one of this connection
+    /// by its id.
+    fn key(&self, logged: &LoggedChange) -> StoredKey {
+        logged.stored.clone().unwrap_or_else(|| StoredKey { session: self.session.clone(), id: logged.id })
+    }
+}
+
+/// The name of the history file of the career `save` (see `save_of`), such as `Steam-12345.jsonl`: a character a file
+/// name may not hold becomes a `-`.
+fn history_file_name(save: &str) -> String {
+    let name: String = save.chars().map(|c| if c.is_ascii_alphanumeric() || c == '+' { c } else { '-' }).collect();
+    format!("{name}.jsonl")
+}
+
+/// The changes the history file at `path` lists, oldest first, numbered from 1; undone where a later line says so. A
+/// line that cannot be read (cut short by a crash, or of a later version) is passed over, and so is a change listed
+/// twice. The mass edits are numbered afresh, as each connection numbers its own from 1.
+fn read_history(path: &Path) -> Vec<LoggedChange> {
+    let Ok(bytes) = std::fs::read(path) else {
+        return Vec::new();
+    };
+    let mut log: Vec<LoggedChange> = Vec::new();
+    let mut places: HashMap<StoredKey, usize> = HashMap::new();
+    let mut batches: HashMap<(String, u32), u32> = HashMap::new();
+    for line in bytes.split(|&byte| byte == b'\n') {
+        match serde_json::from_slice::<HistoryLine>(line) {
+            Ok(HistoryLine::Change(stored)) => {
+                let key = StoredKey { session: stored.session.clone(), id: stored.id };
+                if places.contains_key(&key) {
+                    continue;
+                }
+                let next = batches.len() as u32 + 1;
+                let batch = stored.batch.map(|batch| *batches.entry((stored.session.clone(), batch)).or_insert(next));
+                places.insert(key, log.len());
+                log.push(stored.into_logged(log.len() + 1, batch));
+            }
+            Ok(HistoryLine::Undone { session, id, at }) => {
+                if let Some(&place) = places.get(&StoredKey { session, id }) {
+                    log[place].undone_at.get_or_insert(at);
+                }
+            }
+            Err(_) => {}
+        }
+    }
+    log
+}
+
+/// A line of a history file (see `History`): one JSON object, which says what it is in `line`.
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "line", rename_all = "camelCase")]
+enum HistoryLine {
+    /// A change written to the game.
+    Change(Box<StoredChange>),
+    /// The change the file calls `session` and `id` (see `StoredKey`), undone at `at`.
+    Undone { session: String, id: usize, at: u64 },
+}
+
+/// What a history file calls a change: the connection that wrote it (see `History::session`) and its id there.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct StoredKey {
+    session: String,
+    id: usize,
+}
+
+/// A change as a history file keeps it: what the change log shows of it, and what an undo can do once the game's
+/// memory is no longer what it was.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredChange {
+    session: String,
+    id: usize,
+    at: u64,
+    name: String,
+    change: Change,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    batch: Option<u32>,
+    /// Whether undoing it was writing values back and no more: a change of a value, or a recall from loan. A move,
+    /// healing, a tie, a clause, a name, ... changed the game's lists and records, at addresses that are gone once the
+    /// game has loaded a save.
+    #[serde(default)]
+    plain: bool,
+    /// For a recall from loan that took the loan's option to buy away: that change, which an undo writes back too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    option: Option<Change>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    moved: Option<MovedClubs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    captaincy: Option<Captaincy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tie: Option<TieChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    clause: Option<ClauseChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recall: Option<RecallNote>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stadium: Option<StadiumNames>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    person_name: Option<PersonNameChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    objects: Option<ObjectNames>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prize: Option<PrizeNote>,
+}
+
+impl StoredChange {
+    /// `logged`, a change of the connection called `session`, as its history keeps it.
+    fn of(logged: &LoggedChange, session: &str) -> Self {
+        let (plain, option) = match &logged.undo {
+            None => (true, None),
+            Some(Undo::Recall(option)) => (true, Some(option.clone())),
+            Some(_) => (false, None),
+        };
+        Self {
+            session: session.to_owned(),
+            id: logged.id,
+            at: logged.at,
+            name: logged.name.clone(),
+            change: logged.change.clone(),
+            batch: logged.batch,
+            plain,
+            option,
+            moved: logged.moved.clone(),
+            captaincy: logged.captaincy.clone(),
+            tie: logged.tie.clone(),
+            clause: logged.clause.clone(),
+            recall: logged.recall.clone(),
+            stadium: logged.stadium.clone(),
+            person_name: logged.person_name.clone(),
+            objects: logged.objects.clone(),
+            prize: logged.prize.clone(),
+        }
+    }
+
+    /// The change as the log lists it: numbered `id`, in its mass edit `batch` as the log numbers them, written before
+    /// this connection. Undo may take it back only if it was plain, as `Connection::check_earlier` works out further.
+    fn into_logged(self, id: usize, batch: Option<u32>) -> LoggedChange {
+        LoggedChange {
+            id,
+            at: self.at,
+            name: self.name,
+            change: self.change,
+            undone_at: None,
+            batch,
+            earlier: true,
+            undoable: self.plain,
+            in_game: None,
+            moved: self.moved,
+            captaincy: self.captaincy,
+            tie: self.tie,
+            clause: self.clause,
+            recall: self.recall,
+            stadium: self.stadium,
+            person_name: self.person_name,
+            objects: self.objects,
+            prize: self.prize,
+            stored: Some(StoredKey { session: self.session, id: self.id }),
+            undo: self.option.map(Undo::Recall),
+        }
+    }
+}
+
+/// What a reload keeps of the connection before while the game has the same career: its change log and its history.
+struct Kept {
+    save: Option<String>,
+    log: Vec<LoggedChange>,
+    history: History,
+}
+
+/// Where the app keeps the history of each career's changes (see `History`); none when it has no data folder.
+struct HistoryFolder(Option<PathBuf>);
+
 /// Where the app remembers what was frozen in each save; none when it has no data folder.
 struct FrozenFile(Option<PathBuf>);
 
@@ -253,9 +509,9 @@ struct ExportReport {
     path: PathBuf,
     file: String,
     folder: PathBuf,
-    /// The players or clubs written.
+    /// The players, staff or clubs written.
     count: usize,
-    /// Players or clubs whose objects changed while they were read: left out.
+    /// Players, staff or clubs whose objects changed while they were read: left out.
     skipped: usize,
 }
 
@@ -373,9 +629,11 @@ struct PendingMass {
 }
 
 impl Connection {
-    /// Reads every list. A reload keeps the change log; a mass edit previewed before is dropped,
-    /// since its people may have moved. Nothing is frozen yet.
-    fn load(session: Session, log: Vec<LoggedChange>) -> Result<Self, Failure> {
+    /// Reads every list. The change log is the one `kept` by a reload while the game has the same career, or else the
+    /// one the history of the career in `folder` lists (see `History`), checked against the game (see
+    /// `check_earlier`). A mass edit previewed before is dropped, since its people may have moved. Nothing is frozen
+    /// yet.
+    fn load(session: Session, folder: Option<&Path>, kept: Option<Kept>) -> Result<Self, Failure> {
         // The game may have loaded a save or moved on since the checks last ran; the date the lists' ages are worked
         // out from is one of them.
         session.recheck();
@@ -387,13 +645,163 @@ impl Connection {
         let save = save_of(&session, &humans);
         let staff = StaffIndex::new(staff);
         let clubs = ClubIndex::new(session.clubs()?);
+        let nationals = session.national_teams().map(NationalIndex::new);
+        let (history, log) = match kept {
+            Some(kept) if kept.save == save => (kept.history, kept.log),
+            _ => History::open(folder, save.as_deref()),
+        };
         let next_id = log.iter().filter_map(|logged| logged.batch).max().unwrap_or(0) + 1;
         let frozen = Frozen::default();
         // The clubs were just read, from this save.
         let begin = clubs_begin(&session).unwrap_or(0);
-        let clubs_seen =
-            ClubsSeen { same_save: Some(true), checked: Some(Instant::now()), ..ClubsSeen::unknown(begin) };
-        Ok(Self { session, players, staff, clubs, human_clubs, log, mass: None, next_id, frozen, save, clubs_seen })
+        let clubs_seen = ClubsSeen {
+            same_save: Some(true),
+            checked: Some(Instant::now()),
+            ..ClubsSeen::unknown(begin, session.loads())
+        };
+        let people = OnceCell::new();
+        let mut connection = Self {
+            session,
+            players,
+            staff,
+            clubs,
+            nationals,
+            human_clubs,
+            log,
+            history,
+            mass: None,
+            next_id,
+            frozen,
+            save,
+            clubs_seen,
+            people,
+            prizes: None,
+        };
+        connection.check_earlier();
+        Ok(connection)
+    }
+
+    /// For each change listed from before this connection: whether Undo may take it back, and, unless it is undone,
+    /// whether the game holds what it wrote (see `in_game`). An earlier change is undone as a new edit back to its old
+    /// value would be (see `undo_earlier`), so only one whose undo was writing values back (see `StoredChange::plain`),
+    /// of a field that is not a pointer (the objects it pointed at are gone once the game has loaded a save), to a value
+    /// the editor writes.
+    fn check_earlier(&mut self) {
+        if !self.log.iter().any(|logged| logged.earlier) {
+            return;
+        }
+        let fields: HashMap<(Entity, String), Field> =
+            [Entity::Player, Entity::Staff, Entity::Club, Entity::NationalTeam]
+                .into_iter()
+                .flat_map(|entity| self.session.fields(entity))
+                .map(|field| ((field.entity, field.key.clone()), field))
+                .collect();
+        let writes_back = |change: &Change| {
+            let field = fields.get(&(change.entity, change.field.clone()));
+            field.is_some_and(|field| field.kind != Kind::Pointer && field.takes(change.old))
+        };
+        let mut nations = None;
+        let checked: Vec<(usize, bool, Option<bool>)> = self
+            .log
+            .iter()
+            .enumerate()
+            .filter(|(_, logged)| logged.earlier)
+            .map(|(at, logged)| {
+                let option = match &logged.undo {
+                    Some(Undo::Recall(option)) => Some(option),
+                    _ => None,
+                };
+                let undoable = logged.undoable && writes_back(&logged.change) && option.is_none_or(writes_back);
+                let in_game = logged.undone_at.is_none().then(|| self.in_game(logged, &fields, &mut nations)).flatten();
+                (at, undoable, in_game)
+            })
+            .collect();
+        for (at, undoable, in_game) in checked {
+            self.log[at].undoable = undoable;
+            self.log[at].in_game = in_game;
+        }
+    }
+
+    /// Whether the game holds what the earlier change `logged` wrote: a value as read now (a nation or a city of birth
+    /// by its name), a club or a job as the lists just read have it, a stadium's or a player's name as read now. None
+    /// where that is not looked at: healing and lifting bans (the game brings new ones), cohesion, tactics, retirement,
+    /// ties, clauses and captaincies. `fields` are the fields by entity and key; `nations` keeps the nations of the
+    /// lists once they are worked out.
+    fn in_game(
+        &self,
+        logged: &LoggedChange,
+        fields: &HashMap<(Entity, String), Field>,
+        nations: &mut Option<Vec<Nation>>,
+    ) -> Option<bool> {
+        let change = &logged.change;
+        let uid = change.uid;
+        match (change.entity, change.field.as_str()) {
+            (Entity::Player, "club") => self.players.get(uid).map(|p| i64::from(p.club_uid.unwrap_or(0)) == change.new),
+            (Entity::Staff, "club") => self.staff.get(uid).map(|s| i64::from(s.club_uid.unwrap_or(0)) == change.new),
+            (Entity::Staff, "contract.job") => self.staff.get(uid).map(|s| s.job.map(i64::from) == Some(change.new)),
+            (Entity::Club, "stadium.name") => {
+                let to = &logged.stadium.as_ref()?.to;
+                let now = self.session.stadium_name(self.clubs.get(uid)?).ok()?;
+                Some(now.name == *to)
+            }
+            (Entity::Player, key) if key.starts_with("name.") => {
+                let to = &logged.person_name.as_ref()?.to;
+                let now = self.session.player_names(self.players.get(uid)?).ok()?;
+                let held = match key {
+                    "name.first" => now.first,
+                    "name.last" => now.last,
+                    "name.common" => now.common,
+                    "name.full" => now.full,
+                    _ => return None,
+                };
+                Some(held == *to)
+            }
+            (entity, key) => {
+                let field = fields.get(&(entity, key.to_owned()))?;
+                let (target, _) = self.target(entity, uid).ok()?;
+                let now = self.session.read_field(&target, field).ok()?;
+                if field.kind != Kind::Pointer {
+                    return Some(now == change.new);
+                }
+                let to = logged.objects.as_ref()?.to.as_ref()?;
+                Some(self.object_name(key, now, nations).as_ref() == Some(to))
+            }
+        }
+    }
+
+    /// The name of the nation or the city (as the field `key` says) at `address`, as the game has it now; `nations`
+    /// keeps the nations of the lists once they are worked out.
+    fn object_name(&self, key: &str, address: i64, nations: &mut Option<Vec<Nation>>) -> Option<String> {
+        match key {
+            "nation" => nations
+                .get_or_insert_with(|| self.nations())
+                .iter()
+                .find(|nation| nation.address == address as u64)
+                .map(|nation| nation.name.clone()),
+            "city_of_birth" => self.session.city_at(address as u64).map(|city| city.name),
+            _ => None,
+        }
+    }
+
+    /// For a change of a field that points at one of the game's objects, the names of the objects it pointed at and
+    /// points at: they outlive the addresses the change is logged with.
+    fn objects_of(&self, change: &Change) -> Option<ObjectNames> {
+        // The fields of kind `Kind::Pointer`: a person's nation and a player's city of birth. By key, as this is asked
+        // for every change of a mass edit, and none of these is ever part of one.
+        if !matches!(change.field.as_str(), "nation" | "city_of_birth") {
+            return None;
+        }
+        let mut nations = None;
+        Some(ObjectNames {
+            from: self.object_name(&change.field, change.old, &mut nations),
+            to: self.object_name(&change.field, change.new, &mut nations),
+        })
+    }
+
+    /// Whom the game's ids of people name: read once for these lists, a read for each player, and kept until they
+    /// are read again.
+    fn people(&self) -> &People {
+        self.people.get_or_init(|| self.session.people(&self.players))
     }
 
     /// Freezes again what was frozen in this save before, as the file at `path` remembers it: the attributes, energy,
@@ -473,7 +881,7 @@ impl Connection {
 
     /// Gives the stadium of the club `uid` the name `name`, unless it has it already: whether it has it now. Not
     /// logged: the rename that chose the name was.
-    fn give_stadium_name(&mut self, uid: u32, name: &str) -> bool {
+    fn give_stadium_name(&self, uid: u32, name: &str) -> bool {
         let Some(club) = self.clubs.get(uid) else {
             return false;
         };
@@ -490,9 +898,9 @@ impl Connection {
 
     /// Gives each stadium renamed in the editor its name again where the game has given it back its own, as it does
     /// whenever it loads the save. Before that, the game is checked to have this save: a save loaded (this one again or
-    /// another) moves the clubs' array or objects, or gives the stadiums the names in the game's database. Once it is
-    /// this one, clubs that moved are read again; while it is another, or none, nothing is written, and it is looked at
-    /// again every little while.
+    /// another) raises the game's count of saves loaded, may move the clubs' array or objects, and gives the stadiums
+    /// the names in the game's database. Once it is this one, clubs that moved are read again; while it is another, or
+    /// none, nothing is written, and it is looked at again every little while.
     fn hold_stadiums(&mut self) {
         if self.frozen.stadiums.is_empty() {
             return;
@@ -500,14 +908,17 @@ impl Connection {
         let Some(begin) = clubs_begin(&self.session) else {
             return;
         };
+        let loads = self.session.loads();
         let lost = self.clubs_lost();
         // Names are read only from clubs where the lists found them.
         let off = !lost && self.stadium_names_off();
         let seen = &self.clubs_seen;
-        if begin != seen.begin || (lost && !seen.lost) || (off && !seen.off) {
-            self.clubs_seen = ClubsSeen { lost, off, ..ClubsSeen::unknown(begin) };
+        let loaded = matches!((seen.loads, loads), (Some(then), Some(now)) if now != then);
+        if begin != seen.begin || loaded || (lost && !seen.lost) || (off && !seen.off) {
+            self.clubs_seen = ClubsSeen { lost, off, ..ClubsSeen::unknown(begin, loads) };
         }
         self.clubs_seen.off = off;
+        self.clubs_seen.loads = loads.or(self.clubs_seen.loads);
         let seen = &self.clubs_seen;
         let every = if seen.since.elapsed() < SAVE_SETTLES { SAVE_RECHECK } else { SAVE_RECHECK_LATER };
         if (seen.same_save != Some(true) || lost) && seen.checked.is_none_or(|at| at.elapsed() >= every) {
@@ -524,17 +935,18 @@ impl Connection {
             self.clubs_seen.checked = Some(Instant::now());
         }
         if self.clubs_seen.same_save == Some(true) {
+            // Checked here to be a save of this career, its clubs read again where they moved: the names are given
+            // even after the game has loaded it again, when nothing else is written until the lists are read again.
+            let _vouched = self.session.vouch_for_save();
             self.give_stadium_names();
         }
     }
 
     /// Gives every stadium renamed in the editor the name it was given, where it has another (see
     /// `give_stadium_name`). For the save the lists were read from only.
-    fn give_stadium_names(&mut self) {
-        let names: Vec<(u32, String)> =
-            self.frozen.stadiums.iter().map(|(&uid, held)| (uid, held.name.clone())).collect();
-        for (uid, name) in names {
-            self.give_stadium_name(uid, &name);
+    fn give_stadium_names(&self) {
+        for (&uid, held) in &self.frozen.stadiums {
+            self.give_stadium_name(uid, &held.name);
         }
     }
 
@@ -744,6 +1156,7 @@ impl Connection {
             writable: self.session.process.can_write(),
             known_build: self.session.known_build(),
             gender_known: self.session.layout.player.gender.is_some() && self.session.layout.staff.gender.is_some(),
+            arranges_transfers: self.session.arranges_transfers(),
             health: Health::clone(&self.session.health()),
             refrozen: None,
         }
@@ -772,29 +1185,71 @@ impl Connection {
                 let hits = self.clubs.search(query).into_iter().filter(|c| filter.matches(c));
                 hits.map(|c| (c.target(), c.name.clone())).collect()
             }
+            // National teams have no mass edit: the reputation of one team at a time.
+            Entity::NationalTeam => Vec::new(),
         }
     }
 
-    /// Logs a change just written; `batch` groups the changes of one mass edit.
-    fn log_change(&mut self, change: Change, name: String, batch: Option<u32>) -> LoggedChange {
-        self.note_change(&change, change.new);
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
+    /// The id of the next change logged: one more than the last one's, as the log is in the order of its ids.
+    fn next_log_id(&self) -> usize {
+        self.log.last().map_or(1, |logged| logged.id + 1)
+    }
+
+    /// A log entry for `change` of the one called `name`, written now by this connection, with nothing more to say about
+    /// it than its values; `batch` groups the changes of one mass edit.
+    fn entry(&self, change: Change, name: String, batch: Option<u32>) -> LoggedChange {
+        LoggedChange {
+            id: self.next_log_id(),
             at: now_ms(),
             name,
             change,
             undone_at: None,
             batch,
+            earlier: false,
+            undoable: true,
+            in_game: None,
             moved: None,
             captaincy: None,
             tie: None,
             clause: None,
             recall: None,
             stadium: None,
+            person_name: None,
+            objects: None,
+            prize: None,
+            stored: None,
             undo: None,
-        };
+        }
+    }
+
+    /// Adds `logged` to the log, and to the history of the career.
+    fn push_log(&mut self, logged: LoggedChange) -> LoggedChange {
+        self.history.add(&HistoryLine::Change(Box::new(StoredChange::of(&logged, &self.history.session))));
         self.log.push(logged.clone());
         logged
+    }
+
+    /// Logs a change just written; `batch` groups the changes of one mass edit.
+    fn log_change(&mut self, change: Change, name: String, batch: Option<u32>) -> LoggedChange {
+        // Before the lists take the new value: a nation's name is found among them.
+        let objects = self.objects_of(&change);
+        self.note_change(&change, change.new);
+        self.push_log(LoggedChange { objects, ..self.entry(change, name, batch) })
+    }
+
+    /// Logs a recall from loan just written, as a change of the day the loan ends; with the change of its option to
+    /// buy, if the recall took it away, which its undo writes back too.
+    fn log_recall(&mut self, change: Change, name: String, option: Option<Change>) -> LoggedChange {
+        self.note_change(&change, change.new);
+        let entry = self.entry(change, name, None);
+        match option {
+            Some(option) => self.push_log(LoggedChange {
+                recall: Some(RecallNote { option_fee: option.old }),
+                undo: Some(Undo::Recall(option)),
+                ..entry
+            }),
+            None => self.push_log(entry),
+        }
     }
 
     /// Writes changes a mass edit worked out, each only while the game still holds the value it
@@ -843,23 +1298,8 @@ impl Connection {
             to: self.player_name(done.new),
             swapped: done.swapped,
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name: self.club_name(done.club),
-            change,
-            undone_at: None,
-            batch: None,
-            moved: None,
-            captaincy: Some(captaincy),
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: None,
-            undo: Some(Undo::Captain(done)),
-        };
-        self.log.push(logged.clone());
-        logged
+        let entry = self.entry(change, self.club_name(done.club), None);
+        self.push_log(LoggedChange { captaincy: Some(captaincy), undo: Some(Undo::Captain(done)), ..entry })
     }
 
     /// Logs healing just written, as a change of the player's `injuries` from how many he had to none.
@@ -871,23 +1311,35 @@ impl Connection {
             old: done.injuries as i64,
             new: 0,
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name: self.player_name(done.player),
-            change,
-            undone_at: None,
-            batch,
-            moved: None,
-            captaincy: None,
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: None,
-            undo: Some(Undo::Heal(done)),
+        let entry = self.entry(change, self.player_name(done.player), batch);
+        self.push_log(LoggedChange { undo: Some(Undo::Heal(done)), ..entry })
+    }
+
+    /// Logs cohesion just set, as a change of the player's `cohesion` with his club from what it was to what it is.
+    fn log_cohesion(&mut self, done: CohesionSet, batch: Option<u32>) -> LoggedChange {
+        let change = Change {
+            entity: Entity::Player,
+            uid: done.player,
+            field: "cohesion".to_owned(),
+            old: i64::from(done.before),
+            new: i64::from(done.value),
         };
-        self.log.push(logged.clone());
-        logged
+        let entry = self.entry(change, self.player_name(done.player), batch);
+        self.push_log(LoggedChange { undo: Some(Undo::Cohesion(done)), ..entry })
+    }
+
+    /// Logs Max or Min tactics just written, as a change of how well the player knows the tactic (`tactics`, 0..100)
+    /// from what it was to what it is.
+    fn log_tactics(&mut self, done: TacticsSet, batch: Option<u32>) -> LoggedChange {
+        let change = Change {
+            entity: Entity::Player,
+            uid: done.player,
+            field: "tactics".to_owned(),
+            old: i64::from(done.before.overall),
+            new: i64::from(done.after.overall),
+        };
+        let entry = self.entry(change, self.player_name(done.player), batch);
+        self.push_log(LoggedChange { undo: Some(Undo::Tactics(done)), ..entry })
     }
 
     /// Logs lifting just written, as a change of the player's `bans` from how many he had to none.
@@ -899,23 +1351,8 @@ impl Connection {
             old: done.bans as i64,
             new: 0,
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name: self.player_name(done.player),
-            change,
-            undone_at: None,
-            batch,
-            moved: None,
-            captaincy: None,
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: None,
-            undo: Some(Undo::Lift(done)),
-        };
-        self.log.push(logged.clone());
-        logged
+        let entry = self.entry(change, self.player_name(done.player), batch);
+        self.push_log(LoggedChange { undo: Some(Undo::Lift(done)), ..entry })
     }
 
     /// Logs keeping a player from retiring just written, as a change of his `retirement` from the date he was to retire
@@ -928,23 +1365,8 @@ impl Connection {
             old: done.date.map_or(0, FmDate::to_number),
             new: 0,
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name: self.player_name(done.player),
-            change,
-            undone_at: None,
-            batch: None,
-            moved: None,
-            captaincy: None,
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: None,
-            undo: Some(Undo::Retirement(done)),
-        };
-        self.log.push(logged.clone());
-        logged
+        let entry = self.entry(change, self.player_name(done.player), None);
+        self.push_log(LoggedChange { undo: Some(Undo::Retirement(done)), ..entry })
     }
 
     /// Logs a change to a player's ties just written, as a change of his field `tie.nationality`,
@@ -972,23 +1394,9 @@ impl Connection {
             old: uid(&done.before),
             new: uid(&done.after),
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name: self.player_name(done.player),
-            change,
-            undone_at: None,
-            batch: None,
-            moved: None,
-            captaincy: None,
-            tie: Some(TieChange { from: end(&done.before), to: end(&done.after) }),
-            clause: None,
-            recall: None,
-            stadium: None,
-            undo: Some(Undo::Tie(done)),
-        };
-        self.log.push(logged.clone());
-        logged
+        let tie = TieChange { from: end(&done.before), to: end(&done.after) };
+        let entry = self.entry(change, self.player_name(done.player), None);
+        self.push_log(LoggedChange { tie: Some(tie), undo: Some(Undo::Tie(done)), ..entry })
     }
 
     /// Logs a stadium renamed, as a change of the club's `stadium.name` from one length in bytes to the other, with the
@@ -1002,23 +1410,38 @@ impl Connection {
             new: done.to.len() as i64,
         };
         let name = self.clubs.get(done.club).map_or_else(|| done.club.to_string(), |club| club.name.clone());
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name,
-            change,
-            undone_at: None,
-            batch: None,
-            moved: None,
-            captaincy: None,
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: Some(StadiumNames { from: done.from.clone(), to: done.to.clone() }),
-            undo: Some(Undo::Stadium(done)),
+        let stadium = StadiumNames { from: done.from.clone(), to: done.to.clone() };
+        let entry = self.entry(change, name, None);
+        self.push_log(LoggedChange { stadium: Some(stadium), undo: Some(Undo::Stadium(done)), ..entry })
+    }
+
+    /// Logs a change of a player's name just written, as a change of his field `name.first`, `name.last`,
+    /// `name.common` or `name.full` from one length in bytes to the other (0 for none), with the names.
+    fn log_name(&mut self, done: NameChange) -> LoggedChange {
+        let bytes = |name: &Option<String>| name.as_ref().map_or(0, |name| name.len() as i64);
+        let change = Change {
+            entity: Entity::Player,
+            uid: done.person,
+            field: format!("name.{}", done.kind.key()),
+            old: bytes(&done.from),
+            new: bytes(&done.to),
         };
-        self.log.push(logged.clone());
-        logged
+        let person_name = PersonNameChange { from: done.from.clone(), to: done.to.clone() };
+        let entry = self.entry(change, self.player_name(done.person), None);
+        self.push_log(LoggedChange { person_name: Some(person_name), undo: Some(Undo::Name(done)), ..entry })
+    }
+
+    /// Reads the names of the player `uid` again into his row of the list, after the editor gave him another one or
+    /// put his old one back: the name he is shown and found by, and his full name.
+    fn renamed_player(&mut self, uid: u32) {
+        let Some(names) = self.players.get(uid).and_then(|player| self.session.player_names(player).ok()) else {
+            return;
+        };
+        let shown = names.shown(uid);
+        self.players.rename(uid, |player| {
+            player.name = shown;
+            player.full_name = names.full;
+        });
     }
 
     /// Logs a change to a player's contract clauses just written, as a change of his field `clause` from one amount to
@@ -1032,23 +1455,9 @@ impl Connection {
             old: amount(&done.before),
             new: amount(&done.after),
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name: self.player_name(done.player),
-            change,
-            undone_at: None,
-            batch: None,
-            moved: None,
-            captaincy: None,
-            tie: None,
-            clause: Some(ClauseChange { from: done.before.clone(), to: done.after.clone() }),
-            recall: None,
-            stadium: None,
-            undo: Some(Undo::Clause(done)),
-        };
-        self.log.push(logged.clone());
-        logged
+        let clause = ClauseChange { from: done.before.clone(), to: done.after.clone() };
+        let entry = self.entry(change, self.player_name(done.player), None);
+        self.push_log(LoggedChange { clause: Some(clause), undo: Some(Undo::Clause(done)), ..entry })
     }
 
     /// The nation with the UID `uid`, among the nations of the people in the lists.
@@ -1077,23 +1486,86 @@ impl Connection {
         self.session.plan_staff_job(member, job).map_err(|err| self.with_names(err.into()))
     }
 
-    /// Logs a member of staff's move or signing, as a change of his `club`, or his new job, as a change of
-    /// `contract.job`, and brings his list row up to date: for one signed, with the end of the contract `made`.
-    fn log_staff(&mut self, done: StaffChange, made: Option<NewStaffContract>) -> LoggedChange {
+    /// Works out releasing the member of staff `uid` from his club.
+    fn plan_staff_release(&self, uid: u32) -> Result<StaffPlan, Failure> {
+        let member = self.staff.get(uid).ok_or_else(|| not_found(Entity::Staff, uid))?;
+        self.session.plan_staff_release(member).map_err(|err| self.with_names(err.into()))
+    }
+
+    /// The club `to` that the whole staff of the club `club` would move to, checked as a whole (another club, and both
+    /// men's or both women's clubs), and the ids of that staff in the order the move takes them: the senior team's
+    /// manager first (see `Session::manager_first`), then as the list has them.
+    fn staff_move_all(&self, club: u32, to: u32) -> Result<(ClubSummary, Vec<u32>), Failure> {
+        let from = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        let joining = self.clubs.get(to).ok_or_else(|| not_found(Entity::Club, to))?;
+        if club == to {
+            return Err(MoveError::SameClub.into());
+        }
+        if from.women != joining.women {
+            return Err(MoveError::MenAndWomen.into());
+        }
+        let mut members: Vec<u32> =
+            self.staff.iter().filter(|member| member.club_uid == Some(club)).map(|member| member.uid).collect();
+        self.session.manager_first(from, &mut members);
+        Ok((joining.clone(), members))
+    }
+
+    /// Writes what `plan` works out for each of the members of staff `members`, one after another, each from the game
+    /// as the one before left it, and logs them as one batch, which `undo_batch` undoes, the last one first. One refused
+    /// for a reason `stays` keeps him at his club for is passed over; one that fails is reported, and the others go on.
+    fn staff_batch(
+        &mut self,
+        members: Vec<u32>,
+        plan: impl Fn(&Session, &StaffSummary) -> Result<StaffPlan, MoveError>,
+        stays: fn(&MoveError) -> bool,
+    ) -> MassReport {
+        let batch = self.fresh_id();
+        let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+        for uid in members {
+            let Some(member) = self.staff.get(uid) else {
+                continue;
+            };
+            let name = member.name.clone();
+            let done = match plan(&self.session, member) {
+                Err(err) if stays(&err) => continue,
+                planned => planned.and_then(|planned| self.session.apply_staff_plan(&planned)),
+            };
+            match done {
+                Ok(done) => {
+                    self.log_staff(done, None, Some(batch));
+                    report.applied += 1;
+                }
+                Err(err) => {
+                    let error = self.with_names(err.into());
+                    report.failed.push(MassFailure { uid, name, field: "club".to_owned(), error });
+                }
+            }
+        }
+        report
+    }
+
+    /// Logs a member of staff's move, signing or release, as a change of his `club`, or his new job, as a change of
+    /// `contract.job`, and brings his list row up to date: for one signed, with the end of the contract `made`; for one
+    /// released, with no club, job or contract. `batch` groups the releases or moves of a club's whole staff.
+    fn log_staff(&mut self, done: StaffChange, made: Option<NewStaffContract>, batch: Option<u32>) -> LoggedChange {
         let row = self.staff.get(done.member);
         let (club, club_uid, job, contract_expires) =
             row.map_or((None, None, None, None), |s| (s.club.clone(), s.club_uid, s.job, s.contract_expires));
         let name = row.map_or_else(String::new, |s| s.name.clone());
         let moved = done.from_club != done.to_club;
-        // One signed had no club.
+        // One signed had no club, and one released has none.
         let from = (done.from_club != 0).then(|| self.club_name(done.from_club));
-        let to = self.club_name(done.to_club);
+        let released = done.to_club == 0;
+        let to = (!released).then(|| self.club_name(done.to_club));
         self.staff.update(done.member, |member| {
             if moved {
-                member.club = Some(to.clone());
-                member.club_uid = Some(done.to_club);
+                member.club = to.clone();
+                member.club_uid = (!released).then_some(done.to_club);
             }
-            member.job = Some(done.job.1);
+            member.job = (!released).then_some(done.job.1);
+            if released {
+                member.contract_expires = None;
+            }
             if let Some(made) = made {
                 member.contract_expires = FmDate::from_number(made.expires);
             }
@@ -1103,23 +1575,13 @@ impl Connection {
         } else {
             ("contract.job", i64::from(done.job.0), i64::from(done.job.1))
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name,
-            change: Change { entity: Entity::Staff, uid: done.member, field: field.to_owned(), old, new },
-            undone_at: None,
-            batch: None,
-            moved: moved.then_some(MovedClubs { from, to: Some(to), with: None, released: None, fee: None }),
-            captaincy: None,
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: None,
+        let change = Change { entity: Entity::Staff, uid: done.member, field: field.to_owned(), old, new };
+        let entry = self.entry(change, name, batch);
+        self.push_log(LoggedChange {
+            moved: moved.then_some(MovedClubs { from, to, with: None, released: None, fee: None, arranged: None }),
             undo: Some(Undo::Staff(LoggedStaff { done, club, club_uid, job, contract_expires })),
-        };
-        self.log.push(logged.clone());
-        logged
+            ..entry
+        })
     }
 
     /// Works out what the fee `fee` of moving the player from the club `from` to the club `to` does to their money:
@@ -1139,6 +1601,7 @@ impl Connection {
     fn plan_move(&self, uid: u32, club: u32, terms: MoveTerms, release: Option<u32>) -> Result<MovePlan, Failure> {
         let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
         let to = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        self.refuse_while_arranged(&[Some(uid), release].into_iter().flatten().collect::<Vec<_>>())?;
         Ok(match release {
             Some(leaver) => {
                 let leaver = self.players.get(leaver).ok_or_else(|| not_found(Entity::Player, leaver))?;
@@ -1146,6 +1609,54 @@ impl Connection {
             }
             None => self.session.plan_club_move(player, to, terms, &self.human_clubs)?,
         })
+    }
+
+    /// Works out arranging the transfer of the player `uid` to the club `club` for the next day, for `fee` pounds, on
+    /// the contract `terms`, for the game to make on that day.
+    fn plan_arranged(&self, uid: u32, club: u32, terms: MoveTerms, fee: i64) -> Result<ArrangedPlan, Failure> {
+        let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
+        let to = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        Ok(self.session.plan_arranged_transfer(player, to, terms, fee, &self.human_clubs)?)
+    }
+
+    /// Refuses moving any of the players `uids` while a transfer this connection arranged for him waits for its day:
+    /// the game makes it on that day from the club he is at, so he stays there until then, or until it is undone.
+    fn refuse_while_arranged(&self, uids: &[u32]) -> Result<(), Failure> {
+        let today = self.session.game_date().map(|date| date.to_number());
+        let waiting = self.log.iter().any(|logged| {
+            !logged.earlier
+                && logged.undone_at.is_none()
+                && logged.change.entity == Entity::Player
+                && uids.contains(&logged.change.uid)
+                && logged
+                    .moved
+                    .as_ref()
+                    .and_then(|moved| moved.arranged)
+                    .is_some_and(|day| today.is_none_or(|today| today < day))
+        });
+        if waiting { Err(MoveError::DealUnderWay.into()) } else { Ok(()) }
+    }
+
+    /// Logs a transfer just arranged for the game to make, as a change of the player's `club` from one club UID to the
+    /// other on the day of the move. His list row stays as it is: he is still at his club until then.
+    fn log_arranged(&mut self, done: Arranged, plan: &ArrangedPlan) -> LoggedChange {
+        let moved = MovedClubs {
+            from: Some(self.club_name(plan.from_club)),
+            to: Some(self.club_name(plan.to_club)),
+            with: None,
+            released: None,
+            fee: (plan.fee > 0).then_some(plan.fee),
+            arranged: Some(plan.move_day.to_number()),
+        };
+        let change = Change {
+            entity: Entity::Player,
+            uid: plan.player,
+            field: "club".to_owned(),
+            old: i64::from(plan.from_club),
+            new: i64::from(plan.to_club),
+        };
+        let entry = self.entry(change, self.player_name(plan.player), None);
+        self.push_log(LoggedChange { moved: Some(moved), undo: Some(Undo::Arranged(done)), ..entry })
     }
 
     /// Works out making the loan of the player `uid` permanent on the contract `terms`.
@@ -1157,6 +1668,7 @@ impl Connection {
     /// Works out releasing the player `uid` from his club.
     fn plan_release(&self, uid: u32) -> Result<MovePlan, Failure> {
         let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
+        self.refuse_while_arranged(&[uid])?;
         Ok(self.session.plan_release(player, &self.human_clubs)?)
     }
 
@@ -1164,6 +1676,7 @@ impl Connection {
     fn plan_swap(&self, uid: u32, other: u32) -> Result<MovePlan, Failure> {
         let player = self.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
         let partner = self.players.get(other).ok_or_else(|| not_found(Entity::Player, other))?;
+        self.refuse_while_arranged(&[uid, other])?;
         Ok(self.session.plan_club_swap(player, partner, &self.human_clubs)?)
     }
 
@@ -1201,6 +1714,78 @@ impl Connection {
 
     fn staff_name(&self, uid: u32) -> String {
         self.staff.get(uid).map_or_else(|| uid.to_string(), |member| member.name.clone())
+    }
+
+    /// What the league `uid` pays, as read last (see `league_prizes`); none when it was not read, or pays nothing.
+    fn league_prizes(&self, uid: u32) -> Option<CompetitionPrizes> {
+        competition_prizes(self.prizes.as_deref()?).into_iter().find(|league| league.competition.uid == uid)
+    }
+
+    /// Sets `amounts` in the stage `stage` of the league the club `club` plays in, in every settings of it alike, and
+    /// logs each amount changed as a change of the club, in one batch when there are more. Only on the builds whose
+    /// profile says the prize money was checked there, and while the game may be written to; each amount must still
+    /// be what was read. An amount that is what it was already is left out.
+    fn set_league_prizes(
+        &mut self,
+        club: u32,
+        stage: usize,
+        amounts: &[(PrizeAmount, u32)],
+    ) -> Result<Vec<LoggedChange>, Failure> {
+        if !self.session.profile.as_ref().is_some_and(|profile| profile.prize_money) {
+            return Err(Failure::new("prize.unavailable", PrizeUnavailable::Build.to_string()));
+        }
+        if let Some(lock) = self.session.structure_lock() {
+            return Err(MoveError::Locked(lock).into());
+        }
+        let league_uid = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?.league_uid;
+        let league = league_uid.and_then(|uid| self.league_prizes(uid)).ok_or_else(|| {
+            Failure::new("prize.noLeague", "What the club's league pays has not been read: read it again.")
+        })?;
+        let settings = league
+            .stages
+            .get(stage)
+            .ok_or_else(|| {
+                Failure::new("prize.noStage", format!("The league has no stage {stage}.")).with("stage", stage)
+            })?
+            .settings
+            .clone();
+        let note = PrizeNote {
+            league: league.competition.name.clone(),
+            league_uid: league.competition.uid,
+            settings: settings.len(),
+        };
+        let batch = (amounts.len() > 1).then(|| self.fresh_id());
+        let mut logged = Vec::new();
+        for &(amount, to) in amounts {
+            // As the amounts before left them: they may have changed the same settings.
+            let targets: Vec<PrizeMoney> =
+                self.prizes.iter().flatten().filter(|prize| settings.contains(&prize.settings)).cloned().collect();
+            let plan = self.session.plan_prize_change(&targets.iter().collect::<Vec<_>>(), &[(amount, to)])?;
+            let Some(from) = plan.edits.first().map(|edit| edit.from) else {
+                continue;
+            };
+            if plan.edits.iter().all(|edit| edit.from == edit.to) {
+                continue;
+            }
+            let done = self.session.apply_prize_change(&plan)?;
+            if let Some(found) = &mut self.prizes {
+                done.note(found, false);
+            }
+            let change = Change {
+                entity: Entity::Club,
+                uid: club,
+                field: amount.key(),
+                old: i64::from(from),
+                new: i64::from(to),
+            };
+            let entry = self.entry(change, self.club_name(club), batch);
+            logged.push(self.push_log(LoggedChange {
+                prize: Some(note.clone()),
+                undo: Some(Undo::Prize(done)),
+                ..entry
+            }));
+        }
+        Ok(logged)
     }
 
     fn club_name(&self, uid: u32) -> String {
@@ -1248,23 +1833,12 @@ impl Connection {
             old: i64::from(done.from_club),
             new: i64::from(done.to_club),
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name,
-            change,
-            undone_at: None,
-            batch: None,
-            moved: Some(MovedClubs { from, to: Some(to), with, released, fee }),
-            captaincy: None,
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: None,
+        let entry = self.entry(change, name, None);
+        self.push_log(LoggedChange {
+            moved: Some(MovedClubs { from, to: Some(to), with, released, fee, arranged: None }),
             undo: Some(Undo::Move(before)),
-        };
-        self.log.push(logged.clone());
-        logged
+            ..entry
+        })
     }
 
     /// Logs a release just written, as a change of the player's `club` from his club's UID
@@ -1284,33 +1858,26 @@ impl Connection {
             old: i64::from(done.from_club),
             new: 0,
         };
-        let logged = LoggedChange {
-            id: self.log.len() + 1,
-            at: now_ms(),
-            name: self.player_name(done.player),
-            change,
-            undone_at: None,
-            batch: None,
-            moved: Some(MovedClubs {
-                from: Some(self.club_name(done.from_club)),
-                to: None,
-                with: None,
-                released: None,
-                fee: None,
-            }),
-            captaincy: None,
-            tie: None,
-            clause: None,
-            recall: None,
-            stadium: None,
-            undo: Some(Undo::Move(LoggedMove { done, rows, paid: Vec::new() })),
+        let moved = MovedClubs {
+            from: Some(self.club_name(done.from_club)),
+            to: None,
+            with: None,
+            released: None,
+            fee: None,
+            arranged: None,
         };
-        self.log.push(logged.clone());
-        logged
+        let entry = self.entry(change, self.player_name(done.player), None);
+        self.push_log(LoggedChange {
+            moved: Some(moved),
+            undo: Some(Undo::Move(LoggedMove { done, rows, paid: Vec::new() })),
+            ..entry
+        })
     }
 
     /// Writes back the old value of the logged change `id`, if the game still holds the new
-    /// one; a move or healing goes back if the game still holds everything it wrote.
+    /// one; a move or healing goes back if the game still holds everything it wrote. A change
+    /// listed from the history goes back as `undo_earlier` says. Nothing goes back once the game
+    /// has loaded a save since the lists were read (see `refuse_after_load`).
     fn undo(&mut self, id: usize) -> Result<LoggedChange, Failure> {
         let entry = self
             .log
@@ -1320,6 +1887,11 @@ impl Connection {
             .ok_or_else(|| Failure::new("app.noChange", format!("No change {id}")).with("id", id))?;
         if entry.undone_at.is_some() {
             return Err(Failure::new("app.alreadyUndone", "This change has already been undone."));
+        }
+        self.refuse_after_load()?;
+        if entry.earlier {
+            self.undo_earlier(&entry)?;
+            return Ok(self.mark_undone(id));
         }
         match entry.undo {
             Some(Undo::Recall(option)) => {
@@ -1337,12 +1909,17 @@ impl Connection {
                 self.note_change(&entry.change, entry.change.old);
             }
             Some(Undo::Stadium(renamed)) => self.undo_stadium(&renamed)?,
+            Some(Undo::Name(done)) => {
+                self.session.undo_name_change(&done)?;
+                self.renamed_player(done.person);
+            }
             Some(Undo::Move(moved)) => {
                 // The fee goes back first, by what it changed; if the player cannot go back, it is paid again.
                 self.session.refund_fee(&moved.paid)?;
                 if let Err(err) = self.session.undo_club_move(&moved.done) {
                     let _ = self.session.repay_fee(&moved.paid);
-                    return Err(err.into());
+                    // A squad number a team-mate has been given since is refused, naming him.
+                    return Err(self.with_names(err.into()));
                 }
                 for row in moved.rows {
                     self.players.update(row.uid, |player| {
@@ -1352,8 +1929,19 @@ impl Connection {
                     });
                 }
             }
+            Some(Undo::Arranged(done)) => self.session.undo_arranged_transfer(&done).map_err(|err| match err {
+                // Once the day has come, the game has made the move, and what the editor wrote is the game's.
+                MoveError::Changed { .. } => Failure::new(
+                    "arrange.made",
+                    "The game has made this transfer already, or changed what arranging it wrote: it cannot be \
+                     undone.",
+                ),
+                err => err.into(),
+            })?,
             Some(Undo::Heal(healed)) => self.session.undo_heal(&healed)?,
             Some(Undo::Lift(lifted)) => self.session.undo_lift_bans(&lifted)?,
+            Some(Undo::Cohesion(cohesion)) => self.session.undo_cohesion(&cohesion)?,
+            Some(Undo::Tactics(tactics)) => self.session.undo_tactics(&tactics)?,
             Some(Undo::Retirement(retirement)) => self.session.undo_retirement(&retirement)?,
             Some(Undo::Tie(tie)) => self.session.undo_relation(&tie)?,
             Some(Undo::Clause(clause)) => self.session.undo_clause(&clause)?,
@@ -1367,15 +1955,75 @@ impl Connection {
                 });
             }
             Some(Undo::Captain(captaincy)) => self.session.undo_captain(&captaincy)?,
+            Some(Undo::Prize(done)) => {
+                self.session.undo_prize_change(&done)?;
+                if let Some(found) = &mut self.prizes {
+                    done.note(found, true);
+                }
+            }
             None => {
                 let (target, _) = self.target(entry.change.entity, entry.change.uid)?;
-                self.session.revert(&target, &entry.change)?;
+                // A squad number a team-mate has been given since is refused, naming him.
+                self.session.revert(&target, &entry.change).map_err(|err| self.with_names(err.into()))?;
                 self.note_change(&entry.change, entry.change.old);
             }
         }
-        let logged = self.log.iter_mut().find(|logged| logged.id == id).expect("found above");
-        logged.undone_at = Some(now_ms());
-        Ok(logged.clone())
+        Ok(self.mark_undone(id))
+    }
+
+    /// Undoes `entry`, a change listed from the history, which Undo may take back (see `check_earlier`): its old value
+    /// is written as a new edit would be, with every check, as the game has moved on since it was made, and only while
+    /// the game still holds the value it wrote. A recall from loan goes back with its option to buy, or not at all.
+    fn undo_earlier(&mut self, entry: &LoggedChange) -> Result<(), Failure> {
+        if !entry.undoable {
+            return Err(Failure::new(
+                "app.historyOnly",
+                "This change was made before the app last connected, and undoing it needed the game's memory as it was \
+                 then: change it back by hand.",
+            ));
+        }
+        let change = &entry.change;
+        let (target, _) = self.target(change.entity, change.uid)?;
+        let field = self.session.field(change.entity, &change.field)?;
+        let written = self.session.write_field_if(&target, &field, change.new, change.old);
+        written.map_err(|err| self.with_names(err.into()))?;
+        if let Some(Undo::Recall(option)) = &entry.undo {
+            let written = self
+                .session
+                .field(change.entity, &option.field)
+                .and_then(|field| self.session.write_field_if(&target, &field, option.new, option.old));
+            if let Err(err) = written {
+                // The loan's end back to the day of the recall, which the game held.
+                let back = Change { old: change.new, new: change.old, ..change.clone() };
+                let _ = self.session.revert(&target, &back);
+                return Err(err.into());
+            }
+        }
+        self.note_change(change, change.old);
+        Ok(())
+    }
+
+    /// Refuses an undo while the game has loaded a save, or gone back to its main menu, since the lists were read: the
+    /// people and clubs there may be another save's, at the same places, and putting a value back skips the checks a new
+    /// edit makes, that one among them. An undo of a change of this connection would write where the lists found its
+    /// person, if a person with the same UID was there and held the value it wrote. Reload data reads the lists again,
+    /// and keeps the log only while the game has the same career.
+    fn refuse_after_load(&self) -> Result<(), Failure> {
+        if self.session.save_changed() {
+            return Err(MoveError::Locked(Lock::SaveChanged).into());
+        }
+        Ok(())
+    }
+
+    /// Marks the change `id` undone now, in the log and in the history of the career.
+    fn mark_undone(&mut self, id: usize) -> LoggedChange {
+        let at = now_ms();
+        let logged = self.log.iter_mut().find(|logged| logged.id == id).expect("in the log");
+        logged.undone_at = Some(at);
+        let logged = logged.clone();
+        let StoredKey { session, id } = self.history.key(&logged);
+        self.history.add(&HistoryLine::Undone { session, id, at });
+        logged
     }
 
     /// Where the player, member of staff or club with `uid` lives in the game, and its name.
@@ -1384,6 +2032,9 @@ impl Connection {
             Entity::Player => self.players.get(uid).map(|p| (p.target(), p.name.clone())),
             Entity::Staff => self.staff.get(uid).map(|s| (s.target(), s.name.clone())),
             Entity::Club => self.clubs.get(uid).map(|c| (c.target(), c.name.clone())),
+            Entity::NationalTeam => {
+                self.nationals.as_ref().ok().and_then(|n| n.get(uid)).map(|n| (n.target(), n.name.clone()))
+            }
         }
         .ok_or_else(|| not_found(entity, uid))
     }
@@ -1392,9 +2043,17 @@ impl Connection {
     /// the attributes of every frozen member of staff from getting worse: what the game took is put back, and what it
     /// gave raises what they are held at. The position ratings of a frozen player are held exactly: what the game gave
     /// is put back too. These writes are not logged; unfreezing ends them.
+    ///
+    /// Once the game has loaded a save, or gone back to its main menu, since the lists were read, nothing is held at
+    /// what they found until they are read again: the people and clubs there may be another save's, at the same places.
+    /// Only the names of renamed stadiums are given again then, where the game is checked to have a save of this career
+    /// (see `hold_stadiums`).
     fn hold_frozen(&mut self) {
-        self.hold_money();
         self.hold_stadiums();
+        if self.session.save_changed() {
+            return;
+        }
+        self.hold_money();
         if !self.frozen.attributes.is_empty() {
             let fields = self.attribute_fields(Entity::Player);
             let target_of = |uid| self.players.get(uid).map(|player| player.target());
@@ -1508,11 +2167,16 @@ impl Connection {
                 }
             }),
             Entity::Club => self.clubs.update(change.uid, |c| c.note_change(&change.field, value)),
+            Entity::NationalTeam => match self.nationals.as_mut() {
+                Ok(nationals) => nationals.update(change.uid, |n| n.note_change(&change.field, value)),
+                Err(_) => false,
+            },
         };
     }
 }
 
-/// A change written to the game this session.
+/// A change written to the game: by this connection, or before it, as the history of the career lists it (see
+/// `History`).
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LoggedChange {
@@ -1527,6 +2191,15 @@ struct LoggedChange {
     undone_at: Option<u64>,
     /// The mass edit it was part of, if any.
     batch: Option<u32>,
+    /// Whether it was written before this connection, and is listed from the history of the career.
+    earlier: bool,
+    /// Whether Undo may take it back: a change of this connection, or an earlier one as `Connection::check_earlier`
+    /// works out.
+    undoable: bool,
+    /// For an earlier change that is not undone: whether the game held what it wrote when the lists were last read;
+    /// none where that is not looked at (see `Connection::in_game`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    in_game: Option<bool>,
     /// For a move to another club, logged as a change of the field `club` from one club UID
     /// to the other: the clubs' names.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1548,6 +2221,21 @@ struct LoggedChange {
     /// other: the names.
     #[serde(skip_serializing_if = "Option::is_none")]
     stadium: Option<StadiumNames>,
+    /// For a player given another name, logged as a change of his field `name.first`, `name.last`, `name.common` or
+    /// `name.full` from one length in bytes to the other (0 for none): the names.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    person_name: Option<PersonNameChange>,
+    /// For a change of a nation or a city of birth, logged with the objects' addresses as its values: their names,
+    /// which outlive the addresses.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    objects: Option<ObjectNames>,
+    /// For an amount of prize money the club's league pays, logged as a change of the club's field `prize.place.N`,
+    /// `prize.win`, `prize.draw` or `prize.loss` in pounds: the league, and how many settings of it were changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prize: Option<PrizeNote>,
+    /// For an earlier change: what the history file calls it.
+    #[serde(skip)]
+    stored: Option<StoredKey>,
     /// For a move, healing, lifting bans, a captaincy, a tie or a clause: what undoing it takes. Other changes write
     /// back `old`.
     #[serde(skip)]
@@ -1556,19 +2244,46 @@ struct LoggedChange {
 
 /// A recall from loan that took the loan's option to buy away, so that the game would not sell him to the club he is on
 /// loan at when the loan ends.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecallNote {
     /// The option to buy it took away, pounds.
     option_fee: i64,
 }
 
+/// The league whose prize money a change set, for every club in it: its name and UID, and how many settings of its
+/// stage were changed alike (one per group of a group stage).
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PrizeNote {
+    league: String,
+    league_uid: u32,
+    settings: usize,
+}
+
 /// A stadium's name before and after a rename.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StadiumNames {
     from: String,
     to: String,
+}
+
+/// A person's name before and after a change: none for a common or full name he did not have, or no longer has.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersonNameChange {
+    from: Option<String>,
+    to: Option<String>,
+}
+
+/// The names of the objects a change of a pointer pointed at and points at: nations, or cities; none where the game
+/// had no name for the address.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObjectNames {
+    from: Option<String>,
+    to: Option<String>,
 }
 
 /// What undoing a change takes when writing back its old value is not enough.
@@ -1579,14 +2294,22 @@ enum Undo {
     Recall(Change),
     /// A stadium renamed: the bytes it wrote, which the undo writes back.
     Stadium(StadiumRename),
+    /// A player given another name: the person's pointer it wrote, which the undo writes back.
+    Name(NameChange),
     Move(LoggedMove),
+    /// A transfer arranged for the game to make: what arranging it wrote, which the undo takes back until the day.
+    Arranged(Arranged),
     Heal(Healed),
     Lift(Lifted),
+    Cohesion(CohesionSet),
+    Tactics(TacticsSet),
     Retirement(RetirementSet),
     Tie(RelationSet),
     Clause(ClauseSet),
     Captain(CaptainSet),
     Staff(LoggedStaff),
+    /// Prize money a league pays: the amounts it wrote, which the undo writes back.
+    Prize(PrizeChange),
 }
 
 /// A member of staff's move, new job or signing as the log keeps it: the writes to undo, and what his list row said
@@ -1601,7 +2324,7 @@ struct LoggedStaff {
 }
 
 /// A tie before and after a change: none before for one added, none after for one taken out.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TieChange {
     from: Option<TieEnd>,
@@ -1609,7 +2332,7 @@ struct TieChange {
 }
 
 /// The nation or club of a tie, and its homegrown rule for a training.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TieEnd {
     name: String,
@@ -1617,14 +2340,14 @@ struct TieEnd {
 }
 
 /// A contract clause before and after a change: none before for one added, none after for one taken out.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ClauseChange {
     from: Option<Clause>,
     to: Option<Clause>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Captaincy {
     /// Where the team is in its club's list of teams; 0 is the senior team.
@@ -1649,6 +2372,8 @@ struct TeamView {
     age_limit: Option<u8>,
     captain: Option<u32>,
     vice_captain: Option<u32>,
+    /// Whether a manager of the user's runs the club, as Destroy's question says: never for a national team.
+    human_club: bool,
     players: Vec<SquadRow>,
 }
 
@@ -1664,6 +2389,15 @@ struct SquadRow {
     match_sharpness: u16,
     jadedness: i16,
     morale: u8,
+    /// His cohesion with the club, 1..100; none where the layout has not placed it, or he has no entry for it yet.
+    cohesion: Option<i8>,
+    /// How well he knows the tactic the team plays, 0..100 (see `familiarity.rs`); none where the layout has not
+    /// placed it, no human manager picks the team's tactic, or he has no record of familiarity.
+    tactics: Option<u8>,
+    /// Whether the game keeps a history of training for him: not for one who does not train, as when injured.
+    trains: bool,
+    /// How many of the club's other players hold a reason to be unhappy about him that is not over.
+    concerned_teammates: usize,
     injuries: usize,
     bans: usize,
     /// Whether his attributes are frozen, his energy and match sharpness, or his positions (see `freeze_team`).
@@ -1682,8 +2416,18 @@ struct RoomMakerRow {
     captain: bool,
 }
 
+/// A member of staff of a club, as its Staff tab lists him: his list row, and why Release all staff would leave him at
+/// the club (none for one it releases).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClubStaffRow {
+    #[serde(flatten)]
+    member: fmlibre_core::StaffSummary,
+    stays: Option<Failure>,
+}
+
 /// What a team-wide action does to every player of the team.
-#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum TeamAction {
     /// Heals every current injury.
@@ -1696,9 +2440,51 @@ enum TeamAction {
     Refresh,
     /// Every attribute to its best: 20, or 1 where lower is better.
     MaxAttributes,
+    /// Cohesion with the club to the top, for those who have an entry for it.
+    MaxCohesion,
+    /// The tactic the human manager plays with the team known at its best (see `familiarity.rs`).
+    MaxTactics,
+    /// The team at its best in one go: `AT_ITS_BEST`, each step skipped where it cannot run. Attributes and bans stay.
+    AtItsBest,
+    /// Morale, happiness and happiness with playing time to the bottom: `DEMORALIZE`, Destroy's first step.
+    Demoralize,
+    /// No energy, the least match sharpness and the most jadedness: `EXHAUST`, Destroy's second step.
+    Exhaust,
+    /// Cohesion with the club to the bottom, for those who have an entry for it.
+    MinCohesion,
+    /// The tactic the human manager plays with the team known at its least (see `familiarity.rs`).
+    MinTactics,
+    /// The team at its worst in one go: `DESTROY`, each step skipped where it cannot run. No value is made better than
+    /// it was; attributes, injuries and bans stay.
+    Destroy,
 }
 
-#[derive(Clone, Serialize)]
+/// What Team at its best does, in order.
+const AT_ITS_BEST: [TeamAction; 5] =
+    [TeamAction::Heal, TeamAction::Inspire, TeamAction::Refresh, TeamAction::MaxCohesion, TeamAction::MaxTactics];
+
+/// What Destroy does, in order.
+const DESTROY: [TeamAction; 4] =
+    [TeamAction::Demoralize, TeamAction::Exhaust, TeamAction::MinCohesion, TeamAction::MinTactics];
+
+/// Destroy's morale, happiness and happiness with playing time: the least the editor writes, as the game itself holds
+/// them (1, -100 and -100 on the Game Pass save of 0.9.2524.0, November 2026). Lower values stay as they are.
+const DEMORALIZE: [(&str, Operation); 3] = [
+    ("morale", Operation::AtMost { value: 1 }),
+    ("contract.happiness", Operation::AtMost { value: -100 }),
+    ("contract.playing_time_happiness", Operation::AtMost { value: -100 }),
+];
+
+/// Destroy's energy, match sharpness and jadedness: no energy, the least sharpness the editor writes and the most
+/// jadedness, each kept where it is worse already, as a youth intake's sharpness below 35%. On the same save the game
+/// itself held energy down to 0.01% (players long injured), nobody's sharpness below 35%, and jadedness up to 605.
+const EXHAUST: [(&str, Operation); 3] = [
+    ("condition", Operation::AtMost { value: 0 }),
+    ("match_sharpness", Operation::AtMost { value: 3_500 }),
+    ("jadedness", Operation::AtLeast { value: 1_000 }),
+];
+
+#[derive(Clone, Serialize, Deserialize)]
 struct MovedClubs {
     /// None for a free agent signed, who had no club.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1715,6 +2501,10 @@ struct MovedClubs {
     /// The fee the buying club paid the selling one, in pounds, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     fee: Option<i64>,
+    /// For a transfer arranged for the game to make: the day of the move, as a number like 20261019. The game pays the
+    /// fee and moves him on that day.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    arranged: Option<i64>,
 }
 
 /// A move as the log keeps it: the writes to undo, and what the list rows of the players it
@@ -1759,6 +2549,19 @@ struct MovePreview {
 struct ClubName {
     uid: u32,
     name: String,
+}
+
+/// A transfer the game is to make on the day of the move: the clubs, the fee and the contract he is to have.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArrangedPreview {
+    from: ClubName,
+    to: ClubName,
+    /// Pounds; the game pays it on the day.
+    fee: i64,
+    /// The day the game makes the move, as a number like 20261019.
+    move_day: i64,
+    contract: NewContract,
 }
 
 /// The filter of the list a mass edit applies to; only the one for its entity is used.
@@ -1808,6 +2611,29 @@ struct MassReport {
     batch: u32,
     applied: usize,
     failed: Vec<MassFailure>,
+}
+
+/// From `team_action`: what it wrote, and the steps of Team at its best it left out (none for any other action).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamReport {
+    #[serde(flatten)]
+    report: MassReport,
+    skipped: Vec<SkippedStep>,
+}
+
+impl From<MassReport> for TeamReport {
+    fn from(report: MassReport) -> Self {
+        TeamReport { report, skipped: Vec::new() }
+    }
+}
+
+/// A step of Team at its best or Destroy that did not run, and why.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SkippedStep {
+    action: TeamAction,
+    reason: Failure,
 }
 
 #[derive(Serialize)]
@@ -1896,24 +2722,6 @@ fn graphics_info(graphics: State<'_, Graphics>) -> GraphicsInfo {
     }
 }
 
-/// Whether this copy of the app can update itself: download a new version, check its signature and put it in place.
-/// On Windows, a copy the installer put in place, which has its uninstaller beside it; on macOS, the app run from its
-/// bundle, unless macOS runs it from a read-only copy, as it does an app opened where it was downloaded (App
-/// Translocation). A portable copy and a development build open the release's page instead.
-#[tauri::command]
-fn can_self_update() -> bool {
-    let Ok(exe) = std::env::current_exe() else {
-        return false;
-    };
-    if cfg!(windows) {
-        exe.parent().is_some_and(|folder| folder.join("uninstall.exe").is_file())
-    } else if cfg!(target_os = "macos") {
-        app_bundle(&exe).is_some_and(|bundle| !bundle.to_string_lossy().contains("/AppTranslocation/"))
-    } else {
-        false
-    }
-}
-
 /// The macOS app bundle the executable `exe` is in (`FMLibreEditor.app/Contents/MacOS/FMLibreEditor`); none for a
 /// development build, which runs from the target folder.
 fn app_bundle(exe: &Path) -> Option<&Path> {
@@ -1922,13 +2730,6 @@ fn app_bundle(exe: &Path) -> Option<&Path> {
     let bundle = contents.parent()?;
     let inside = macos.file_name()? == "MacOS" && contents.file_name()? == "Contents" && bundle.extension()? == "app";
     inside.then_some(bundle)
-}
-
-/// Starts the app again: on macOS, once an update has put the new version in place of this one, so that it runs. On
-/// Windows the update's installer starts the new version itself (see app/src/update.ts).
-#[tauri::command]
-fn restart_app(app: tauri::AppHandle) {
-    app.restart();
 }
 
 /// Serves `fmgfx` requests such as `/club/728`, `/face/7458500` or `/flag/765` from the
@@ -2009,6 +2810,9 @@ struct ConnectionInfo {
     known_build: bool,
     /// Whether the layout tells women from men, players and staff alike: the lists offer that filter only then.
     gender_known: bool,
+    /// Whether a transfer can be arranged for the game to make the next day: this version of the game's layout places
+    /// its transfers, and the editor can take blocks of the game's heap (Windows).
+    arranges_transfers: bool,
     /// What the checks the editor makes before it writes found on this game.
     health: Health,
     /// Only from `connect`: what it froze again of what was frozen in this save before, when there was any.
@@ -2087,7 +2891,7 @@ macro_rules! coded_failures {
     )*};
 }
 
-coded_failures!(EditError, MoveError, ScoutError, SessionError, fmlibre_mem::Error);
+coded_failures!(EditError, MoveError, PrizeError, ScoutError, SessionError, fmlibre_mem::Error);
 
 impl<T> From<std::sync::PoisonError<T>> for Failure {
     fn from(err: std::sync::PoisonError<T>) -> Self {
@@ -2138,15 +2942,22 @@ fn inspect(pid: u32) -> DetectedGame {
 /// Attaches to the running game, locates its data and reads every player, member of
 /// staff and club. Only reads memory; the game is opened for writing too when the system
 /// allows it, so that edits can be applied later, and so that what was frozen in this
-/// save before can be held again (see `Connection::restore_frozen`).
+/// save before can be held again (see `Connection::restore_frozen`). The change log lists
+/// the history of the career the game has loaded (see `History`).
 #[tauri::command]
-async fn connect(state: State<'_, AppState>, file: State<'_, FrozenFile>) -> Result<ConnectionInfo, Failure> {
+async fn connect(
+    state: State<'_, AppState>,
+    file: State<'_, FrozenFile>,
+    history: State<'_, HistoryFolder>,
+) -> Result<ConnectionInfo, Failure> {
     let started = Instant::now();
     let path = file.0.clone();
+    let folder = history.0.clone();
     let (connection, refrozen) = tauri::async_runtime::spawn_blocking(move || -> Result<_, Failure> {
         let pid = find_game(None)?;
         let process = Process::open_read_write(pid).or_else(|_| Process::open_read(pid))?;
-        let mut connection = Connection::load(Session::connect(process, ArraySource::ProfileFirst)?, Vec::new())?;
+        let session = Session::connect(process, ArraySource::ProfileFirst)?;
+        let mut connection = Connection::load(session, folder.as_deref(), None)?;
         let refrozen = connection.restore_frozen(path.as_deref());
         Ok((connection, refrozen))
     })
@@ -2177,18 +2988,33 @@ fn allow_editing(state: State<'_, AppState>) -> Result<ConnectionInfo, Failure> 
     Ok(connection.info(0))
 }
 
+/// Whether the game has loaded a save, or gone back to its main menu, since the lists were read (see
+/// `Session::save_changed`): until they are read again (`reload`), nothing is written and nothing frozen is held, but
+/// for the names of stadiums renamed in a save of the same career. False while not connected, or reading again.
+#[tauri::command]
+fn save_changed(state: State<'_, AppState>) -> Result<bool, Failure> {
+    let guard = state.0.lock()?;
+    Ok(guard.as_ref().is_some_and(|connection| connection.session.save_changed()))
+}
+
 /// Reads everything again, e.g. after the game has moved on. A list not found when the app connected, as while the
 /// game was still loading a save, is looked for again. Drops the connection when that fails. What is frozen stays
-/// frozen, unless the game has loaded another save: then what was frozen in that one before is frozen instead.
+/// frozen, and the change log stays, unless the game has loaded another career: then what was frozen in that one
+/// before is frozen instead, and the change log lists its history.
 #[tauri::command]
-async fn reload(state: State<'_, AppState>, file: State<'_, FrozenFile>) -> Result<ReloadInfo, Failure> {
+async fn reload(
+    state: State<'_, AppState>,
+    file: State<'_, FrozenFile>,
+    history: State<'_, HistoryFolder>,
+) -> Result<ReloadInfo, Failure> {
     let old = state.0.lock()?.take().ok_or_else(not_connected)?;
     let path = file.0.clone();
+    let folder = history.0.clone();
     let (connection, refrozen) = tauri::async_runtime::spawn_blocking(move || -> Result<_, Failure> {
-        let (save, frozen) = (old.save, old.frozen);
-        let mut session = old.session;
+        let Connection { mut session, save, frozen, log, history, .. } = old;
         session.find_missing_arrays();
-        let mut connection = Connection::load(session, old.log)?;
+        let kept = Kept { save: save.clone(), log, history };
+        let mut connection = Connection::load(session, folder.as_deref(), Some(kept))?;
         if connection.save == save {
             connection.frozen = frozen;
             // A save loaded again has its stadiums' own names back: the ones the editor gave are given again now.
@@ -2209,6 +3035,21 @@ async fn reload(state: State<'_, AppState>, file: State<'_, FrozenFile>) -> Resu
     };
     *state.0.lock()? = Some(connection);
     Ok(info)
+}
+
+/// The report Copy diagnostics puts on the clipboard for a bug report, built now from the connection as it is, with
+/// the lists Reload data may have found since the app connected (see `fmlibre_core::diagnostics_report`). Off the
+/// window's thread, as the retirement manager may be looked for then.
+#[tauri::command]
+async fn diagnostics(app: tauri::AppHandle) -> Result<String, Failure> {
+    let version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || -> Result<String, Failure> {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        Ok(diagnostics_report(&connection.session, &version))
+    })
+    .await?
 }
 
 /// Players matching `query`, highest current ability first; at most `limit` rows.
@@ -2291,6 +3132,129 @@ fn search_clubs(
     Ok(page(&connection.clubs, &query, limit, |c| filter.matches(c), |_| {}))
 }
 
+/// The leagues the clubs `filter` selects play in this season, for the club list's league filter: grouped by their
+/// nation, a nation's best known first. The filter's own league is left out of it, so that every league its other
+/// filters allow is offered. Only reads what the club list holds.
+#[tauri::command]
+fn club_leagues(state: State<'_, AppState>, filter: Option<ClubFilter>) -> Result<Vec<fmlibre_core::League>, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let filter = ClubFilter { league_uid: None, ..filter.unwrap_or_default() };
+    Ok(fmlibre_core::leagues(connection.clubs.search("").into_iter().filter(|club| filter.matches(club))))
+}
+
+/// What the league the club `club` plays in pays this season, by position and per match, in each stage that pays
+/// something; or why this version of the game shows none. The first time, and with `again`, read from the game: off
+/// the window's thread, as it reads all of the game's memory once, which takes a few seconds, and longer the first
+/// time on macOS. After that, as read then, with the changes the editor made since. Only reads.
+#[tauri::command]
+async fn league_prizes(app: tauri::AppHandle, club: u32, again: bool) -> Result<LeaguePrizes, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<LeaguePrizes, Failure> {
+        let state = app.state::<AppState>();
+        let mut guard = state.0.lock()?;
+        let connection = guard.as_mut().ok_or_else(not_connected)?;
+        let league_uid = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?.league_uid;
+        let Some(league_uid) = league_uid else {
+            return Ok(LeaguePrizes { unavailable: None, league: None });
+        };
+        if again || connection.prizes.is_none() {
+            connection.prizes = match connection.session.checked_prize_money() {
+                Ok(found) => Some(found),
+                Err(PrizeReadError::Unavailable(reason)) => {
+                    return Ok(LeaguePrizes { unavailable: Some(reason), league: None });
+                }
+                Err(PrizeReadError::Memory(err)) => return Err(err.into()),
+            };
+        }
+        Ok(LeaguePrizes { unavailable: None, league: connection.league_prizes(league_uid) })
+    })
+    .await?
+}
+
+/// The sponsorship deals the club `club` holds, as its Sponsorship screen lists them and the ones that have ended too; or
+/// why this version of the game shows none. Read from the game each time, a few pointers and no scan. Only reads.
+#[tauri::command]
+fn club_sponsorships(state: State<'_, AppState>, club: u32) -> Result<ClubSponsorships, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+    match connection.session.checked_sponsorships(summary) {
+        Ok(deals) => Ok(ClubSponsorships { unavailable: None, deals }),
+        Err(SponsorshipReadError::Unavailable(reason)) => {
+            Ok(ClubSponsorships { unavailable: Some(reason), deals: Vec::new() })
+        }
+        Err(SponsorshipReadError::Memory(err)) => Err(err.into()),
+    }
+}
+
+/// A club's sponsorship deals, or why the app shows none on this version of the game.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClubSponsorships {
+    /// "build": nobody has checked the deals on this build yet; "unreadable": it was checked, but what the editor found
+    /// does not read as the game's.
+    unavailable: Option<SponsorshipUnavailable>,
+    deals: Vec<Sponsorship>,
+}
+
+/// What a club's league pays, or why the app shows none on this version of the game.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LeaguePrizes {
+    /// "build": nobody has checked the prize money on this build yet; "unreadable": it was checked, but what the
+    /// editor found does not read as the game's.
+    unavailable: Option<PrizeUnavailable>,
+    /// None where the club plays in no league, or its league pays nothing.
+    league: Option<CompetitionPrizes>,
+}
+
+/// An amount of prize money to set, in pounds: for a final position (1 for the first place), or per win, draw or loss.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum PrizeInput {
+    Place { place: usize, pounds: u32 },
+    Win { pounds: u32 },
+    Draw { pounds: u32 },
+    Loss { pounds: u32 },
+}
+
+impl PrizeInput {
+    fn amount(self) -> (PrizeAmount, u32) {
+        match self {
+            PrizeInput::Place { place, pounds } => (PrizeAmount::Place(place), pounds),
+            PrizeInput::Win { pounds } => (PrizeAmount::Win, pounds),
+            PrizeInput::Draw { pounds } => (PrizeAmount::Draw, pounds),
+            PrizeInput::Loss { pounds } => (PrizeAmount::Loss, pounds),
+        }
+    }
+}
+
+/// Sets `amounts` in the stage `stage` (as `league_prizes` lists them) of the league the club `club` plays in, for
+/// every club in it, and logs each amount changed, in one batch when there are more; Undo in Changes puts it back. The
+/// game pays from these amounts and keeps them in its saves, until it sets the next season's stages up from its own.
+#[tauri::command]
+fn set_league_prizes(
+    state: State<'_, AppState>,
+    club: u32,
+    stage: usize,
+    amounts: Vec<PrizeInput>,
+) -> Result<LeaguePrizesSet, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let amounts: Vec<(PrizeAmount, u32)> = amounts.into_iter().map(PrizeInput::amount).collect();
+    let changes = connection.set_league_prizes(club, stage, &amounts)?;
+    let league = connection.clubs.get(club).and_then(|c| c.league_uid).and_then(|uid| connection.league_prizes(uid));
+    Ok(LeaguePrizesSet { changes, league })
+}
+
+/// The changes `set_league_prizes` logged, and what the league pays now.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LeaguePrizesSet {
+    changes: Vec<LoggedChange>,
+    league: Option<CompetitionPrizes>,
+}
+
 /// Writes the players `query` and `filter` select, in `order`, to a new file in the exports folder as `format`: what
 /// their profiles hold, with the in-game date in the file and in its name ("players-2027-01-02.csv"; a second export
 /// that day "players-2027-01-02-2.csv"). Only reads memory.
@@ -2314,6 +3278,29 @@ async fn export_players(
     .await
 }
 
+/// Writes the staff `query` and `filter` select, in `order` or as the list shows them (the human manager first, then by
+/// current ability), to a new file in the exports folder as `format`: what their profiles hold, with the in-game date in
+/// the file and in its name ("staff-2027-01-02.csv"). Only reads memory.
+#[tauri::command]
+async fn export_staff(
+    app: tauri::AppHandle,
+    query: String,
+    filter: Option<StaffFilter>,
+    order: Option<StaffOrder>,
+    format: ExportFormat,
+) -> Result<ExportReport, Failure> {
+    export_list(app, "staff", format, move |connection, header, out| {
+        let filter = filter.unwrap_or_default();
+        let mut hits = connection.staff.search(&query);
+        hits.retain(|member| filter.matches(member));
+        if let Some(order) = order {
+            sort_staff(&mut hits, order);
+        }
+        connection.session.export_staff(&hits, format, header, out)
+    })
+    .await
+}
+
 /// Writes the clubs `query` and `filter` select, highest reputation first as the list shows them, to a new file in the
 /// exports folder as `format`: what their profiles hold, with the in-game date in the file and in its name
 /// ("clubs-2027-01-02.csv"). Only reads memory.
@@ -2333,8 +3320,25 @@ async fn export_clubs(
     .await
 }
 
-/// Writes an export of `what` ("players", "clubs") with `write` to a new file in the exports folder, named after it and
-/// the in-game date. Only reads memory.
+/// Writes the changes `rows` to a new file in the exports folder as CSV, with commas or with semicolons (`format`), a row
+/// each: what the Changes view lists for them, with the in-game date in the file's name ("changes-2027-01-02.csv"; a
+/// second export that day "changes-2027-01-02-2.csv"). The window sends the rows its search and filters show, since it
+/// alone has the texts that go with them: the values as shown, the field's name, the time in its zone. Nothing in the
+/// game changes.
+#[tauri::command]
+async fn export_changes(
+    app: tauri::AppHandle,
+    rows: Vec<ChangeRow>,
+    format: ExportFormat,
+) -> Result<ExportReport, Failure> {
+    if format == ExportFormat::Json {
+        return Err(Failure::new("export.format", "The changes are exported as CSV."));
+    }
+    export_list(app, "changes", format, move |_, _, out| fmlibre_core::export_changes(rows, format, out)).await
+}
+
+/// Writes an export of `what` ("players", "staff", "clubs", "changes") with `write` to a new file in the exports
+/// folder, named after it and the in-game date. Only reads memory.
 async fn export_list(
     app: tauri::AppHandle,
     what: &'static str,
@@ -2346,16 +3350,7 @@ async fn export_list(
     tauri::async_runtime::spawn_blocking(move || -> Result<ExportReport, Failure> {
         let folder = app.state::<ExportsFolder>().0.clone();
         let folder = folder.ok_or_else(|| Failure::new("export.noFolder", "There is no folder to export to."))?;
-        // macOS may ask the user before an app first writes to the Documents folder (see Info.plist): a no is said as
-        // such, with where to change it.
-        let failed = |err: std::io::Error| {
-            if cfg!(target_os = "macos") && err.kind() == std::io::ErrorKind::PermissionDenied {
-                Failure::new("export.notAllowed", format!("FMLibreEditor may not write to {}: {err}", folder.display()))
-                    .with("folder", folder.display())
-            } else {
-                Failure::new("export.failed", err.to_string()).with("reason", err)
-            }
-        };
+        let failed = |err: std::io::Error| export_failure(&folder, err);
         let state = app.state::<AppState>();
         let guard = state.0.lock()?;
         let connection = guard.as_ref().ok_or_else(not_connected)?;
@@ -2375,8 +3370,19 @@ async fn export_list(
     .await?
 }
 
-/// A new file for an export of `what` ("players", "clubs") in `folder`, named after the in-game date: the first of
-/// "players-2027-01-02.json", "players-2027-01-02-2.json", ... that is not there yet.
+/// What a failed write to the exports `folder` says. macOS may ask the user before an app first writes to the Documents
+/// folder (see Info.plist): a no is said as such, with where to change it.
+fn export_failure(folder: &Path, err: std::io::Error) -> Failure {
+    if cfg!(target_os = "macos") && err.kind() == std::io::ErrorKind::PermissionDenied {
+        Failure::new("export.notAllowed", format!("FMLibreEditor may not write to {}: {err}", folder.display()))
+            .with("folder", folder.display())
+    } else {
+        Failure::new("export.failed", err.to_string()).with("reason", err)
+    }
+}
+
+/// A new file for an export of `what` ("players", "staff", "clubs", "changes") in `folder`, named after the in-game date:
+/// the first of "players-2027-01-02.json", "players-2027-01-02-2.json", ... that is not there yet.
 fn new_export_file(
     folder: &Path,
     what: &str,
@@ -2432,6 +3438,121 @@ fn club_details(state: State<'_, AppState>, uid: u32) -> Result<ClubDetails, Fai
     connection.session.club_details(club)?.ok_or_else(data_changed)
 }
 
+/// Whether this build of the game has national teams the editor can show: the National teams tab says why when it has
+/// none. Only reads what the connection holds.
+#[tauri::command]
+fn national_status(state: State<'_, AppState>) -> Result<NationalStatus, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    Ok(match &connection.nationals {
+        Ok(nationals) => NationalStatus { available: true, reason: None, teams: nationals.len() },
+        Err(reason) => NationalStatus { available: false, reason: Some(*reason), teams: 0 },
+    })
+}
+
+/// Whether the National teams tab can show national teams, and if not, why.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NationalStatus {
+    available: bool,
+    /// "build": nobody has found where this build keeps them; "unreadable": the profile places them but what is there
+    /// does not read as the game's.
+    reason: Option<NationalUnavailable>,
+    teams: usize,
+}
+
+/// Nations' national teams matching `query` (a name or a code), the best known first; at most `limit` rows. `women`
+/// keeps to the men's or the women's teams.
+#[tauri::command]
+fn search_national_teams(
+    state: State<'_, AppState>,
+    query: String,
+    limit: usize,
+    women: Option<bool>,
+) -> Result<Page<NationalTeamSummary>, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let nationals = national_teams_of(connection)?;
+    Ok(page(nationals, &query, limit, |team| women.is_none_or(|women| team.women == women), |_| {}))
+}
+
+/// The nations' index, or the failure that says this build has none.
+fn national_teams_of(connection: &Connection) -> Result<&NationalIndex, Failure> {
+    connection.nationals.as_ref().map_err(|reason| {
+        Failure::new("national.unavailable", "The editor cannot read national teams on this version of the game.")
+            .with("reason", format!("{reason:?}"))
+    })
+}
+
+/// A national team as its profile shows it: its list row, its teams (the senior team and the youth teams), and the one
+/// asked for with its players.
+#[derive(Serialize)]
+struct NationalProfile {
+    team: NationalTeamSummary,
+    teams: Vec<NationalSide>,
+    squad: TeamView,
+}
+
+/// The national team `uid` with its teams, and the players of its team of kind `kind` (its senior team when none is
+/// asked for, or the first of its teams when it has no senior team), read now: each one's list row. Captains, cohesion
+/// and tactics are not read.
+#[tauri::command]
+fn national_squad(state: State<'_, AppState>, uid: u32, kind: Option<u8>) -> Result<NationalProfile, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let team = national_teams_of(connection)?.get(uid).ok_or_else(|| not_found(Entity::NationalTeam, uid))?;
+    let teams = connection.session.national_sides(team)?;
+    let shown = kind
+        .filter(|kind| teams.iter().any(|side| side.kind == *kind))
+        .or_else(|| teams.iter().find(|side| side.kind == SENIOR_KIND).or(teams.first()).map(|side| side.kind));
+    // A container the game gives no team at all has no squad to read.
+    let squad = match shown {
+        Some(kind) => connection.session.national_squad(team, kind, &connection.players)?,
+        None => fmlibre_core::ClubTeam {
+            index: 0,
+            kind: SENIOR_KIND,
+            age_limit: None,
+            captain: None,
+            vice_captain: None,
+            players: Vec::new(),
+        },
+    };
+    let squad = TeamView {
+        index: squad.index,
+        kind: squad.kind,
+        age_limit: squad.age_limit,
+        captain: None,
+        vice_captain: None,
+        human_club: false,
+        players: squad
+            .players
+            .into_iter()
+            .filter_map(|member| {
+                let player = connection.players.get(member.uid)?.clone();
+                Some(SquadRow {
+                    player,
+                    plays_here: member.plays_here,
+                    loan: member.loan,
+                    condition: member.condition,
+                    match_sharpness: member.match_sharpness,
+                    jadedness: member.jadedness,
+                    morale: member.morale,
+                    cohesion: None,
+                    tactics: None,
+                    trains: false,
+                    concerned_teammates: 0,
+                    injuries: member.injuries,
+                    bans: member.bans,
+                    attributes_frozen: connection.frozen.attributes.contains_key(&member.uid),
+                    fitness_frozen: connection.frozen.fitness.contains_key(&member.uid),
+                    positions_frozen: connection.frozen.positions.contains_key(&member.uid),
+                })
+            })
+            .collect(),
+    };
+    Ok(NationalProfile { team: team.clone(), teams, squad })
+}
+
 /// The full profile of the player with `uid`. Only reads memory.
 #[tauri::command]
 fn player_details(state: State<'_, AppState>, uid: u32) -> Result<PlayerDetails, Failure> {
@@ -2439,6 +3560,10 @@ fn player_details(state: State<'_, AppState>, uid: u32) -> Result<PlayerDetails,
     let connection = guard.as_ref().ok_or_else(not_connected)?;
     let player = connection.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
     let mut details = connection.session.player_details(player)?.ok_or_else(data_changed)?;
+    // The teammates his reasons to be unhappy are about, by name.
+    if let Some(contract) = details.contract.as_mut().filter(|contract| !contract.concerns.is_empty()) {
+        connection.session.name_concerns(&mut contract.concerns, connection.people(), &connection.players);
+    }
     // A loan that ends on the day this session's recall wrote, not undone, is the editor's doing.
     if let Some(loan) = details.loan.as_mut() {
         let until = loan.until.map(FmDate::to_number);
@@ -2797,22 +3922,42 @@ fn recall_loan(state: State<'_, AppState>, uid: u32) -> Result<Option<LoggedChan
             return Err(connection.with_names(err.into()));
         }
     };
-    let mut logged = connection.log_change(change, name, None);
-    if let Some(option) = option {
-        let entry = connection.log.last_mut().expect("just logged");
-        entry.recall = Some(RecallNote { option_fee: option.old });
-        entry.undo = Some(Undo::Recall(option));
-        logged = entry.clone();
-    }
-    Ok(Some(logged))
+    Ok(Some(connection.log_recall(change, name, option)))
 }
 
-/// Every change written this session, newest first.
+/// Makes the contract of the player or member of staff `uid` run `years` longer: the day it ends moves on by as many
+/// years (see `Session::extend_contract`). Logged as a change of `contract.expires`, which Undo in Changes takes back.
+#[tauri::command]
+fn extend_contract(state: State<'_, AppState>, entity: Entity, uid: u32, years: i64) -> Result<LoggedChange, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let (target, name) = connection.target(entity, uid)?;
+    match connection.session.extend_contract(&target, years) {
+        Ok(change) => Ok(connection.log_change(change, name, None)),
+        Err(err) => Err(connection.with_names(err.into())),
+    }
+}
+
+/// Every change written to the career the game has loaded, newest first: this connection's, and the earlier ones its
+/// history lists.
 #[tauri::command]
 fn change_log(state: State<'_, AppState>) -> Result<Vec<LoggedChange>, Failure> {
     let guard = state.0.lock()?;
     let connection = guard.as_ref().ok_or_else(not_connected)?;
     Ok(connection.log.iter().rev().cloned().collect())
+}
+
+/// Forgets the history of the career the game has loaded: its file is emptied, and the change log with it, this
+/// connection's changes too. Every change stays in the game; Undo can no longer take them back.
+#[tauri::command]
+fn clear_history(state: State<'_, AppState>) -> Result<(), Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    connection.history.clear().map_err(|err| {
+        Failure::new("app.history", format!("The history could not be cleared: {err}")).with("reason", err)
+    })?;
+    connection.log.clear();
+    Ok(())
 }
 
 /// Writes back the old value of the logged change `id`, provided the game still holds the
@@ -2909,6 +4054,56 @@ async fn move_player(
         // The contract made for a free agent ends on the day it says, given or not.
         let terms = MoveTerms { expires: terms.expires.or(plan.contract.map(|made| made.expires)), ..terms };
         Ok(connection.log_move(done, terms, paid, fee_plan.map(|plan| plan.fee)))
+    })
+    .await?
+}
+
+/// Checks that the transfer of the player `uid` to the club `club` can be arranged for the game to make the next day,
+/// for `fee` pounds, on the contract `terms`, and says what it would be; the error says why it cannot. Nothing is
+/// written. Off the window's thread: the first time, finding the game's transfers takes a few seconds.
+#[tauri::command]
+async fn plan_arranged_transfer(
+    app: tauri::AppHandle,
+    uid: u32,
+    club: u32,
+    terms: MoveTerms,
+    fee: Option<i64>,
+) -> Result<ArrangedPreview, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<ArrangedPreview, Failure> {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        let plan = connection.plan_arranged(uid, club, terms, fee.unwrap_or(0))?;
+        let name = |uid: u32| ClubName { uid, name: connection.club_name(uid) };
+        Ok(ArrangedPreview {
+            from: name(plan.from_club),
+            to: name(plan.to_club),
+            fee: plan.fee,
+            move_day: plan.move_day.to_number(),
+            contract: plan.terms,
+        })
+    })
+    .await?
+}
+
+/// Arranges the transfer of the player `uid` to the club `club` for the game to make the next day, for `fee` pounds,
+/// on the contract `terms`, worked out again from the game as it is now, and logs it. The game moves him, writes the
+/// move into his history and pays the fee on that day; until then one undo takes it back. Off the window's thread.
+#[tauri::command]
+async fn arrange_transfer(
+    app: tauri::AppHandle,
+    uid: u32,
+    club: u32,
+    terms: MoveTerms,
+    fee: Option<i64>,
+) -> Result<LoggedChange, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<LoggedChange, Failure> {
+        let state = app.state::<AppState>();
+        let mut guard = state.0.lock()?;
+        let connection = guard.as_mut().ok_or_else(not_connected)?;
+        let plan = connection.plan_arranged(uid, club, terms, fee.unwrap_or(0))?;
+        let done = connection.session.apply_arranged_transfer(&plan)?;
+        Ok(connection.log_arranged(done, &plan))
     })
     .await?
 }
@@ -3030,7 +4225,7 @@ fn move_staff(
     let connection = guard.as_mut().ok_or_else(not_connected)?;
     let plan = connection.plan_staff_move(uid, club, job, terms.unwrap_or_default())?;
     let done = connection.session.apply_staff_plan(&plan)?;
-    Ok(connection.log_staff(done, plan.contract))
+    Ok(connection.log_staff(done, plan.contract, None))
 }
 
 /// Gives the member of staff `uid` the job `job` (a contract code) at his club, and logs it.
@@ -3040,7 +4235,161 @@ fn change_staff_job(state: State<'_, AppState>, uid: u32, job: u8) -> Result<Log
     let connection = guard.as_mut().ok_or_else(not_connected)?;
     let plan = connection.plan_staff_job(uid, job)?;
     let done = connection.session.apply_staff_plan(&plan)?;
-    Ok(connection.log_staff(done, None))
+    Ok(connection.log_staff(done, None, None))
+}
+
+/// Checks that the member of staff `uid` can be released from his club, and names it; the error says why he cannot.
+/// Nothing is written.
+#[tauri::command]
+fn plan_staff_release(state: State<'_, AppState>, uid: u32) -> Result<ClubName, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let plan = connection.plan_staff_release(uid)?;
+    Ok(ClubName { uid: plan.from_club, name: connection.club_name(plan.from_club) })
+}
+
+/// Releases the member of staff `uid` from his club, worked out again from the game as it is now, and logs it: he has
+/// no club and no contract then, as the game's own staff without a club have none (see `Session::plan_staff_release`).
+/// One undo puts him back on his contract.
+#[tauri::command]
+fn release_staff(state: State<'_, AppState>, uid: u32) -> Result<LoggedChange, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let plan = connection.plan_staff_release(uid)?;
+    let done = connection.session.apply_staff_plan(&plan)?;
+    Ok(connection.log_staff(done, None, None))
+}
+
+/// The staff of the club `club` as the lists have them, the human manager first and then the best, each with why
+/// Release all staff would leave him at the club: the human manager, the board, a player-coach, ... (none for one it
+/// releases). Off the window's thread: each is checked as his release would be.
+#[tauri::command]
+async fn club_staff(app: tauri::AppHandle, club: u32) -> Result<Vec<ClubStaffRow>, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ClubStaffRow>, Failure> {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        Ok(connection
+            .staff
+            .iter()
+            .filter(|member| member.club_uid == Some(club))
+            .map(|member| ClubStaffRow {
+                member: member.clone(),
+                stays: connection.session.plan_staff_release(member).err().map(|err| connection.with_names(err.into())),
+            })
+            .collect())
+    })
+    .await?
+}
+
+/// Whether a release refused for `err` leaves the member of staff at his club for good, as Release all staff leaves
+/// the human manager, the board, a player-coach and one his club points at in another way: not a failure to report.
+fn stays_at_club(err: &MoveError) -> bool {
+    matches!(err, MoveError::You | MoveError::UnusualJob { .. } | MoveError::PlayerCoach | MoveError::StaffRole)
+}
+
+/// Releases every member of staff of the club `club` that can be released, one after another, each worked out from the
+/// game as the release before left it: the human manager, the board and those `stays_at_club` keeps stay. Logged as
+/// one batch, which `undo_batch` undoes, the last one first; a release that fails is reported and the others go on.
+/// Off the window's thread, as a club may have seventy.
+#[tauri::command]
+async fn release_club_staff(app: tauri::AppHandle, club: u32) -> Result<MassReport, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<MassReport, Failure> {
+        let state = app.state::<AppState>();
+        let mut guard = state.0.lock()?;
+        let connection = guard.as_mut().ok_or_else(not_connected)?;
+        connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        // A release changes the club's lists: refused once, not once for every member of staff.
+        if let Some(lock) = connection.session.structure_lock() {
+            return Err(MoveError::Locked(lock).into());
+        }
+        let members: Vec<u32> =
+            connection.staff.iter().filter(|member| member.club_uid == Some(club)).map(|member| member.uid).collect();
+        Ok(connection.staff_batch(members, |session, member| session.plan_staff_release(member), stays_at_club))
+    })
+    .await?
+}
+
+/// Whether a move of a club's whole staff leaves a member of staff refused for `err` at his club, as `stays_at_club`
+/// does for Release all staff, and a director of football or a manager whose place at the new club is taken, or is the
+/// human manager's: not a failure to report.
+fn stays_on_move(err: &MoveError) -> bool {
+    stays_at_club(err)
+        || matches!(err, MoveError::DirectorTaken { .. } | MoveError::ManagerTaken { .. } | MoveError::YourClub)
+}
+
+/// Who takes the new club's places for a director of football and for a manager as a whole staff moves there, one after
+/// another: once one of them takes a place, the next one for it is refused, as the game will refuse him by then.
+#[derive(Default)]
+struct PlacesTaken {
+    director: Option<u32>,
+    manager: Option<u32>,
+}
+
+impl PlacesTaken {
+    /// Refuses `plan` where it puts its member of staff into a place that one before him takes; else notes him there.
+    fn take(&mut self, plan: &StaffPlan) -> Result<(), MoveError> {
+        let (place, taken): (_, fn(u32) -> MoveError) = match plan.job.1 {
+            DIRECTOR_OF_FOOTBALL => (&mut self.director, |uid| MoveError::DirectorTaken { uid }),
+            MANAGER => (&mut self.manager, |uid| MoveError::ManagerTaken { uid }),
+            _ => return Ok(()),
+        };
+        match *place {
+            Some(uid) => Err(taken(uid)),
+            None => {
+                *place = Some(plan.member);
+                Ok(())
+            }
+        }
+    }
+}
+
+/// The staff of the club `club` as moving all of them to the club `to` would leave them, in the order the move takes
+/// them: each with why he would stay at his club (none for one who moves). Each is worked out from the game as it is
+/// now, but for the places for a director of football and a manager at the new club: one that one of them takes is
+/// taken for those after him. Refused as a whole for the same club, or a men's and a women's club. Nothing is written.
+/// Off the window's thread, as `club_staff`.
+#[tauri::command]
+async fn plan_club_staff_move(app: tauri::AppHandle, club: u32, to: u32) -> Result<Vec<ClubStaffRow>, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ClubStaffRow>, Failure> {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        let (joining, members) = connection.staff_move_all(club, to)?;
+        let mut places = PlacesTaken::default();
+        Ok(members
+            .into_iter()
+            .filter_map(|uid| connection.staff.get(uid))
+            .map(|member| {
+                let planned = connection.session.plan_staff_move(member, &joining, None);
+                let stays = planned.and_then(|plan| places.take(&plan)).err();
+                ClubStaffRow { member: member.clone(), stays: stays.map(|err| connection.with_names(err.into())) }
+            })
+            .collect())
+    })
+    .await?
+}
+
+/// Moves every member of staff of the club `club` that can be moved to the club `to`, each in his own job and on his
+/// contract, one after another in the order `plan_club_staff_move` lists them, each worked out from the game as the
+/// move before left it: those `stays_on_move` keeps stay. Logged as one batch, which `undo_batch` undoes, the last one
+/// first; a move that fails is reported and the others go on. Off the window's thread, as a club may have seventy.
+#[tauri::command]
+async fn move_club_staff(app: tauri::AppHandle, club: u32, to: u32) -> Result<MassReport, Failure> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<MassReport, Failure> {
+        let state = app.state::<AppState>();
+        let mut guard = state.0.lock()?;
+        let connection = guard.as_mut().ok_or_else(not_connected)?;
+        // A move changes the clubs' lists: refused once, not once for every member of staff.
+        if let Some(lock) = connection.session.structure_lock() {
+            return Err(MoveError::Locked(lock).into());
+        }
+        let (joining, members) = connection.staff_move_all(club, to)?;
+        let plan = |session: &Session, member: &StaffSummary| session.plan_staff_move(member, &joining, None);
+        Ok(connection.staff_batch(members, plan, stays_on_move))
+    })
+    .await?
 }
 
 /// The jobs `change_staff_job` gives, and a move or a signing of staff can, by contract code: in the game connected
@@ -3241,6 +4590,35 @@ fn rename_stadium(
     Ok(logged)
 }
 
+/// The names of the player `uid` as stored, and how many new names the game's tables of names take (see `names.rs`).
+/// Only reads memory.
+#[tauri::command]
+fn player_names(state: State<'_, AppState>, uid: u32) -> Result<PersonNames, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let player = connection.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
+    Ok(connection.session.player_names(player)?)
+}
+
+/// Gives the player `uid` the name `name` of kind `kind` (his first, last, common or full name), or with none takes his
+/// common or full name away, as the game names a person it makes (see `names.rs`). Logged and undone like any change.
+/// The game keeps people's names in its saves, so the name stays once the game is saved.
+#[tauri::command]
+fn rename_player(
+    state: State<'_, AppState>,
+    uid: u32,
+    kind: NameKind,
+    name: Option<String>,
+) -> Result<LoggedChange, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let player = connection.players.get(uid).ok_or_else(|| not_found(Entity::Player, uid))?;
+    let plan = connection.session.plan_player_name(player, kind, name.as_deref())?;
+    let done = connection.session.apply_name_change(&plan)?;
+    connection.renamed_player(uid);
+    Ok(connection.log_name(done))
+}
+
 /// Gives the contract of the player `uid`, which has none, a release clause of `amount` pounds, where its list has
 /// room. Logged and undone like any change.
 #[tauri::command]
@@ -3325,6 +4703,108 @@ fn scouting_suggest(state: State<'_, AppState>, request: ScoutRequest) -> Result
     Ok(connection.session.scout(&request, &buyer, &connection.players, &connection.clubs, &connection.human_clubs)?)
 }
 
+/// The players of one list of opportunities (contracts running out, release clauses below a player's value, unhappy
+/// players, clubs in the red, the transfer and loan lists, wonderkids) for the human manager's club, and how many every
+/// list holds. Only reads memory.
+#[tauri::command]
+fn scouting_opportunities(
+    state: State<'_, AppState>,
+    request: fmlibre_core::OpportunityRequest,
+) -> Result<fmlibre_core::Opportunities, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let club = scouting_club(connection)?;
+    let buyer = scouting_buyer(connection, club)?;
+    let (players, clubs, humans) = (&connection.players, &connection.clubs, &connection.human_clubs);
+    Ok(connection.session.opportunities(&request, &buyer, players, clubs, humans)?)
+}
+
+/// Players like the player `request.uid` at a position, most alike first, as signings for the human manager's club.
+/// Only reads memory.
+#[tauri::command]
+fn scouting_similar(
+    state: State<'_, AppState>,
+    request: fmlibre_core::SimilarRequest,
+) -> Result<fmlibre_core::Similar, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let club = scouting_club(connection)?;
+    let buyer = scouting_buyer(connection, club)?;
+    let reference = connection.players.get(request.uid).ok_or_else(|| not_found(Entity::Player, request.uid))?;
+    let (players, clubs, humans) = (&connection.players, &connection.clubs, &connection.human_clubs);
+    Ok(connection.session.similar(reference, &request, &buyer, players, clubs, humans)?)
+}
+
+/// The youth intakes of the club `club`, or of the human manager's club when none is given: the players the game made
+/// who began their careers there, by the day they joined it, the newest first. Only reads memory.
+#[tauri::command]
+fn youth_intakes(state: State<'_, AppState>, club: Option<u32>) -> Result<fmlibre_core::YouthIntakes, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let club = match club {
+        Some(uid) => connection.clubs.get(uid).ok_or_else(|| not_found(Entity::Club, uid))?,
+        None => scouting_club(connection)?,
+    };
+    Ok(connection.session.youth_intakes(club, &connection.players)?)
+}
+
+/// The cities the players of the save were born in, each once, by name: what a player's city of birth can be set to.
+/// Only reads memory.
+#[tauri::command]
+fn birth_cities(state: State<'_, AppState>) -> Result<Vec<fmlibre_core::City>, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    Ok(connection.session.birth_cities(connection.players.iter()))
+}
+
+/// The headers of `save_scout_report`: the UID of the player the report is about, and what the body is, "png" or
+/// "pdf".
+const REPORT_PLAYER_HEADER: &str = "x-fmlibre-player";
+const REPORT_FORMAT_HEADER: &str = "x-fmlibre-format";
+
+/// A player's name as part of a file name: its letters and digits in lower case, words joined by dashes.
+fn file_slug(name: &str) -> String {
+    let words: Vec<String> =
+        name.split(|c: char| !c.is_alphanumeric()).filter(|word| !word.is_empty()).map(str::to_lowercase).collect();
+    words.join("-")
+}
+
+/// Saves the scout report the request's body holds, a PNG picture or a PDF (as the `x-fmlibre-format` header says), to
+/// a new file in the exports folder, named after the player whose UID the `x-fmlibre-player` header gives and the
+/// in-game date ("scout-report-arda-güler-2027-01-02.png").
+#[tauri::command]
+fn save_scout_report(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<ExportReport, Failure> {
+    let header = |name: &str| request.headers().get(name).and_then(|value| value.to_str().ok());
+    let (extension, signature): (&str, &[u8]) = match header(REPORT_FORMAT_HEADER) {
+        Some("pdf") => ("pdf", b"%PDF-"),
+        _ => ("png", b"\x89PNG\r\n\x1a\n"),
+    };
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err(Failure::new("export.failed", "The report came without its file.").with("reason", "no file"));
+    };
+    if !bytes.starts_with(signature) {
+        let reason = format!("not a {}", extension.to_uppercase());
+        return Err(Failure::new("export.failed", format!("The report is {reason}.")).with("reason", reason));
+    }
+    let uid = header(REPORT_PLAYER_HEADER).and_then(|value| value.parse::<u32>().ok());
+    let folder = app.state::<ExportsFolder>().0.clone();
+    let folder = folder.ok_or_else(|| Failure::new("export.noFolder", "There is no folder to export to."))?;
+    let (name, date) = {
+        let state = app.state::<AppState>();
+        let guard = state.0.lock()?;
+        let connection = guard.as_ref().ok_or_else(not_connected)?;
+        let name = uid.and_then(|uid| connection.players.get(uid)).map(|player| file_slug(&player.name));
+        (name.filter(|name| !name.is_empty()).unwrap_or_else(|| "player".to_owned()), connection.session.game_date())
+    };
+    let failed = |err: std::io::Error| export_failure(&folder, err);
+    std::fs::create_dir_all(&folder).map_err(failed)?;
+    let (path, mut file) =
+        new_export_file(&folder, &format!("scout-report-{name}"), date, extension).map_err(failed)?;
+    std::io::Write::write_all(&mut file, bytes).map_err(failed)?;
+    let file = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(ExportReport { path, file, folder, count: 1, skipped: 0 })
+}
+
 /// The teams of the club `uid`, the senior team first, with their players: each one's list
 /// row and the live values a squad screen shows, read now.
 #[tauri::command]
@@ -3333,35 +4813,57 @@ fn club_squads(state: State<'_, AppState>, uid: u32) -> Result<Vec<TeamView>, Fa
     let connection = guard.as_ref().ok_or_else(not_connected)?;
     let club = connection.clubs.get(uid).ok_or_else(|| not_found(Entity::Club, uid))?;
     let teams = connection.session.club_teams(club, &connection.players)?;
+    // Cohesion is shown only where the lists checked out: a build that moved them would read other bytes. So is how
+    // well the players know the tactic.
+    let cohesion_read = connection.session.health().passed(fmlibre_core::Check::Cohesion);
+    let tactics_read = connection.session.health().passed(fmlibre_core::Check::Tactics);
+    // Who the club's players hold reasons to be unhappy about, across its teams.
+    let members: BTreeSet<u32> = teams.iter().flat_map(|team| team.players.iter().map(|member| member.uid)).collect();
+    let members: Vec<&PlayerSummary> = members.iter().filter_map(|&uid| connection.players.get(uid)).collect();
+    let concerned = connection.session.concerned_teammates(&members);
     Ok(teams
         .into_iter()
-        .map(|team| TeamView {
-            index: team.index,
-            kind: team.kind,
-            age_limit: team.age_limit,
-            captain: team.captain,
-            vice_captain: team.vice_captain,
-            players: team
-                .players
-                .into_iter()
-                .filter_map(|member| {
-                    let player = connection.players.get(member.uid)?.clone();
-                    Some(SquadRow {
-                        player,
-                        plays_here: member.plays_here,
-                        loan: member.loan,
-                        condition: member.condition,
-                        match_sharpness: member.match_sharpness,
-                        jadedness: member.jadedness,
-                        morale: member.morale,
-                        injuries: member.injuries,
-                        bans: member.bans,
-                        attributes_frozen: connection.frozen.attributes.contains_key(&member.uid),
-                        fitness_frozen: connection.frozen.fitness.contains_key(&member.uid),
-                        positions_frozen: connection.frozen.positions.contains_key(&member.uid),
+        .map(|team| {
+            let known = tactics_read
+                .then(|| connection.session.team_familiarity(club, team.index, &connection.players).ok().flatten())
+                .flatten()
+                .unwrap_or_default();
+            TeamView {
+                index: team.index,
+                kind: team.kind,
+                age_limit: team.age_limit,
+                captain: team.captain,
+                vice_captain: team.vice_captain,
+                human_club: connection.human_clubs.contains(&uid),
+                players: team
+                    .players
+                    .into_iter()
+                    .filter_map(|member| {
+                        let player = connection.players.get(member.uid)?.clone();
+                        let cohesion =
+                            cohesion_read.then(|| connection.session.cohesion(&player, club).ok().flatten()).flatten();
+                        let familiarity = known.get(&member.uid);
+                        Some(SquadRow {
+                            player,
+                            plays_here: member.plays_here,
+                            loan: member.loan,
+                            condition: member.condition,
+                            match_sharpness: member.match_sharpness,
+                            jadedness: member.jadedness,
+                            morale: member.morale,
+                            cohesion,
+                            tactics: familiarity.map(|f| f.overall),
+                            trains: familiarity.is_some_and(|f| f.trains),
+                            concerned_teammates: concerned.get(&member.uid).copied().unwrap_or(0),
+                            injuries: member.injuries,
+                            bans: member.bans,
+                            attributes_frozen: connection.frozen.attributes.contains_key(&member.uid),
+                            fitness_frozen: connection.frozen.fitness.contains_key(&member.uid),
+                            positions_frozen: connection.frozen.positions.contains_key(&member.uid),
+                        })
                     })
-                })
-                .collect(),
+                    .collect(),
+            }
         })
         .collect())
 }
@@ -3388,28 +4890,198 @@ fn set_captain(
     Ok(connection.log_captain(done))
 }
 
+/// Heals, inspires or refreshes every player the senior team of the national team `uid` lists, read now, as Heal all,
+/// Inspire all and Refresh all do for a club's team. The changes are logged as one batch, which `undo_batch` undoes.
+#[tauri::command]
+fn national_team_action(state: State<'_, AppState>, uid: u32, action: TeamAction) -> Result<MassReport, Failure> {
+    if !matches!(action, TeamAction::Heal | TeamAction::Inspire | TeamAction::Refresh) {
+        return Err(Failure::new("national.action", "A national team has Heal all, Inspire all and Refresh all only."));
+    }
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let team = national_teams_of(connection)?.get(uid).ok_or_else(|| not_found(Entity::NationalTeam, uid))?;
+    let members = connection.session.national_squad(team, SENIOR_KIND, &connection.players)?.players;
+    let batch = connection.fresh_id();
+    act_on_players(connection, &members, action, batch)
+}
+
 /// Does `action` to every player of the team `team` of the club `club`, read now: those out
 /// on loan too. The changes are logged as one batch, which `undo_batch` undoes.
 #[tauri::command]
-fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamAction) -> Result<MassReport, Failure> {
+fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamAction) -> Result<TeamReport, Failure> {
     let mut guard = state.0.lock()?;
     let connection = guard.as_mut().ok_or_else(not_connected)?;
-    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+    // A copy, for the log can be written while it is in use.
+    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?.clone();
     let members = connection
         .session
-        .club_teams(summary, &connection.players)?
+        .club_teams(&summary, &connection.players)?
         .into_iter()
         .find(|found| found.index == team)
         .ok_or(MoveError::NoTeam { index: team })?
         .players;
+    let batch = connection.fresh_id();
+    match action {
+        TeamAction::MaxCohesion | TeamAction::MinCohesion => {
+            Ok(set_cohesion(connection, &summary, &members, batch, action == TeamAction::MaxCohesion).0.into())
+        }
+        TeamAction::MaxTactics | TeamAction::MinTactics => {
+            let report = set_tactics(connection, &summary, team, batch, action == TeamAction::MaxTactics)?;
+            Ok(report.unwrap_or(MassReport { batch, applied: 0, failed: Vec::new() }).into())
+        }
+        TeamAction::AtItsBest => Ok(run_steps(connection, &summary, team, &members, batch, &AT_ITS_BEST)),
+        TeamAction::Destroy => Ok(run_steps(connection, &summary, team, &members, batch, &DESTROY)),
+        _ => act_on_players(connection, &members, action, batch).map(TeamReport::from),
+    }
+}
+
+/// Team at its best or Destroy: every one of `steps` under the one batch `batch`, so one Undo takes them all back. A
+/// step that cannot run (nobody injured, a lock, a part of the game this version has not been checked for, a team whose
+/// tactic no human picks) is left out and named, and the others still run.
+fn run_steps(
+    connection: &mut Connection,
+    summary: &ClubSummary,
+    team: usize,
+    members: &[SquadMember],
+    batch: u32,
+    steps: &[TeamAction],
+) -> TeamReport {
+    let mut done = TeamReport::from(MassReport { batch, applied: 0, failed: Vec::new() });
+    for &action in steps {
+        let ran = match action {
+            TeamAction::Heal if !members.iter().any(|member| member.injuries > 0) => {
+                Err(Failure::new("team.nobodyInjured", "nobody in the team is injured"))
+            }
+            TeamAction::MaxCohesion | TeamAction::MinCohesion => {
+                match set_cohesion(connection, summary, members, batch, action == TeamAction::MaxCohesion) {
+                    (report, true) => Ok(report),
+                    (_, false) => Err(Failure::new(
+                        "team.noCohesion",
+                        "no player of the team has an entry for cohesion with the club that the editor can read",
+                    )),
+                }
+            }
+            TeamAction::MaxTactics | TeamAction::MinTactics => {
+                set_tactics(connection, summary, team, batch, action == TeamAction::MaxTactics).and_then(|report| {
+                    report.ok_or_else(|| {
+                        Failure::new("team.noTactics", "the editor cannot read how well the team knows its tactic")
+                    })
+                })
+            }
+            _ => act_on_players(connection, members, action, batch),
+        };
+        match ran {
+            Ok(report) => {
+                done.report.applied += report.applied;
+                done.report.failed.extend(report.failed);
+            }
+            Err(reason) => done.skipped.push(SkippedStep { action, reason }),
+        }
+    }
+    done
+}
+
+/// Cohesion with the club at its best, 100, or with `best` false at its least, 1, for every one of `members` who has an
+/// entry for the club, logged under `batch`: one is added nowhere, and the app counts those without one. One there
+/// already, or past it, is left as it is. The game shows the team's cohesion on its Dynamics page once it moves on.
+/// Also says whether any of them has an entry the editor could read.
+fn set_cohesion(
+    connection: &mut Connection,
+    summary: &ClubSummary,
+    members: &[SquadMember],
+    batch: u32,
+    best: bool,
+) -> (MassReport, bool) {
+    let (least, most) = COHESION_RANGE;
+    let value = if best { most } else { least };
+    let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+    let mut read = false;
+    for member in members {
+        let Some(player) = connection.players.get(member.uid) else {
+            continue;
+        };
+        let name = player.name.clone();
+        let planned = connection.session.plan_cohesion(player, summary, value);
+        read |= matches!(planned, Ok(Some(_)));
+        let set = match planned {
+            Ok(Some(plan)) if (best && plan.before >= value) || (!best && plan.before <= value) => continue,
+            Ok(Some(plan)) => connection.session.apply_cohesion(&plan),
+            Ok(None) => continue,
+            Err(err) => Err(err),
+        };
+        match set {
+            Ok(done) => {
+                connection.log_cohesion(done, Some(batch));
+                report.applied += 1;
+            }
+            Err(err) => report.failed.push(MassFailure {
+                uid: member.uid,
+                name,
+                field: "cohesion".to_owned(),
+                error: err.into(),
+            }),
+        }
+    }
+    (report, read)
+}
+
+/// The tactic the human manager plays with the team at `team` of the club known at its best, or with `best` false at
+/// its least, logged under `batch`: each player's record and history of training (see `familiarity.rs`). One the game
+/// keeps no history for has his record written; the app counts them. None where the editor cannot read the team's
+/// familiarity with its tactic, as for a team whose tactic no human picks.
+fn set_tactics(
+    connection: &mut Connection,
+    summary: &ClubSummary,
+    team: usize,
+    batch: u32,
+    best: bool,
+) -> Result<Option<MassReport>, Failure> {
+    if let Some(lock) = connection.session.tactics_lock().or_else(|| connection.session.structure_lock()) {
+        return Err(MoveError::Locked(lock).into());
+    }
+    let (session, players) = (&connection.session, &connection.players);
+    let planned = if best {
+        session.plan_max_tactics(summary, team, players)?
+    } else {
+        session.plan_min_tactics(summary, team, players)?
+    };
+    let Some(plans) = planned else {
+        return Ok(None);
+    };
+    let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
+    for plan in plans.iter().filter(|plan| plan.writes()) {
+        let name = connection.player_name(plan.player);
+        match connection.session.apply_tactics(plan) {
+            Ok(done) => {
+                connection.log_tactics(done, Some(batch));
+                report.applied += 1;
+            }
+            Err(err) => report.failed.push(MassFailure {
+                uid: plan.player,
+                name,
+                field: "tactics".to_owned(),
+                error: err.into(),
+            }),
+        }
+    }
+    Ok(Some(report))
+}
+
+/// Does `action` to `members`, the players of one team, logged under `batch`: the actions a club's team and a national
+/// team share. Cohesion, tactics, Team at its best and Destroy need the club, and are `team_action`'s own.
+fn act_on_players(
+    connection: &mut Connection,
+    members: &[SquadMember],
+    action: TeamAction,
+    batch: u32,
+) -> Result<MassReport, Failure> {
     // Healing and lifting bans change the players' records: refused once, not once for every player.
     if matches!(action, TeamAction::Heal | TeamAction::LiftBans)
         && let Some(lock) = connection.session.structure_lock()
     {
         return Err(MoveError::Locked(lock).into());
     }
-    let batch = connection.fresh_id();
-    let values: &[(&str, i64)] = match action {
+    let values: &[(&str, Operation)] = match action {
         TeamAction::Heal => {
             let mut report = MassReport { batch, applied: 0, failed: Vec::new() };
             for member in members.iter().filter(|member| member.injuries > 0) {
@@ -3459,11 +5131,27 @@ fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamA
             }
             return Ok(report);
         }
-        // Morale at its best, and the reasons to be unhappy gone, as FMRTE's Inspire does.
-        TeamAction::Inspire => &[("morale", 20), ("contract.unhappiness", 0)],
+        // Morale at its best, and the reasons to be unhappy gone.
+        TeamAction::Inspire => {
+            &[("morale", Operation::Set { value: 20 }), ("contract.unhappiness", Operation::Set { value: 0 })]
+        }
         // Rested as the game rests a player: full energy and sharpness, and jadedness at its least.
-        TeamAction::Refresh => &[("condition", 10_000), ("match_sharpness", 10_000), ("jadedness", -500)],
+        TeamAction::Refresh => &[
+            ("condition", Operation::Set { value: 10_000 }),
+            ("match_sharpness", Operation::Set { value: 10_000 }),
+            ("jadedness", Operation::Set { value: -500 }),
+        ],
+        TeamAction::Demoralize => &DEMORALIZE,
+        TeamAction::Exhaust => &EXHAUST,
         TeamAction::MaxAttributes => &[],
+        TeamAction::MaxCohesion
+        | TeamAction::MaxTactics
+        | TeamAction::AtItsBest
+        | TeamAction::MinCohesion
+        | TeamAction::MinTactics
+        | TeamAction::Destroy => {
+            return Err(Failure::new("team.action", "This action needs the club the team belongs to."));
+        }
     };
     let targets: Vec<(Target, String)> = members
         .iter()
@@ -3475,10 +5163,62 @@ fn team_action(state: State<'_, AppState>, club: u32, team: usize, action: TeamA
     } else {
         values
             .iter()
-            .map(|&(key, value)| Ok((connection.session.field(Entity::Player, key)?, Operation::Set { value })))
+            .map(|&(key, operation)| Ok((connection.session.field(Entity::Player, key)?, operation)))
             .collect::<Result<Vec<_>, EditError>>()?
     };
     let plan = connection.session.plan_mass_edit(&targets, &operations)?;
+    Ok(connection.write_planned(Entity::Player, plan.planned, batch))
+}
+
+/// Adds and/or removes traits for all players in a team of a club.
+/// Traits in `add_traits` are set to 1 (if not already 1).
+/// Traits in `remove_traits` are set to 0 (if not already 0).
+#[tauri::command]
+fn batch_traits_team(
+    state: State<'_, AppState>,
+    club: u32,
+    team: usize,
+    add_traits: Vec<u8>,
+    remove_traits: Vec<u8>,
+) -> Result<MassReport, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    if let Some(lock) = connection.session.structure_lock() {
+        return Err(MoveError::Locked(lock).into());
+    }
+    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?.clone();
+    let members = connection
+        .session
+        .club_teams(&summary, &connection.players)?
+        .into_iter()
+        .find(|found| found.index == team)
+        .ok_or(MoveError::NoTeam { index: team })?
+        .players;
+
+    let targets: Vec<(Target, String)> = members
+        .iter()
+        .filter_map(|member| connection.players.get(member.uid))
+        .map(|player| (player.target(), player.name.clone()))
+        .collect();
+
+    let mut operations = Vec::new();
+    for bit in add_traits {
+        let field_key = format!("trait.{bit}");
+        let field = connection.session.field(Entity::Player, &field_key)?;
+        operations.push((field, Operation::Set { value: 1 }));
+    }
+    for bit in remove_traits {
+        let field_key = format!("trait.{bit}");
+        let field = connection.session.field(Entity::Player, &field_key)?;
+        operations.push((field, Operation::Set { value: 0 }));
+    }
+
+    if operations.is_empty() {
+        return Ok(MassReport { batch: connection.fresh_id(), applied: 0, failed: Vec::new() });
+    }
+
+    let plan = connection.session.plan_mass_edit(&targets, &operations)?;
+    let batch = connection.fresh_id();
     Ok(connection.write_planned(Entity::Player, plan.planned, batch))
 }
 
@@ -3585,11 +5325,13 @@ fn apply_mass_edit(state: State<'_, AppState>, id: u32) -> Result<MassReport, Fa
 }
 
 /// Undoes every change of the mass edit `batch` that is not undone yet, newest first.
-/// Changes the game has changed since are left as they are and reported.
+/// Changes the game has changed since are left as they are and reported. Refused at once
+/// while the game has loaded a save since the lists were read, as each undo would be.
 #[tauri::command]
 fn undo_batch(state: State<'_, AppState>, batch: u32) -> Result<BatchUndo, Failure> {
     let mut guard = state.0.lock()?;
     let connection = guard.as_mut().ok_or_else(not_connected)?;
+    connection.refuse_after_load()?;
     let ids: Vec<usize> = connection
         .log
         .iter()
@@ -3613,7 +5355,7 @@ pub fn run() {
         // Opens the page of a new release in the browser (see app/src/update.ts).
         .plugin(tauri_plugin_opener::init())
         // Downloads a new version, checks its signature against the key in tauri.conf.json and installs it: the
-        // installer on Windows, the app in place of this one on macOS.
+        // installer on Windows, the app in place of this one on macOS (see self_update.rs).
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .manage(Graphics::default())
@@ -3630,6 +5372,7 @@ pub fn run() {
                 None => user_data.ok().map(|folder| GraphicsIndex::default_root(&folder, 27)),
             };
             let data = std::env::var_os(DATA_FOLDER).map(PathBuf::from).or_else(|| app.path().app_data_dir().ok());
+            app.manage(HistoryFolder(data.as_ref().map(|folder| folder.join(HISTORY_FOLDER))));
             app.manage(FrozenFile(data.map(|folder| folder.join(FROZEN_FILE))));
             let exports = std::env::var_os(EXPORTS_FOLDER)
                 .map(PathBuf::from)
@@ -3669,12 +5412,23 @@ pub fn run() {
             connect,
             current_connection,
             allow_editing,
+            save_changed,
             reload,
+            diagnostics,
             search_players,
             search_staff,
             search_clubs,
+            club_leagues,
+            league_prizes,
+            club_sponsorships,
+            set_league_prizes,
+            national_status,
+            search_national_teams,
+            national_squad,
             export_players,
+            export_staff,
             export_clubs,
+            export_changes,
             open_export,
             show_export,
             player_details,
@@ -3698,7 +5452,9 @@ pub fn run() {
             club_diagnostics,
             apply_edits,
             recall_loan,
+            extend_contract,
             change_log,
+            clear_history,
             undo_change,
             plan_mass_edit,
             apply_mass_edit,
@@ -3706,6 +5462,8 @@ pub fn run() {
             plan_club_move,
             room_makers,
             move_player,
+            plan_arranged_transfer,
+            arrange_transfer,
             plan_loan_permanent,
             make_loan_permanent,
             plan_release,
@@ -3715,6 +5473,12 @@ pub fn run() {
             plan_staff_move,
             move_staff,
             change_staff_job,
+            plan_staff_release,
+            release_staff,
+            club_staff,
+            release_club_staff,
+            plan_club_staff_move,
+            move_club_staff,
             staff_jobs,
             heal_player,
             lift_bans,
@@ -3727,16 +5491,26 @@ pub fn run() {
             add_release_clause,
             stadium_name,
             rename_stadium,
+            player_names,
+            rename_player,
             homegrown_rules,
             club_squads,
             scouting_overview,
             scouting_suggest,
+            scouting_opportunities,
+            scouting_similar,
+            save_scout_report,
+            youth_intakes,
+            birth_cities,
             set_captain,
             team_action,
+            national_team_action,
+            batch_traits_team,
             max_attributes,
             graphics_info,
-            can_self_update,
-            restart_app,
+            self_update::can_self_update,
+            self_update::install_update,
+            self_update::restart_app,
             bridge::bridge_status,
             bridge::set_up_bridge,
             bridge::remove_bridge
@@ -3748,6 +5522,26 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn release_all_leaves_the_board_and_reports_what_went_wrong() {
+        // Those who stay are not failures: the human manager, the board, a player-coach, one held in another way.
+        for stays in [MoveError::You, MoveError::UnusualJob { job: 4 }, MoveError::PlayerCoach, MoveError::StaffRole] {
+            assert!(stays_at_club(&stays), "{stays}");
+        }
+        // A release the game's memory did not let through is.
+        for failed in [MoveError::Changed { address: 0x10 }, MoveError::NotInDepartment, MoveError::UnusualContract] {
+            assert!(!stays_at_club(&failed), "{failed}");
+        }
+    }
+
+    #[test]
+    fn report_files_are_named_after_the_player() {
+        assert_eq!(file_slug("Arda Güler"), "arda-güler");
+        assert_eq!(file_slug("N'Golo Kanté"), "n-golo-kanté");
+        assert_eq!(file_slug("  Vinícius Júnior / 7 "), "vinícius-júnior-7");
+        assert_eq!(file_slug("?:*"), "");
+    }
 
     #[test]
     fn frozen_files_of_earlier_versions_are_read() {
@@ -3829,5 +5623,131 @@ mod tests {
         let written = serde_json::to_string(&save).expect("written");
         let read: RememberedSave = serde_json::from_str(&written).expect("read back");
         assert!(read.players.contains(&8) && read.fitness.contains(&7) && read.positions.contains(&9));
+    }
+
+    /// A change of a player of this connection, as the log keeps it.
+    fn logged(id: usize, field: &str, old: i64, new: i64, batch: Option<u32>) -> LoggedChange {
+        LoggedChange {
+            id,
+            at: 1_700_000_000_000 + id as u64,
+            name: format!("Player {id}"),
+            change: Change { entity: Entity::Player, uid: 1000 + id as u32, field: field.to_owned(), old, new },
+            undone_at: None,
+            batch,
+            earlier: false,
+            undoable: true,
+            in_game: None,
+            moved: None,
+            captaincy: None,
+            tie: None,
+            clause: None,
+            recall: None,
+            stadium: None,
+            person_name: None,
+            objects: None,
+            prize: None,
+            stored: None,
+            undo: None,
+        }
+    }
+
+    /// `logged` as a line of the history of the connection called `session`.
+    fn line(logged: &LoggedChange, session: &str) -> HistoryLine {
+        HistoryLine::Change(Box::new(StoredChange::of(logged, session)))
+    }
+
+    /// A folder of a test's own under the system's temporary folder, empty.
+    fn test_folder(name: &str) -> PathBuf {
+        let folder = std::env::temp_dir().join(format!("fmlibre-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        folder
+    }
+
+    #[test]
+    fn history_files_are_named_after_the_career() {
+        assert_eq!(history_file_name("Steam:28122642"), "Steam-28122642.jsonl");
+        assert_eq!(history_file_name("GamePass:1+2"), "GamePass-1+2.jsonl");
+        assert_eq!(history_file_name(r"Steam:..\x"), "Steam----x.jsonl");
+    }
+
+    #[test]
+    fn the_history_lists_the_changes_of_two_connections_again_with_their_undos() {
+        let folder = test_folder("history");
+        let career = Some("Steam:1");
+        let (mut first, log) = History::open(Some(&folder), career);
+        assert!(log.is_empty());
+        first.session = "first".to_owned();
+        let (mut second, _) = History::open(Some(&folder), career);
+        second.session = "second".to_owned();
+        // A value, a recall from loan that took the option to buy away, and a mass edit, which both connections number 1.
+        let value = logged(1, "attribute.finishing", 70, 100, None);
+        let option =
+            Change { entity: Entity::Player, uid: 1002, field: LOAN_OPTION_FEE.to_owned(), old: 5_000_000, new: -1 };
+        let recall = LoggedChange {
+            recall: Some(RecallNote { option_fee: 5_000_000 }),
+            undo: Some(Undo::Recall(option)),
+            ..logged(2, LOAN_EXPIRES, 20270630, 20261115, None)
+        };
+        for change in [&value, &recall, &logged(3, "morale", 10, 20, Some(1)), &logged(4, "morale", 12, 20, Some(1))] {
+            first.add(&line(change, "first"));
+        }
+        // A move, whose undo needed the game's memory as it was.
+        let mut moved = StoredChange::of(&logged(1, "club", 728, 1139, None), "second");
+        moved.plain = false;
+        moved.moved = Some(MovedClubs {
+            from: Some("Tottenham".to_owned()),
+            to: Some("Juventus".to_owned()),
+            with: None,
+            released: None,
+            fee: None,
+            arranged: None,
+        });
+        second.add(&HistoryLine::Change(Box::new(moved)));
+        second.add(&line(&logged(2, "morale", 9, 20, Some(1)), "second"));
+        first.add(&HistoryLine::Undone { session: "first".to_owned(), id: 1, at: 99 });
+        // A change listed twice, a line that is no JSON and one cut short by a crash: passed over.
+        first.add(&line(&value, "first"));
+        drop((first, second));
+        let path = folder.join(history_file_name("Steam:1"));
+        let mut file = OpenOptions::new().append(true).open(&path).expect("the history file");
+        file.write_all(b"not json\n{\"line\":\"change\",\"sess").expect("written");
+        drop(file);
+
+        let (_, log) = History::open(Some(&folder), career);
+        assert_eq!(log.iter().map(|logged| logged.id).collect::<Vec<_>>(), [1, 2, 3, 4, 5, 6]);
+        assert!(log.iter().all(|logged| logged.earlier));
+        let [value, recall, mass, same_mass, moved, other_mass] = &log[..] else {
+            panic!("six changes");
+        };
+        assert_eq!(value.undone_at, Some(99));
+        assert_eq!((value.change.old, value.change.new, value.undoable), (70, 100, true));
+        assert!(recall.undoable && matches!(&recall.undo, Some(Undo::Recall(option)) if option.old == 5_000_000));
+        assert_eq!(recall.recall.as_ref().map(|note| note.option_fee), Some(5_000_000));
+        assert!(mass.batch.is_some() && mass.batch == same_mass.batch);
+        assert_ne!(mass.batch, other_mass.batch, "the mass edits of two connections are told apart");
+        assert!(!moved.undoable && moved.undo.is_none());
+        assert_eq!(moved.moved.as_ref().and_then(|clubs| clubs.to.as_deref()), Some("Juventus"));
+        assert_eq!(moved.stored, Some(StoredKey { session: "second".to_owned(), id: 1 }));
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn a_cleared_history_lists_nothing_and_goes_on_after() {
+        let folder = test_folder("history-clear");
+        let career = Some("GamePass:7");
+        let (mut history, _) = History::open(Some(&folder), career);
+        history.add(&line(&logged(1, "morale", 10, 20, None), "one"));
+        assert_eq!(History::open(Some(&folder), career).1.len(), 1);
+        history.clear().expect("cleared");
+        assert!(History::open(Some(&folder), career).1.is_empty());
+        history.add(&line(&logged(1, "morale", 20, 15, None), "two"));
+        let (_, log) = History::open(Some(&folder), career);
+        assert_eq!(log.iter().map(|logged| logged.change.new).collect::<Vec<_>>(), [15]);
+        // Without a data folder, or a career, nothing is kept and nothing fails.
+        let (mut nowhere, log) = History::open(None, career);
+        assert!(log.is_empty() && nowhere.clear().is_ok());
+        nowhere.add(&HistoryLine::Undone { session: "x".to_owned(), id: 1, at: 1 });
+        assert!(History::open(Some(&folder), None).1.is_empty());
+        let _ = std::fs::remove_dir_all(&folder);
     }
 }

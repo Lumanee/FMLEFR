@@ -2,6 +2,7 @@
 //! game's task port, which the bridge library in the game hands over (see [`bridge`]).
 
 pub mod bridge;
+mod call;
 mod macho;
 mod module;
 mod process;

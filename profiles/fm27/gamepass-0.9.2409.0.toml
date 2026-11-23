@@ -15,6 +15,14 @@ current_date = 0x56257C8
 # class, 0xED60 before the players pair as in 0.9.2355.0.
 retirement_manager = 0x5675060
 
+# The static pointer to the game's one GAME_UI object, whose count of saves loaded tells a load from a save: 0x3C80
+# before the players pair, as on Steam build 26340721. Another static, at 0x5670EC8, points at it too.
+game_ui = 0x5680140
+
+# The prize money competitions pay (layout.toml, [prize_money]; #123) was read on this build on a save of August 2027:
+# the Champions League, Libertadores, Sudamericana and AFC Champions League Elite amounts are those read on Steam.
+prize_money = true
+
 # game_plugin.dll as mapped in memory; these two values identify the build.
 [plugin]
 size_of_image = 0x175DA000
@@ -25,3 +33,6 @@ link_timestamp = 0x6AE563A1
 players = 0x5683DC0
 staff = 0x5683E08
 clubs = 0x5683F78
+
+# [national_teams] is not here: the places of the national teams were not read on this build, so the National teams
+# tab shows nothing on it (see docs/DEVELOPING.md, National teams).

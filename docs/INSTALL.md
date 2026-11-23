@@ -2,7 +2,8 @@
 
 FMLibreEditor is a free program that edits the players, staff and clubs of Football Manager
 27 while the game runs. It works on Windows with the Xbox / Game Pass and Steam builds, and
-on macOS with the Steam build.
+on macOS with the Steam build. Support for the Epic Games Store build on Windows is
+experimental, as we cannot test it ourselves.
 
 **Before you start, save your game under a new name in FM.**
 
@@ -37,10 +38,14 @@ extract it and run **FMLibreEditor.exe**.
    **Apply**.
 
 The game shows a change after you press **Continue** in FM. The **Changes** view lists what
-you did, and **Undo** puts the old value back.
+you did, and **Undo** puts the old value back. It keeps the changes of each career, so they
+are listed again after a restart, and the search box and the choices beside it (this session or
+earlier ones, only what is not undone, only what the game does not hold) narrow the list down
+to a person, a club or a field. **Export** there writes the changes the list shows to a CSV
+file in the same folder as the other exports.
 
-**Export**, above the player list, writes the players the list shows (with its search, filters
-and order) to a CSV or JSON file in `Documents\FMLibreEditor\Exports`
+**Export**, above the player, staff and club lists, writes what the list shows (with its
+search, filters and order) to a CSV or JSON file in `Documents\FMLibreEditor\Exports`
 (`Documents/FMLibreEditor/Exports` on macOS), named after the in-game date. Pick **CSV,
 semicolon-separated** if Excel puts every value in one column, as it does where decimals are
 written with a comma. Exporting only reads the game.
@@ -68,9 +73,10 @@ for the latest release; it sends nothing else.
   `FMLibreEditor.exe` in place of the old one.
 - **macOS:** **Update** downloads the new app, checks that it was signed with FMLibreEditor's
   key, and puts it in place of the old one: the app closes and opens again with the new
-  version. macOS may ask for your password if your account cannot change the Applications
-  folder. (Versions up to 0.4.1 have no Update: download the next one by hand and put it in
-  Applications in place of the old one.) To remove it, quit Steam, click **Remove the
+  version, wherever the app is. macOS may ask for your password if your account cannot
+  change the Applications folder. (Versions up to 0.4.1 have no Update, and up to 0.5.1 an
+  app opened where it was downloaded offers Download instead: download the next one by hand
+  and put it in Applications in place of the old one.) To remove it, quit Steam, click **Remove the
   bridge**, then move the app to the Bin.
 
 ## If something goes wrong

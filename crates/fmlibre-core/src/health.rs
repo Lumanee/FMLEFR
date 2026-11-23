@@ -19,8 +19,12 @@ use crate::date::FmDate;
 use crate::edit::{Entity, Field};
 use crate::game::GAME_PLUGIN;
 use crate::locate::{DatePlace, Found, date_candidates};
-use crate::profile::Layout;
+use crate::profile::{CohesionLayout, Layout};
 use crate::session::Session;
+
+/// The share of the players sampled who have an entry for their club in their list of cohesion entries, at least. On
+/// the macOS Steam save (25 July 2026) most senior players had one; those who had only just joined did not.
+const MOST_WITH_COHESION: f64 = 0.5;
 
 /// How many players, members of staff and clubs each check looks at, spread evenly over their arrays.
 const SAMPLES: u64 = 2_000;
@@ -67,6 +71,14 @@ pub enum Check {
     Staff,
     /// A club's senior team points back at the club.
     Clubs,
+    /// Players' lists of cohesion entries hold only clubs and nations, with values of 1–100, and most players have
+    /// an entry for their club (see `cohesion.rs`). Guards Max cohesion.
+    Cohesion,
+    /// Players' records of familiarity hold six lists naming their areas, options of 1–20 and values of at most 100,
+    /// and the training manager's histories hold entries for the eight areas (see `familiarity.rs`). Guards Max
+    /// tactics. It passes unchecked where the layout or the build's profile does not place them: Max tactics has
+    /// nothing to write there, and the app shows no familiarity.
+    Tactics,
 }
 
 /// The checks a change to the game's lists and records needs (moves, swaps, healing, captains, ties, clauses,
@@ -74,7 +86,7 @@ pub enum Check {
 pub const STRUCTURE: [Check; 4] = [Check::Contracts, Check::Teams, Check::Staff, Check::Clubs];
 
 impl Check {
-    pub const ALL: [Check; 10] = [
+    pub const ALL: [Check; 12] = [
         Check::GameDate,
         Check::Players,
         Check::Positions,
@@ -85,6 +97,8 @@ impl Check {
         Check::Teams,
         Check::Staff,
         Check::Clubs,
+        Check::Cohesion,
+        Check::Tactics,
     ];
 
     /// The name of the check in error codes' parameters and in the app: `gameDate`, `liveValues`, ...
@@ -100,6 +114,8 @@ impl Check {
             Check::Teams => "teams",
             Check::Staff => "staff",
             Check::Clubs => "clubs",
+            Check::Cohesion => "cohesion",
+            Check::Tactics => "tactics",
         }
     }
 
@@ -108,7 +124,8 @@ impl Check {
         let key = field.key.as_str();
         match field.entity {
             Entity::Staff => Check::Staff,
-            Entity::Club => Check::Clubs,
+            // A national team's reputations sit where a club's does, which the clubs' check reads.
+            Entity::Club | Entity::NationalTeam => Check::Clubs,
             Entity::Player if key.starts_with("attribute.") => Check::Attributes,
             Entity::Player if key.starts_with("position.") => Check::Positions,
             Entity::Player if key.starts_with("personality.") => Check::Personality,
@@ -134,6 +151,8 @@ impl fmt::Display for Check {
             Check::Teams => "the teams",
             Check::Staff => "the staff",
             Check::Clubs => "the clubs",
+            Check::Cohesion => "the cohesion with clubs",
+            Check::Tactics => "the tactical familiarity",
         })
     }
 }
@@ -146,9 +165,21 @@ pub struct CheckResult {
     pub passed: bool,
     pub fit: u64,
     pub sampled: u64,
-    /// What else it measured, in a few words, for the probe.
+    /// What else it measured, in a few words, for the probe and the diagnostics report.
     #[serde(skip)]
     pub note: String,
+}
+
+impl fmt::Display for CheckResult {
+    /// The check as the probe and the diagnostics report list it: "pass  staff   1980 of  2000 fit; ...".
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let verdict = if self.passed { "pass" } else { "FAIL" };
+        write!(f, "{verdict}  {:<12} {:>5} of {:>5} fit", self.check.key(), self.fit, self.sampled)?;
+        if !self.note.is_empty() {
+            write!(f, "; {}", self.note)?;
+        }
+        Ok(())
+    }
 }
 
 /// What the checks found on the running game.
@@ -189,6 +220,12 @@ impl DateEvidence {
     }
 }
 
+/// A player can be born after the database cutoff in an old save: youth intakes keep being generated as the game
+/// advances. These are valid FM dates and must not make the player-field safety check fail.
+fn player_birth_date_fits(date: Option<FmDate>) -> bool {
+    date.is_some_and(|born| (1900..=2100).contains(&born.year))
+}
+
 /// How a date fits [`DateEvidence`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DateFit {
@@ -227,6 +264,13 @@ impl DateFit {
         self.contracts_hold() && self.injuries_hold() == Some(true)
     }
 
+    /// Whether the date this is the fit of fits the same evidence better than the one `other` is the fit of: no more
+    /// contract dates after it and no fewer current injuries that fit it, and better on at least one of the two.
+    pub fn beats(&self, other: &DateFit) -> bool {
+        let (ours, theirs) = ((self.before, self.within), (other.before, other.within));
+        ours.0 >= theirs.0 && ours.1 >= theirs.1 && ours != theirs
+    }
+
     fn note(&self) -> String {
         let latest = match self.since_latest {
             Some(days) => format!("the latest before it {days} days earlier"),
@@ -261,6 +305,9 @@ pub enum Lock {
     UnknownBuild,
     /// A check the change needs did not pass on this game.
     Failed(Check),
+    /// The game has loaded a save, or gone back to its main menu, since the editor read it (see
+    /// [`crate::Session::save_changed`]): what the editor read may be another save's.
+    SaveChanged,
 }
 
 impl Lock {
@@ -268,12 +315,13 @@ impl Lock {
         match self {
             Lock::UnknownBuild => "guard.unknownBuild",
             Lock::Failed(_) => "guard.failed",
+            Lock::SaveChanged => "guard.saveChanged",
         }
     }
 
     pub(crate) fn params(self) -> Vec<(&'static str, String)> {
         match self {
-            Lock::UnknownBuild => Vec::new(),
+            Lock::UnknownBuild | Lock::SaveChanged => Vec::new(),
             Lock::Failed(check) => vec![("check", check.key().to_owned())],
         }
     }
@@ -289,6 +337,10 @@ impl fmt::Display for Lock {
             Lock::Failed(check) => {
                 write!(f, "{check} did not check out in this version of the game, so the editor leaves them unchanged")
             }
+            Lock::SaveChanged => f.write_str(
+                "the game has loaded a save, or gone back to its main menu, since the editor read it, so the editor \
+                 writes nothing until it reads the game again",
+            ),
         }
     }
 }
@@ -455,11 +507,19 @@ const GOALKEEPING: [&str; 9] = [
 ];
 
 /// How much higher, as stored (0–100), goalkeepers rate on average at goalkeeping than outfield players, strikers
-/// at finishing than centre-backs, and centre-backs at tackling than strikers, for the attributes to be read right;
-/// and among staff, goalkeeping coaches at goalkeeping, physios at physiotherapy and scouts at judging potential. On
-/// the Game Pass test save (9 September 2026) these gaps were 42, 37 and 36, and 39, 51 and 30. With the players'
-/// attributes read one byte off, the first three were 23, -4 and -5.
+/// at finishing than centre-backs, and centre-backs at tackling than strikers, for the players' attributes to be read
+/// right. On the Game Pass test save (9 September 2026) these gaps were 42, 37 and 36. With the players' attributes
+/// read one byte off, they were 23, -4 and -5.
 const GAP: f64 = 20.0;
+
+/// How much higher, as stored (0–100), goalkeeping coaches rate on average at goalkeeping than coaches, physios at
+/// physiotherapy than coaches, and scouts at judging potential than physios, for the staff's attributes to be read
+/// right. Read right, these gaps were 39, 51 and 30 on the Game Pass test save (9 September 2026), 42, 50 and 30 over
+/// all the staff of the Mac Steam save (17 July 2027), and 27, 41 and 19 on a Game Pass career in October 2027. They
+/// differ from one career to another, so the check asks staff for less than the players' [`GAP`]. Read one byte off on
+/// the Mac save, the gaps were -9, -17 and -21 one way and -2 at physiotherapy the other (judging then reads judging
+/// ability, which scouts are good at too, and stays at 30).
+const STAFF_GAP: f64 = 10.0;
 
 /// Runs every check on the running game, and finds the in-game date.
 pub(crate) fn check(session: &Session) -> Health {
@@ -481,6 +541,10 @@ pub(crate) fn check(session: &Session) -> Health {
     // Contracts signed after the player joined: renewals, which a date read in place of the other cannot show.
     let mut renewed = Tally::default();
     let mut teams = Tally::default();
+    // Lists of cohesion entries that hold, and those with an entry for the player's club.
+    let (mut cohesion_lists, mut cohesion_own) = (Tally::default(), Tally::default());
+    // Records of familiarity that hold, of the players who have one.
+    let mut records = Tally::default();
     // Goalkeeping by goalkeepers and by the rest; finishing and tackling by strikers and by centre-backs.
     let (mut keepers, mut outfield) = (Mean::default(), Mean::default());
     let (mut striker_finishing, mut defender_finishing) = (Mean::default(), Mean::default());
@@ -491,7 +555,9 @@ pub(crate) fn check(session: &Session) -> Health {
     let p = &layout.player;
     let attribute = |player: &SampledPlayer, key: &str| p.attributes.get(key).map(|&at| player.u8(layout, at));
     for player in &players {
-        let born = player.date(layout, p.date_of_birth).is_some_and(|born| (1900..=2020).contains(&born.year));
+        // Saves can run beyond the database's original years: youth intakes generated in a 2041 save can be born
+        // after 2020. Their date is still a real date; don't let that make the whole player check fail and lock CA/PA.
+        let born = player_birth_date_fits(player.date(layout, p.date_of_birth));
         let height = (140..=220).contains(&player.u16(layout, p.height));
         let ability = (1..=200).contains(&player.u16(layout, p.current_ability));
         let potential = player.u16(layout, p.potential_ability) as i16;
@@ -562,6 +628,29 @@ pub(crate) fn check(session: &Session) -> Health {
         if is_user_pointer(team) {
             teams.add(team_lists(process, layout, team, player.object));
         }
+
+        // His cohesion entries are for clubs and nations, from 1 to 100, and one is for his club.
+        let record = player.u64(layout, p.relations);
+        if let Some(c) = &layout.cohesion
+            && is_user_pointer(team)
+            && is_user_pointer(record)
+            && let Some(club) = club_cohesion_index(process, layout, c, team)
+        {
+            let list = crate::cohesion::read_list(process, c, record).ok().flatten();
+            let holds = list.map(|(_, bytes)| crate::cohesion::list_holds(c, &bytes, club));
+            cohesion_lists.add(holds.is_some_and(|(holds, _)| holds));
+            if let Some((true, own)) = holds {
+                cohesion_own.add(own);
+            }
+        }
+
+        // His record of familiarity, for one who has one: six lists naming their areas, and his shapes.
+        if let Some(f) = &layout.familiarity
+            && let Ok(record) = process.read_u64(player.object + p.at(f.record, player.shift))
+            && is_user_pointer(record)
+        {
+            records.add(crate::familiarity::record_holds(process, f, record));
+        }
     }
 
     let gap = |high: Mean, low: Mean| high.value().zip(low.value()).map(|(high, low)| high - low);
@@ -573,6 +662,30 @@ pub(crate) fn check(session: &Session) -> Health {
     let (date, date_result) = find_date(session, &evidence);
     let staff = check_staff(session);
     let clubs = check_clubs(session);
+    let mut cohesion = cohesion_lists.result(Check::Cohesion, 0.99, String::new());
+    cohesion.passed &= cohesion_own.holds(MOST_WITH_COHESION);
+    cohesion.note = match layout.cohesion {
+        Some(_) => format!("{} of {} have an entry for their club", cohesion_own.fit, cohesion_own.sampled),
+        None => "the layout does not place it".to_owned(),
+    };
+
+    // The records, and every history of training the training manager keeps: one that does not hold would be another
+    // list read as one. Where the layout or the build's profile does not place them there is nothing to check, and
+    // nothing Max tactics could write: that is no failure, or every such build would show the notice of one. Nor is
+    // a save whose manager has no club, where the training manager keeps no history.
+    let mut tactics = records.result(Check::Tactics, 0.99, String::new());
+    let histories = layout.familiarity.as_ref().and_then(|f| crate::familiarity::histories_hold(session, f));
+    match histories {
+        None => tactics.passed = true,
+        Some((_, holds)) => tactics.passed &= holds,
+    }
+    tactics.note = match (&layout.familiarity, histories) {
+        (None, _) => "not checked: the layout does not place it".to_owned(),
+        (Some(_), None) => "not checked: the build's profile does not place the training manager".to_owned(),
+        (Some(_), Some((0, true))) => "no history of training kept: no club is managed".to_owned(),
+        (Some(_), Some((count, true))) => format!("{count} histories of training hold"),
+        (Some(_), Some((count, false))) => format!("of {count} histories of training, some do not hold"),
+    };
 
     let mut attributes = attributes.result(Check::Attributes, 0.99, String::new());
     attributes.passed &= signature;
@@ -604,10 +717,20 @@ pub(crate) fn check(session: &Session) -> Health {
             teams.result(Check::Teams, 0.95, String::new()),
             staff,
             clubs,
+            cohesion,
+            tactics,
         ],
         date,
         evidence,
     }
+}
+
+/// The index the cohesion entries of the players of the team at `team` name its club by; `None` where the team leads
+/// to no club.
+fn club_cohesion_index(process: &Process, layout: &Layout, c: &CohesionLayout, team: u64) -> Option<i32> {
+    let club = process.read_u64(team + layout.team.club).ok().filter(|&club| is_user_pointer(club))?;
+    let bytes = process.read_bytes(club + c.club_index, 4).ok()?;
+    Some(i32::from_le_bytes(bytes.try_into().ok()?))
 }
 
 /// The current injuries that the injury record at `record` lists: the day each began, and the day he is back at the
@@ -681,14 +804,30 @@ fn find_date(session: &Session, evidence: &DateEvidence) -> (Option<DatePlace>, 
 }
 
 /// The date among `candidates` that fits `evidence` strictly, and the best place to read it: the profile's, else a
-/// variable of its own rather than the field beside the arrays, which the game leaves unset after a load.
+/// variable of its own (one near where other builds keep the date first) rather than the field beside the arrays,
+/// which the game leaves unset after a load.
 ///
-/// When more than one date fits, the evidence cannot tell them apart: on a day on which no contract was signed and no
-/// injury began, a value the game keeps for the day before fits as well as the date (on the Game Pass save of 23
-/// September 2026, `game_plugin.dll+0x56546f8` held the 22nd). The field beside the arrays then tells, when it holds
-/// the latest of them: it is where the builds before November 2026 kept the date, and later builds keep the date
-/// there too once the game has moved on a day after a save is loaded. Otherwise no date is used. Along with the place,
-/// a note on how the date was chosen among several, if it was.
+/// More than one date can fit. The game keeps a value for the day before, and the evidence leaves some room, so the
+/// day before fits as well unless enough contracts were signed and injuries begun on the day to rule it out: on the
+/// Game Pass save of 23 September 2026, `game_plugin.dll+0x56546f8` held the 22nd and fitted as well as the date; on
+/// 0.9.2435.0, `+0x53886f8` held 10 January 2028 and fitted too, if less well than the 11th. On 0.9.2524.0 a value for
+/// the day after fits instead (`+0x53bb3b4`), which only an injury over on the day rules out. Then the date is, in
+/// turn:
+/// - the latest of them, when the field beside the arrays holds it: where the builds before November 2026 kept the
+///   date, and 0.9.2409.0 keeps it there too once the game has moved on a day after a load;
+/// - the one of them read about as far from the players' array as other builds keep their date ([`Found::Guessed`]):
+///   the date's own variable has kept its distance from build to build, and the day before is far from it;
+/// - the one of them that fits better than every other ([`DateFit::beats`]): each contract signed and each injury
+///   begun on the day counts against the day before, and each injury over on the day against the day after;
+/// - of those no other fits better, the one held in more places than any other: the game can keep its date in more
+///   than one place, while each value for another day seen so far was held in one. On 0.9.2524.0, on a save of 23
+///   October 2026 played on for some days since it was loaded, no injury was over on the day, and the day after
+///   fitted every contract and injury as well as the date, which three places held, `+0x539dd10` (its own variable),
+///   `+0x53ce958` and `+0x53fb6e8`, against the one value for the 24th.
+///
+/// Otherwise no date is used, as where two of them are held in as many places: right after a load the date's own
+/// variable can be the only place that holds it, as on 0.9.2409.0. Along with the place, a note on how the date was
+/// chosen among several, if it was.
 fn pick_date(candidates: &[DatePlace], evidence: &DateEvidence) -> Result<(DatePlace, Option<String>), String> {
     let fitting: Vec<DatePlace> =
         candidates.iter().copied().filter(|place| evidence.fit(place.date).holds_strictly()).collect();
@@ -697,42 +836,84 @@ fn pick_date(candidates: &[DatePlace], evidence: &DateEvidence) -> Result<(DateP
     dates.dedup();
     let rank = |place: &DatePlace| match place.found {
         Found::Profile => 0,
-        Found::Searched | Found::Guessed => 1,
-        Found::BesideArrays => 2,
+        Found::Guessed => 1,
+        Found::Searched => 2,
+        Found::BesideArrays => 3,
     };
     let read_at = |date: FmDate| {
         fitting.iter().copied().filter(|place| place.date == date).min_by_key(|place| (rank(place), place.rva))
     };
     let listed = |dates: &[FmDate]| dates.iter().map(|&date| iso(date)).collect::<Vec<_>>().join(", ");
-    match dates.as_slice() {
-        [] => Err(format!("{} values in the plugin's data read as dates, and none fits", candidates.len())),
-        [date] => Ok((read_at(*date).expect("the date fits"), None)),
-        several => {
-            let latest = *several.last().expect("several dates");
-            let beside = fitting.iter().find(|place| place.found == Found::BesideArrays).map(|place| place.date);
-            if beside == Some(latest) {
-                let chosen = format!(
-                    "of the {} dates that fit ({}), the latest, which the field beside the arrays holds",
-                    several.len(),
-                    listed(several)
-                );
-                return Ok((read_at(latest).expect("the date fits"), Some(chosen)));
-            }
-            let beside = match beside {
-                Some(date) => format!("; the field beside the arrays holds {}, not the latest", iso(date)),
-                None => "; the field beside the arrays holds none of them".to_owned(),
-            };
-            Err(format!(
-                "values in the plugin's data read as {} dates that fit, so none is used: {}{beside}",
-                several.len(),
-                listed(several)
-            ))
-        }
+    let several = match dates.as_slice() {
+        [] => return Err(format!("{} values in the plugin's data read as dates, and none fits", candidates.len())),
+        [date] => return Ok((read_at(*date).expect("the date fits"), None)),
+        several => several,
+    };
+
+    let latest = *several.last().expect("several dates");
+    let beside = fitting.iter().find(|place| place.found == Found::BesideArrays).map(|place| place.date);
+    let mut guessed: Vec<FmDate> =
+        fitting.iter().filter(|place| place.found == Found::Guessed).map(|place| place.date).collect();
+    guessed.sort_unstable();
+    guessed.dedup();
+    let fits: Vec<(FmDate, DateFit)> = several.iter().map(|&date| (date, evidence.fit(date))).collect();
+    let best = fits
+        .iter()
+        .find(|(date, fit)| fits.iter().all(|(other, other_fit)| other == date || fit.beats(other_fit)))
+        .map(|&(date, _)| date);
+    // The dates no other fits better, each with the number of places that hold it.
+    let held: Vec<(FmDate, usize)> = fits
+        .iter()
+        .filter(|(_, fit)| !fits.iter().any(|(_, other)| other.beats(fit)))
+        .map(|&(date, _)| (date, fitting.iter().filter(|place| place.date == date).count()))
+        .collect();
+    let most_held = held
+        .iter()
+        .find(|&&(date, count)| held.iter().all(|&(other, other_count)| other == date || count > other_count))
+        .map(|&(date, count)| {
+            let next = held.iter().filter(|&&(other, _)| other != date).map(|&(_, count)| count).max().unwrap_or(0);
+            (date, count, next)
+        });
+    let pick = if beside == Some(latest) {
+        Some((latest, "the latest, which the field beside the arrays holds".to_owned()))
+    } else if let [date] = guessed.as_slice() {
+        Some((*date, "the one read about as far from the players' array as other builds keep the date".to_owned()))
+    } else if let Some(date) = best {
+        Some((date, "the one that fits the contracts and the current injuries better than any other".to_owned()))
+    } else {
+        most_held.map(|(date, count, next)| {
+            let next = if held.len() > 2 { format!("at most {next}") } else { next.to_string() };
+            (date, format!("the one held in the most places among those that fit best ({count}, against {next})"))
+        })
+    };
+    if let Some((date, how)) = pick {
+        let chosen = format!("of the {} dates that fit ({}), {how}", several.len(), listed(several));
+        return Ok((read_at(date).expect("the date fits"), Some(chosen)));
     }
+
+    let beside = match beside {
+        Some(date) => format!("the field beside the arrays holds {}, not the latest", iso(date)),
+        None => "the field beside the arrays holds none of them".to_owned(),
+    };
+    let guessed = match guessed.len() {
+        0 => "none is read where other builds keep the date".to_owned(),
+        count => format!("{count} are read where other builds keep the date"),
+    };
+    let places = |count: usize| if count == 1 { "1 place".to_owned() } else { format!("{count} places") };
+    let counted: Vec<String> =
+        held.iter().map(|&(date, count)| format!("{} in {}", iso(date), places(count))).collect();
+    Err(format!(
+        "values in the plugin's data read as {} dates that fit, and nothing tells them apart, so none is used: {}; \
+         {beside}; {guessed}; none fits better than every other, and of those that fit best none is held in more \
+         places than every other ({})",
+        several.len(),
+        listed(several),
+        counted.join(", ")
+    ))
 }
 
 /// A date as YYYY-MM-DD.
-fn iso(date: FmDate) -> String {
+pub(crate) fn iso(date: FmDate) -> String {
     format!("{:04}-{:02}-{:02}", date.year, date.month, date.day)
 }
 
@@ -863,9 +1044,10 @@ fn check_staff(session: &Session) -> CheckResult {
     ];
     let shown = |gap: Option<f64>| gap.map_or_else(|| "-".to_owned(), |gap| format!("{gap:.0}"));
     let mut result = tally.result(Check::Staff, 0.97, String::new());
-    result.passed &= contracts.holds(0.95) && gaps.iter().all(|gap| gap.is_some_and(|gap| gap >= GAP));
+    result.passed &= contracts.holds(0.95) && gaps.iter().all(|gap| gap.is_some_and(|gap| gap >= STAFF_GAP));
     result.note = format!(
-        "{} of {} contracts point back; goalkeeping gap {}, physiotherapy gap {}, judging gap {} (at least {GAP:.0})",
+        "{} of {} contracts point back; goalkeeping gap {}, physiotherapy gap {}, judging gap {} (at least \
+         {STAFF_GAP:.0})",
         contracts.fit,
         contracts.sampled,
         shown(gaps[0]),
@@ -932,6 +1114,14 @@ mod tests {
         assert!(tally(LEAST_SAMPLED, LEAST_SAMPLED).holds(1.0));
     }
 
+    #[test]
+    fn player_birth_dates_cover_youth_intakes_from_later_seasons() {
+        assert!(player_birth_date_fits(Some(date(2041, 3, 24))));
+        assert!(player_birth_date_fits(Some(date(2100, 12, 31))));
+        assert!(!player_birth_date_fits(Some(date(2101, 1, 1))));
+        assert!(!player_birth_date_fits(None));
+    }
+
     fn date(year: u16, month: u8, day: u8) -> FmDate {
         FmDate { year, month, day }
     }
@@ -988,8 +1178,16 @@ mod tests {
         assert!(few.fit(today).holds() && !few.fit(today).holds_strictly());
     }
 
+    /// As [`evidence_on`] the day before `today`, with every injury a day longer: no contract was signed and no injury
+    /// began on `today`, so the day before fits as well as the date.
+    fn quiet_day(today: FmDate) -> DateEvidence {
+        let mut evidence = evidence_on(today.plus_days(-1));
+        evidence.injuries.iter_mut().for_each(|(_, back)| *back = back.plus_days(1));
+        evidence
+    }
+
     #[test]
-    fn a_searched_date_must_be_the_only_one_that_fits() {
+    fn a_searched_date_must_be_the_one_that_fits() {
         let today = date(2027, 8, 13);
         let evidence = evidence_on(today);
         let place = |rva, date, found| DatePlace { rva, date, found };
@@ -1006,17 +1204,23 @@ mod tests {
         assert_eq!(picked(&candidates), Ok(candidates[2]));
         // The field beside the arrays alone, as right after a load it would not be.
         assert_eq!(picked(&candidates[..2]), Ok(candidates[1]));
-        // A second date that fits leaves the editor without one, unless the field beside the arrays holds the latest:
-        // a value the game keeps for the day before is no match for it, a date later than the field's is.
+        // A date the day after, which every contract and injury fits as well, and which is later than the field beside
+        // the arrays: held in one place, where the date's own variable and the field hold the date. Held in as many
+        // places, nothing tells the two apart, and the editor goes without a date.
         let mut later = candidates.to_vec();
         later.push(place(0x100, today.plus_days(1), Found::Searched));
-        assert!(picked(&later).is_err());
+        assert_eq!(picked(&later), Ok(candidates[2]));
+        later.push(place(0x108, today.plus_days(1), Found::Searched));
+        let refused = pick_date(&later, &evidence).expect_err("no date");
+        assert!(refused.contains("2027-08-13 in 2 places, 2027-08-14 in 2 places"), "{refused}");
+        // The day before is told apart by the field beside the arrays, and without it by the contract signed and the
+        // injuries begun on the day.
         let mut before = candidates.to_vec();
         before.push(place(0x200, today.plus_days(-1), Found::Searched));
         assert_eq!(picked(&before), Ok(candidates[2]));
         let without_beside: Vec<DatePlace> =
             before.iter().copied().filter(|p| p.found != Found::BesideArrays).collect();
-        assert!(picked(&without_beside).is_err());
+        assert_eq!(picked(&without_beside), Ok(candidates[2]));
         // A date the injuries cannot vouch for leaves the editor without one too.
         let few = DateEvidence { injuries: evidence.injuries[..10].to_vec(), ..evidence.clone() };
         assert!(pick_date(&candidates, &few).is_err());
@@ -1028,9 +1232,9 @@ mod tests {
         // As on the Game Pass save of 23 September 2026: on a day on which no contract was signed and no injury began,
         // the day before fits the evidence as well as the date.
         let today = date(2026, 9, 23);
-        let mut evidence = evidence_on(today.plus_days(-1));
-        evidence.injuries.iter_mut().for_each(|(_, back)| *back = back.plus_days(1));
+        let evidence = quiet_day(today);
         assert!(evidence.fit(today).holds_strictly() && evidence.fit(today.plus_days(-1)).holds_strictly());
+        assert!(!evidence.fit(today).beats(&evidence.fit(today.plus_days(-1))));
         let place = |rva, date, found| DatePlace { rva, date, found };
         let candidates = [
             place(0x562_57C8, today, Found::Searched),
@@ -1049,6 +1253,107 @@ mod tests {
         // A field that held the day before would not be followed either.
         let behind = [candidates[0], place(0x568_4608, today.plus_days(-1), Found::BesideArrays)];
         assert!(pick_date(&behind, &evidence).is_err());
+    }
+
+    #[test]
+    fn where_other_builds_keep_the_date_tells_it_from_the_day_before() {
+        // As on Game Pass 0.9.2435.0, where the field beside the arrays held no date after a day in the game, on a day
+        // on which no contract was signed and no injury began.
+        let today = date(2028, 1, 11);
+        let evidence = quiet_day(today);
+        let place = |rva, date, found| DatePlace { rva, date, found };
+        let candidates = [
+            place(0x535_97C8, today, Found::Guessed),
+            place(0x538_86F8, today.plus_days(-1), Found::Searched),
+            place(0x535_9E40, date(2027, 12, 1), Found::Guessed),
+        ];
+        let (picked, note) = pick_date(&candidates, &evidence).expect("a date");
+        assert_eq!(picked, candidates[0]);
+        assert!(note.is_some_and(|note| note.contains("as other builds keep the date")));
+        // Read where the guess put it rather than anywhere else that holds the date.
+        let elsewhere = [place(0x100, today, Found::Searched), candidates[0], candidates[1]];
+        assert_eq!(pick_date(&elsewhere, &evidence).map(|(place, _)| place), Ok(candidates[0]));
+        // Two dates near where other builds keep it tell nothing.
+        let both = [candidates[0], place(0x535_97D0, today.plus_days(-1), Found::Guessed)];
+        let refused = pick_date(&both, &evidence).expect_err("no date");
+        assert!(refused.contains("2 are read where other builds keep the date"), "{refused}");
+    }
+
+    #[test]
+    fn the_date_fits_better_than_the_day_before() {
+        // As on Game Pass 0.9.2435.0 on 11 January 2028, with no profile: contracts were signed and injuries began on
+        // the day, so the day before fitted less well, but still well enough; the field beside the arrays held no date.
+        let today = date(2028, 1, 11);
+        let evidence = evidence_on(today);
+        let (on_the_day, the_day_before) = (evidence.fit(today), evidence.fit(today.plus_days(-1)));
+        assert!(on_the_day.holds_strictly() && the_day_before.holds_strictly());
+        assert!(on_the_day.beats(&the_day_before));
+        assert!(!the_day_before.beats(&on_the_day) && !on_the_day.beats(&on_the_day));
+        let place = |rva, date, found| DatePlace { rva, date, found };
+        let candidates =
+            [place(0x538_86F8, today.plus_days(-1), Found::Searched), place(0x535_97C8, today, Found::Searched)];
+        let (picked, note) = pick_date(&candidates, &evidence).expect("a date");
+        assert_eq!(picked, candidates[1]);
+        assert!(note.is_some_and(|note| note.contains("better than any other")));
+        // Where each fits better on one count, neither is used: a contract signed on the day, and an injury still
+        // listed though over the day before.
+        let mut torn = quiet_day(today);
+        torn.signed.push(today);
+        torn.injuries.push((today.plus_days(-10), today.plus_days(-1)));
+        let (on_the_day, the_day_before) = (torn.fit(today), torn.fit(today.plus_days(-1)));
+        assert!(on_the_day.holds_strictly() && the_day_before.holds_strictly());
+        assert!(!on_the_day.beats(&the_day_before) && !the_day_before.beats(&on_the_day));
+        let refused = pick_date(&candidates, &torn).expect_err("no date");
+        assert!(refused.contains("none fits better than every other"), "{refused}");
+    }
+
+    #[test]
+    fn the_date_is_held_in_more_places_than_the_day_after() {
+        // As on Game Pass 0.9.2524.0 on 23 October 2026, with no profile, some days after the save was loaded: no
+        // injury was over on the day, so the value the game keeps for the day after fitted every contract and injury
+        // as well as the date. Three places held the date, beyond every guess from other builds, and one the day
+        // after; another value held 14 October, which the contracts and the injuries rule out.
+        let today = date(2026, 10, 23);
+        let evidence = evidence_on(today);
+        let (on_the_day, the_day_after) = (evidence.fit(today), evidence.fit(today.plus_days(1)));
+        assert!(on_the_day.holds_strictly() && the_day_after.holds_strictly());
+        assert!(!on_the_day.beats(&the_day_after) && !the_day_after.beats(&on_the_day));
+        let place = |rva, date, found| DatePlace { rva, date, found };
+        let candidates = [
+            place(0x539_DD10, today, Found::Searched),
+            place(0x53B_B3B4, today.plus_days(1), Found::Searched),
+            place(0x53C_E958, today, Found::Searched),
+            place(0x53F_B4C0, date(2026, 10, 14), Found::Searched),
+            place(0x53F_B6E8, today, Found::Searched),
+        ];
+        let (picked, note) = pick_date(&candidates, &evidence).expect("a date");
+        // Read from the first place that holds it, the date's own variable, where the build's profile puts it.
+        assert_eq!(picked, candidates[0]);
+        assert!(
+            note.as_deref().is_some_and(|note| note.contains("the most places") && note.contains("(3, against 1)"))
+        );
+        // Right after a load the date's own variable can be the only place that holds it, as on 0.9.2409.0: then
+        // nothing tells it from the day after.
+        let loaded = [candidates[0], candidates[1], candidates[3]];
+        let refused = pick_date(&loaded, &evidence).expect_err("no date");
+        assert!(refused.contains("2026-10-23 in 1 place, 2026-10-24 in 1 place"), "{refused}");
+        // A date another fits better than counts for nothing, however many places hold it: the day before, ruled out by
+        // the contracts signed on the day, held in three places, leaves the date and the day after held in one each.
+        let before = [
+            candidates[0],
+            candidates[1],
+            place(0x100, today.plus_days(-1), Found::Searched),
+            place(0x200, today.plus_days(-1), Found::Searched),
+            place(0x300, today.plus_days(-1), Found::Searched),
+        ];
+        assert!(on_the_day.beats(&evidence.fit(today.plus_days(-1))));
+        let refused = pick_date(&before, &evidence).expect_err("no date");
+        assert!(refused.contains("2026-10-23 in 1 place, 2026-10-24 in 1 place"), "{refused}");
+        // And with the date in two places of its own, among three dates that fit, it is the one.
+        let three = [before[0], before[1], before[2], before[3], before[4], candidates[2]];
+        let (picked, note) = pick_date(&three, &evidence).expect("a date");
+        assert_eq!(picked, candidates[0]);
+        assert!(note.as_deref().is_some_and(|note| note.contains("(2, against 1)")), "{note:?}");
     }
 
     #[test]
@@ -1098,5 +1403,10 @@ mod tests {
         assert_eq!(check(Entity::Player, "trait.49"), Check::Players);
         assert_eq!(check(Entity::Staff, "contract.wage"), Check::Staff);
         assert_eq!(check(Entity::Club, "finance.balance"), Check::Clubs);
+        // A national team's reputation sits where a club's does, where the layout places national teams.
+        if layout.national.is_some() {
+            assert_eq!(check(Entity::NationalTeam, "reputation"), Check::Clubs);
+            assert_eq!(check(Entity::NationalTeam, "team.10.reputation"), Check::Clubs);
+        }
     }
 }

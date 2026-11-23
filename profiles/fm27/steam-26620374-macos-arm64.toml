@@ -1,0 +1,61 @@
+# FM27 on Steam for macOS (app 4530370, build 26620374), the update of 17 November 2026 (version 27.1.0.2505117): the
+# arm64 half of the universal game_plugin, which Apple silicon Macs run natively. Worked out by `fmlibre-probe profile`
+# on a running save (14 July 2027), as for a build without a profile, and all 12 checks passed. __DATA starts 0x34000
+# further on (0x5774000); the date and the retirement manager's static moved 0x10 more, the arrays 0x178 more, and two
+# objects keep something a few bytes further on, as on Windows (see the end).
+name = "FM27 Steam build 26620374 (macOS, Apple silicon)"
+edition = 27
+storefront = "steam"
+
+# The in-game date, 14 July 2027 on the save: 3,416 of 3,416 contract dates before it, and 82 of 82 current injuries
+# begun by then and not over.
+current_date = 0x5781DC8
+
+# The static pointer to the retirement manager (RETIREMENT_MANAGER), found by searching: 830 planned retirements on
+# the save.
+retirement_manager = 0x57782B8
+
+# A static pointer to the game's own object (game_plugin::GAME_UI), whose count of saves loaded tells a load from a
+# save: 1 on the save, loaded once since the game started. A second static, game_plugin+0x57A4A90, points at it too.
+game_ui = 0x5774B60
+
+# The static pointers to the tactics the human managers keep for their teams (TACTICS_MANAGER, 0x68 after the
+# retirement manager's, as before) and to the training manager (TRAINING_MANAGER), which keeps the history of training
+# of their players: on the save, each the one pointer in the plugin to the one object of its class.
+tactics_manager = 0x5778320
+training_manager = 0x5775758
+
+# The prize money competitions pay (layout-macos.toml, [prize_money]; #123) was read on this build on a save of 14 July
+# 2027: 384 settings, all held by a stage. The Premier League pays its 20 places from £53,100,000 to £2,600,000 and
+# Serie A from £28,691,666 to £773,129: to the pound what Steam build 26620374 reads on Windows.
+prize_money = true
+
+# game_plugin as mapped in memory: its LC_UUID identifies the build and the architecture.
+[plugin]
+uuid = "869F5F90-FD89-3606-8AE4-2B4A7F02F324"
+
+# RVAs in game_plugin of the (begin, end) pointer pairs of the entity arrays, as calibrate found them by scanning.
+[arrays]
+players = 0x57A2FC8
+staff = 0x57A3010
+clubs = 0x57A3180
+
+# RVAs of the pairs of the arrays of national teams' containers (docs/recon/fm27-national-teams.md): 251 for the men's
+# teams and 251 for the women's, 0xA8 and 0xC0 past the players pair as in build 26385295.
+[national_teams]
+men = 0x57A3070
+women = 0x57A3088
+
+# What this build lays out otherwise than layout-macos.toml, as the Windows builds of the same update do. The club
+# finance record keeps corporate facilities at 0x8AD, 4 bytes further on: Arsenal 19, Liverpool 16, Tottenham Hotspur
+# 20, as on Windows, and 0x8A9 holds 0; the balance, the budgets and the ticket price are where they were. Read at 0x8A9,
+# no club's finances look real, and the editor reads none; read here, 336 clubs keep them, corporate facilities 1 to 20.
+[layout.club_finance]
+corporate = 0x8AD
+
+# A team's tactics, in the human manager's map of them, keep the list of tactics and the index of the one in use 8
+# bytes further on: Arsenal's tactic in use is found with them here (options 5, 17, 10, 4, 6, 10, each among the
+# options the players' familiarity records list for its area); read at 0x1000 and 0x1018, none is found.
+[layout.tactics]
+tactics = 0x1008
+current = 0x1020
