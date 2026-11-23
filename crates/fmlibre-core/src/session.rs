@@ -2,7 +2,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use fmlibre_mem::{Module, Process, find_processes, list_modules};
+use fmlibre_mem::{Module, Process, find_processes, is_user_pointer, list_modules};
 
 use crate::calibrate::{EntityArrays, calibrate, find_missing};
 use crate::clubs::{ClubDetails, ClubSummary, full_finance_class, read_club_details, read_clubs, stadium_class};
@@ -12,9 +12,9 @@ use crate::details::{PlayerDetails, read_player_details};
 use crate::edit::Field;
 use crate::game::{GAME_EXE, GAME_PLUGIN, GameInfo};
 use crate::health::{Check, Health, Lock, STRUCTURE};
-use crate::locate::{DatePlace, Found, Place, find_retirement_manager, game_date_from};
+use crate::locate::{DatePlace, Found, Place, find_game_ui, find_retirement_manager, game_date_from};
 use crate::players::{PlayerSummary, read_players};
-use crate::profile::{BuildProfile, Layout, PluginFingerprint, layout_for, profile_for};
+use crate::profile::{BuildProfile, Layout, PluginFingerprint, layout_of, profile_for};
 use crate::retirement::MANAGER_CLASS;
 use crate::rtti::{class_of, mangled};
 use crate::staff::{StaffDetails, StaffSummary, read_staff, read_staff_details};
@@ -122,6 +122,34 @@ pub enum ArraySource {
     ScanOnly,
 }
 
+/// What the game had loaded when the editor last read it (see [`Session::save_changed`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct SaveMark {
+    /// How many saves the game had loaded since it started; none while the editor cannot read the count.
+    loads: Option<u64>,
+    /// Whether the game has loaded a save since, or been seen with none loaded: at its main menu, its lists empty.
+    changed: bool,
+}
+
+impl SaveMark {
+    /// The mark once the game was seen with `loads` saves loaded and its players' list `empty` or not, each `None`
+    /// where it could not be read, which tells nothing. A count first read now is taken as the one the editor read.
+    fn seen(self, loads: Option<u64>, empty: Option<bool>) -> SaveMark {
+        let loaded = matches!((self.loads, loads), (Some(then), Some(now)) if now != then);
+        SaveMark { loads: self.loads.or(loads), changed: self.changed || loaded || empty == Some(true) }
+    }
+}
+
+/// While it lives, writes leave out the check that the game still has the save the editor read: see
+/// [`Session::vouch_for_save`].
+pub struct SaveVouched<'a>(&'a Session);
+
+impl Drop for SaveVouched<'_> {
+    fn drop(&mut self) {
+        self.0.save_vouched.store(false, Ordering::Relaxed);
+    }
+}
+
 /// A game process with its data located and ready to read.
 pub struct Session {
     pub process: Process,
@@ -141,6 +169,15 @@ pub struct Session {
     /// Where the static pointer to the retirement manager is, once looked for: kept when found, and looked for again
     /// after [`Session::recheck`] when it was not.
     retirement_place: Mutex<Option<Option<Place>>>,
+    /// The vtable of the game's own object ([`crate::profile::GameLayout`]), once its class name has been checked.
+    game_class: OnceLock<u64>,
+    /// Where the static pointer to the game's own object is, once looked for: kept when found, and looked for again
+    /// after [`Session::recheck`] when it was not.
+    game_place: Mutex<Option<Option<Place>>>,
+    /// What the game had loaded when the editor last read it (see [`Session::save_changed`]).
+    save_mark: Mutex<SaveMark>,
+    /// Whether the writes made now were vouched for by their caller (see [`Session::vouch_for_save`]).
+    save_vouched: AtomicBool,
     /// The vtables of the class that holds a human manager's selections, found by its name the first time they are
     /// needed: none when the layout does not place them or the game does not name that class.
     pub(crate) selection_class: OnceLock<Vec<u64>>,
@@ -153,6 +190,11 @@ pub struct Session {
     /// Where the game's pools of objects were found that the editor took a slot of, or looked for one in (see
     /// `object_pool.rs`).
     pub(crate) pools_found: Mutex<Vec<u64>>,
+    /// The C runtime's functions that take and give back blocks of the game's heap (see `heap.rs`), found the first
+    /// time they are needed: none where the game has no such runtime loaded.
+    pub(crate) runtime: OnceLock<Option<crate::heap::Runtime>>,
+    /// The game's transfer manager and its vtable, once found (see `arranged.rs`).
+    pub(crate) transfer_manager: Mutex<Option<(u64, u64)>>,
     /// What the checks found: worked out the first time it is needed, and again by [`Session::recheck`].
     health: Mutex<Option<Arc<Health>>>,
     /// Whether editing a build without a profile was allowed.
@@ -172,13 +214,17 @@ impl Session {
         let fingerprint = PluginFingerprint::read(&process, &plugin)?;
         let profile = if profiles_ignored() { None } else { profile_for(fingerprint) };
         let edition = profile.as_ref().map(|p| p.edition).or(game.edition);
-        let layout = edition.and_then(layout_for).ok_or(SessionError::UnsupportedEdition(edition))?;
+        // What the build lays out otherwise is a fact of the build, not a place to search for: kept with ScanOnly too.
+        let overrides = profile.as_ref().map(|profile| profile.layout.clone()).unwrap_or_default();
+        let layout = edition
+            .and_then(|edition| layout_of(edition, &overrides))
+            .ok_or(SessionError::UnsupportedEdition(edition))?;
         let hint = profile.as_ref().filter(|_| source == ArraySource::ProfileFirst).map(|p| &p.arrays);
         let arrays = calibrate(&process, &plugin, &layout, hint);
         if arrays.players.is_none() {
             return Err(SessionError::PlayersNotFound);
         }
-        Ok(Self {
+        let session = Self {
             process,
             game,
             plugin,
@@ -190,14 +236,22 @@ impl Session {
             stadium_class: OnceLock::new(),
             retirement_class: OnceLock::new(),
             retirement_place: Mutex::new(None),
+            game_class: OnceLock::new(),
+            game_place: Mutex::new(None),
+            save_mark: Mutex::new(SaveMark::default()),
+            save_vouched: AtomicBool::new(false),
             selection_class: OnceLock::new(),
             loan_class: OnceLock::new(),
             own_memory: Mutex::new(None),
             pools_found: Mutex::new(Vec::new()),
+            runtime: OnceLock::new(),
+            transfer_manager: Mutex::new(None),
             health: Mutex::new(None),
             unknown_build_allowed: AtomicBool::new(false),
             search_all: source == ArraySource::ScanOnly,
-        })
+        };
+        session.mark_read();
+        Ok(session)
     }
 
     /// Whether the editor has a profile for this build of the game: one it has been checked with.
@@ -221,14 +275,17 @@ impl Session {
         health.get_or_insert_with(|| Arc::new(crate::health::check(self))).clone()
     }
 
-    /// Runs the checks again, e.g. once the game has moved on or a save has been loaded meanwhile. A retirement
-    /// manager that was not found is looked for again.
+    /// Runs the checks again, e.g. once the game has moved on or a save has been loaded meanwhile, and takes what the
+    /// game has loaded now as what the editor reads (see [`Session::save_changed`]): the lists are to be read again
+    /// after it. A retirement manager or a game object that was not found is looked for again.
     pub fn recheck(&self) -> Arc<Health> {
-        let mut place = self.retirement_place.lock().unwrap_or_else(PoisonError::into_inner);
-        if *place == Some(None) {
-            *place = None;
+        for place in [&self.retirement_place, &self.game_place] {
+            let mut place = place.lock().unwrap_or_else(PoisonError::into_inner);
+            if *place == Some(None) {
+                *place = None;
+            }
         }
-        drop(place);
+        self.mark_read();
         let fresh = Arc::new(crate::health::check(self));
         *self.health.lock().unwrap_or_else(PoisonError::into_inner) = Some(fresh.clone());
         fresh
@@ -248,13 +305,37 @@ impl Session {
         found
     }
 
-    /// Why `field` may not be written now, if it may not: an unknown build not allowed, or its check failed.
+    /// Why `field` may not be written now, if it may not: an unknown build not allowed, another save than the one the
+    /// editor read, or its check failed.
     pub fn field_lock(&self, field: &Field) -> Option<Lock> {
         if !self.writes_allowed() {
             return Some(Lock::UnknownBuild);
         }
+        if let Some(lock) = self.save_lock() {
+            return Some(lock);
+        }
         let check = Check::of_field(field);
         (!self.health().passed(check)).then_some(Lock::Failed(check))
+    }
+
+    /// Why a player's cohesion with his club may not be written now, if it may not: an unknown build not allowed, or the
+    /// lists of cohesion entries did not check out ([`Check::Cohesion`]). Writing it also needs what
+    /// [`Session::structure_lock`] asks.
+    pub fn cohesion_lock(&self) -> Option<Lock> {
+        if !self.writes_allowed() {
+            return Some(Lock::UnknownBuild);
+        }
+        (!self.health().passed(Check::Cohesion)).then_some(Lock::Failed(Check::Cohesion))
+    }
+
+    /// Why Max tactics may not be written now, if it may not: an unknown build not allowed, or the players' records of
+    /// familiarity and histories of training did not check out ([`Check::Tactics`]). Writing it also needs what
+    /// [`Session::structure_lock`] asks.
+    pub fn tactics_lock(&self) -> Option<Lock> {
+        if !self.writes_allowed() {
+            return Some(Lock::UnknownBuild);
+        }
+        (!self.health().passed(Check::Tactics)).then_some(Lock::Failed(Check::Tactics))
     }
 
     /// Why a change to the game's lists and records (a move, a heal, a captaincy, ...) may not be written now, if it
@@ -263,8 +344,89 @@ impl Session {
         if !self.writes_allowed() {
             return Some(Lock::UnknownBuild);
         }
+        if let Some(lock) = self.save_lock() {
+            return Some(lock);
+        }
         let health = self.health();
         STRUCTURE.into_iter().find(|&check| !health.passed(check)).map(Lock::Failed)
+    }
+
+    /// [`Lock::SaveChanged`] while the game may have another save than the one the editor read, unless the writes
+    /// were vouched for ([`Session::vouch_for_save`]).
+    fn save_lock(&self) -> Option<Lock> {
+        let vouched = self.save_vouched.load(Ordering::Relaxed);
+        (!vouched && self.save_changed()).then_some(Lock::SaveChanged)
+    }
+
+    /// Whether the game has loaded a save, or been seen with none loaded (at its main menu, its lists empty), since
+    /// the editor read it: since it connected, or last ran [`Session::recheck`]. What the editor read then may belong
+    /// to another save, even where the lists and objects are where they were, so it writes nothing meanwhile
+    /// ([`Lock::SaveChanged`]); once this is so, it stays so until the next `recheck`. The game's count of the saves
+    /// it has loaded ([`Session::loads`]) tells a load from a save, which leaves the count as it is; where the editor
+    /// cannot read the count, only the empty lists of the main menu tell, as a new game does not change the count.
+    pub fn save_changed(&self) -> bool {
+        let loads = self.loads();
+        let players = self.arrays.players.as_ref();
+        let empty = players.and_then(|array| array.locate(&self.process, &self.plugin).ok()).map(|(_, n)| n == 0);
+        let mut mark = self.save_mark.lock().unwrap_or_else(PoisonError::into_inner);
+        *mark = mark.seen(loads, empty);
+        mark.changed
+    }
+
+    /// Takes what the game has loaded now as what the editor read: on connecting, and by [`Session::recheck`].
+    fn mark_read(&self) {
+        let mark = SaveMark { loads: self.loads(), changed: false };
+        *self.save_mark.lock().unwrap_or_else(PoisonError::into_inner) = mark;
+    }
+
+    /// Has the writes made while what it returns lives leave out the check that the game still has the save the
+    /// editor read ([`Lock::SaveChanged`]): for writes worked out from what the game holds now, once their caller has
+    /// made sure itself that the game has a save it may write them to. The app gives a stadium renamed in the editor
+    /// its name again that way when the game has loaded a save of the same career, whose clubs it has read again.
+    #[must_use = "the check is back as soon as what this returns is dropped"]
+    pub fn vouch_for_save(&self) -> SaveVouched<'_> {
+        self.save_vouched.store(true, Ordering::Relaxed);
+        SaveVouched(self)
+    }
+
+    /// How many saves the game has loaded since it started, read now from its own object
+    /// ([`crate::profile::GameLayout`]); `None` where the layout does not place the count, the static pointer to the
+    /// object is not found, or what it points at now is not of the object's class.
+    pub fn loads(&self) -> Option<u64> {
+        let game = self.layout.game.as_ref()?;
+        let place = self.game_place()?;
+        let object = self.process.read_u64(self.plugin.base + place.rva).ok()?;
+        if !is_user_pointer(object) || !self.is_game_ui(object) {
+            return None;
+        }
+        self.process.read_u64(object + game.loads).ok()
+    }
+
+    /// Where the build profile puts the static pointer to the game's own object, unless every place is searched for.
+    pub(crate) fn placed_game_ui(&self) -> Option<u64> {
+        self.profile.as_ref().filter(|_| !self.search_all)?.game_ui
+    }
+
+    /// Where the static pointer to the game's own object is, and how it was found: looked for the first time it is
+    /// needed (see [`crate::locate`]). `None` when it cannot be found in this build.
+    pub fn game_place(&self) -> Option<Place> {
+        let mut place = self.game_place.lock().unwrap_or_else(PoisonError::into_inner);
+        *place.get_or_insert_with(|| find_game_ui(self))
+    }
+
+    /// Whether `object` is the game's own object, by the name of its class.
+    pub(crate) fn is_game_ui(&self, object: u64) -> bool {
+        let (Some(game), Ok(vtable)) = (self.layout.game.as_ref(), self.process.read_u64(object)) else {
+            return false;
+        };
+        if self.game_class.get() == Some(&vtable) {
+            return true;
+        }
+        if class_of(&self.process, &self.plugin, object).is_none_or(|class| class != mangled(&game.class)) {
+            return false;
+        }
+        let _ = self.game_class.set(vtable);
+        true
     }
 
     /// The class (vtable) of stadiums, the only objects a stadium field is written to; `None` when it cannot be told.
@@ -389,5 +551,131 @@ impl Session {
             (details.retirement_known, details.retires) = (true, date);
         }
         Ok(Some(details))
+    }
+}
+
+#[cfg(all(test, windows))]
+impl Session {
+    /// A session over `process`, a test's own, with `layout` and no game, profile or arrays behind it: for the writes
+    /// that only follow the pointers a test has laid out in memory of its own, such as an undo (see `Session::revert`),
+    /// which neither the build nor the checks of the game's health are asked about.
+    pub(crate) fn over(process: Process, layout: Layout) -> Self {
+        Self {
+            process,
+            game: GameInfo {
+                pid: 0,
+                exe_path: Default::default(),
+                storefront: crate::game::Storefront::Unknown,
+                edition: Some(27),
+                package_full_name: None,
+                package_version: None,
+                steam_build: None,
+            },
+            plugin: Module { name: GAME_PLUGIN.to_owned(), base: 0, size: 0, path: Default::default() },
+            fingerprint: PluginFingerprint::Pe { size_of_image: 0, link_timestamp: 0 },
+            profile: None,
+            layout,
+            arrays: EntityArrays::none(),
+            finance_class: OnceLock::new(),
+            stadium_class: OnceLock::new(),
+            retirement_class: OnceLock::new(),
+            retirement_place: Mutex::new(None),
+            game_class: OnceLock::new(),
+            game_place: Mutex::new(None),
+            save_mark: Mutex::new(SaveMark::default()),
+            save_vouched: AtomicBool::new(false),
+            selection_class: OnceLock::new(),
+            loan_class: OnceLock::new(),
+            own_memory: Mutex::new(None),
+            pools_found: Mutex::new(Vec::new()),
+            runtime: OnceLock::new(),
+            transfer_manager: Mutex::new(None),
+            health: Mutex::new(None),
+            unknown_build_allowed: AtomicBool::new(false),
+            search_all: false,
+        }
+    }
+
+    /// Writes `bytes` at `at`, in memory of the test's own (see [`Blocks`]).
+    pub(crate) fn put(&self, at: u64, bytes: &[u8]) {
+        self.process.write_bytes(at, bytes).expect("memory of the test's own");
+    }
+
+    pub(crate) fn put_pointer(&self, at: u64, value: u64) {
+        self.put(at, &value.to_le_bytes());
+    }
+
+    /// Lays out the team at `team` as the game does: its list of players, at `list`, holds `players`.
+    pub(crate) fn lay_out_team(&self, team: u64, list: u64, players: &[u64]) {
+        let end = list + 8 * players.len() as u64;
+        self.put(
+            team + self.layout.team.players,
+            &[list, end, end].iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>(),
+        );
+        for (i, &player) in players.iter().enumerate() {
+            self.put_pointer(list + 8 * i as u64, player);
+        }
+    }
+
+    /// Lays out the player at `player` as the game does: his UID, the team he plays for, and his contract at
+    /// `contract`, which points back at him, with the squad number `number`. Whether his team lists him is up to it.
+    pub(crate) fn lay_out_player(&self, player: u64, contract: u64, uid: u32, team: u64, number: u8) {
+        let (p, c) = (&self.layout.player, &self.layout.contract);
+        self.put(player + p.uid, &uid.to_le_bytes());
+        self.put_pointer(player + p.team, team);
+        self.put_pointer(player + p.contract, contract);
+        self.put_pointer(contract + c.owner, player + p.identity());
+        self.put(contract + c.squad_number, &[number]);
+    }
+}
+
+/// Memory of a test's own for the objects of teams and players: blocks of [`Blocks::SIZE`] bytes, each holding every
+/// field of an object the checks read. A test writes it through a [`Session::over`] its own process, and nothing else
+/// touches it while it lives.
+#[cfg(all(test, windows))]
+pub(crate) struct Blocks(Vec<u64>);
+
+#[cfg(all(test, windows))]
+impl Blocks {
+    pub(crate) const SIZE: u64 = 0x800;
+
+    /// `count` blocks, zeroed.
+    pub(crate) fn new(count: u64) -> Self {
+        Self(vec![0; (count * Self::SIZE) as usize / size_of::<u64>()])
+    }
+
+    /// Where block `index` starts: aligned as the game's pointers are.
+    pub(crate) fn at(&self, index: u64) -> u64 {
+        self.0.as_ptr() as u64 + index * Self::SIZE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_load_or_the_main_menu_changes_the_save_until_it_is_read_again() {
+        let read = SaveMark { loads: Some(2), changed: false };
+        // A save, or a day played: the count stays, and so do the players.
+        assert_eq!(read.seen(Some(2), Some(false)), read);
+        // What could not be read tells nothing.
+        assert_eq!(read.seen(None, None), read);
+        // A load raises the count; the main menu empties the lists. Either stays told, whatever is seen after it: a
+        // save loaded from the main menu, or a new game started there, which leaves the count as it was.
+        let loaded = read.seen(Some(3), Some(false));
+        assert!(loaded.changed);
+        assert!(loaded.seen(Some(2), Some(false)).changed);
+        let menu = read.seen(Some(2), Some(true));
+        assert!(menu.changed);
+        assert!(menu.seen(Some(2), Some(false)).changed);
+        // Where the count cannot be read (macOS, for now), the main menu still tells.
+        let uncounted = SaveMark { loads: None, changed: false };
+        assert!(!uncounted.seen(None, Some(false)).changed);
+        assert!(uncounted.seen(None, Some(true)).changed);
+        // A count the editor could not read when it read the lists is the first it reads.
+        let first = uncounted.seen(Some(4), Some(false));
+        assert_eq!(first, SaveMark { loads: Some(4), changed: false });
+        assert!(first.seen(Some(5), Some(false)).changed);
     }
 }

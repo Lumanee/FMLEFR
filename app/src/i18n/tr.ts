@@ -4,9 +4,21 @@
 // Turkish has no plural after a number ("3 değişiklik"), and its case endings follow the word they end, not a
 // number, so the sentences are built to put an ending on a noun ("oyuncunun"), never on a figure.
 
-import type { Entity, MassOperationKind, MassPreview, PlayerSort, SquadSort, Storefront } from "../types";
+import type {
+  Concern,
+  EditEntity,
+  Entity,
+  MassOperationKind,
+  MassPreview,
+  OpportunityKind,
+  PlayerSort,
+  SquadSort,
+  Storefront,
+} from "../types";
 import type { ErrorTexts, Strings } from "./en";
 import { fieldName } from "./fieldNames";
+import { reasonText } from "./reasons";
+import { placeNameTR, REASONS_TR } from "./reasons/tr";
 
 const numbers = new Intl.NumberFormat("tr-TR");
 const percents = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
@@ -60,6 +72,7 @@ const CONTRACT_TYPES: Partial<Record<number, string>> = {
   2: "Amatör sözleşme",
   3: "Genç oyuncu sözleşmesi",
   4: "Sözleşmesiz",
+  8: "A takım sözleşmesi",
   10: "Asgari ücretli A takım sözleşmesi",
   11: "A takım sözleşmesi",
 };
@@ -73,7 +86,9 @@ const recordNoun = (entity: string | undefined) =>
 
 /** The reasons the Rust side gives for a field that cannot be changed some way. */
 const UNSUPPORTED: Partial<Record<string, string>> = {
-  "a date can only be set": "bir tarih yalnızca doğrudan ayarlanabilir",
+  "a date can only be set or moved by years":
+    "bir tarih yalnızca doğrudan ayarlanabilir ya da yıl eklenerek kaydırılabilir",
+  "only a date can be moved by years": "yalnızca bir tarihe yıl eklenebilir",
   "it is changed one person at a time": "bu alan kişi kişi değiştirilir",
   "the new value is not one of the game's own records of that kind":
     "yeni değer, oyunun bu türdeki kendi kayıtlarından biri değil",
@@ -99,6 +114,13 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (tr.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Bu takımda sakat oyuncu yok.",
+  "team.noCohesion": () =>
+    "Editör bu takımın uyumunu okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da oyuncuların hiçbirinin " +
+    "kulüple uyumu yok.",
+  "team.noTactics": () =>
+    "Editör bu takımın taktiğini ne kadar bildiğini okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da " +
+    "takım senin seçtiğin bir taktiği oynamıyor.",
   "edit.unknownField": (p) => `Burada “${p.field}” adında düzenlenebilir bir alan yok.`,
   "edit.outOfRange": (p) => `${field(p.field)} için ${p.value} geçersiz: ${p.min} ile ${p.max} arasında olmalı.`,
   "edit.notADate": (p) => `${p.value}, ${field(p.field)} için geçerli bir tarih değil.`,
@@ -132,6 +154,12 @@ const errors: ErrorTexts = {
     "Düzenleyici, oyunun bu sürümünde sözleşmeleri nerede tuttuğunu bulamıyor; bu yüzden serbest oyuncuya sözleşme veremiyor.",
   "sign.poolFull": () =>
     "Oyunun başka bir sözleşmeye yeri yok; yer, oyun günler geçtikçe kendi sözleşmelerini yaptıkça açılır. Oyunda bir gün ilerleyip tekrar deneyin.",
+  "arrange.unknown": () => "Düzenleyici, oyunun bu sürümünde transferlerin nerede tutulduğunu bulamıyor.",
+  "arrange.underWay": () => "Oyuncunun anlaşılmış bir transferi ya da henüz yanıtlanmamış bir teklifi var.",
+  "arrange.noMemory": () =>
+    "Düzenleyici bunun için oyunda bellek alamadı: Sistem, oyunun kendi işlevlerini düzenleyici için çalıştırmasına izin vermedi.",
+  "arrange.made": () =>
+    "Oyun bu transferi zaten yaptı ya da ayarlanırken yazılanları değiştirdi: geri alınamaz.",
   "sign.noModel": () =>
     "Kulübün A takımında yeni sözleşmeye örnek alınacak, olağan sözleşmeli bir oyuncu yok.",
   "sign.noDate": () => "Düzenleyici oyun içi tarihi okuyamıyor; yeni sözleşme o tarihte başlar.",
@@ -146,6 +174,9 @@ const errors: ErrorTexts = {
     "düzenlemeyi açar.",
   "guard.failed": (p) =>
     `${checkName(p.check)} oyunun bu sürümünde denetimden geçmedi, bu yüzden FMLibreEditor onları değiştirmiyor.`,
+  "guard.saveChanged": () =>
+    "FMLibreEditor oyunu okuduktan sonra oyun bir kayıt yükledi ya da ana menüye döndü, bu yüzden “Verileri yeniden " +
+    "oku”ya basana kadar hiçbir şeyi değiştirmiyor.",
   "retirement.none": () => "Oyun bu oyuncunun emekliliğini planlamamış ve oyuncu zaten oynamaya devam etmek istiyor.",
   "clause.noContract": () => "Oyuncunun sözleşmesi yok.",
   "clause.missing": () => `Sözleşmede bu madde artık yok; ${reload}.`,
@@ -167,6 +198,14 @@ const errors: ErrorTexts = {
   "staff.notListed": () => "Kulübün personel listeleri onu olması gereken yerde tutmuyor.",
   "staff.noRoom": (p) =>
     `Kulübün ${STAFF_DEPARTMENTS[p.department] ?? p.department} listesinde bir kişiye daha yer yok (şu an ${p.staff}) ve düzenleyici bu sistemde listeyi büyütemez.`,
+  "names.unknown": () =>
+    "Editör, oyunun bu sürümünde kişilerin adlarını nerede tuttuğunu bulamıyor; bu yüzden onları değiştiremiyor.",
+  "names.noRoom": (p) =>
+    `Oyunda şu an yeni bir ${({ first: "ad", last: "soyad", common: "bilinen ad" } as Record<string, string>)[p.table] ?? "ad"} için yer yok. ` +
+    "Yeni oyuncular ve personel geldikçe oyun kendisi yer açar; ya da oyunu kaydedin, kaydı yeniden yükleyin ve tekrar deneyin.",
+  "names.same": () => "Ad zaten bu.",
+  "names.bad": (p) =>
+    `Ad ya da soyad boş olamaz; hiçbir ad boşlukla başlayıp bitemez, denetim karakteri içeremez ve ${p.max} bayttan uzun olamaz.`,
   "stadium.none": () => "Kulübün A takımının oynadığı stadyum okunamıyor.",
   "stadium.shared": (p) => `Bu adı oyunda ${p.holders} şey paylaşıyor; yalnızca bu stadyum için değiştirilemez.`,
   "stadium.nameLength": (p) =>
@@ -227,6 +266,8 @@ const errors: ErrorTexts = {
   "app.dataChanged": () => `Bu veriler oyunda değişti; ${reload}.`,
   "app.noChange": (p) => `${p.id} numaralı bir değişiklik yok.`,
   "app.alreadyUndone": () => "Bu değişiklik zaten geri alındı.",
+  "app.historyOnly": () => "Bu değişiklik uygulama son bağlandığından önce yapıldı ve geri almak için oyunun belleğinin o anki hâli gerekiyordu: elle geri değiştir.",
+  "app.history": (p) => `Geçmiş temizlenemedi: ${p.reason}`,
   "export.failed": (p) => `Dosya yazılamadı: ${p.reason}`,
   "export.notAllowed": (p) =>
     `FMLibreEditor ${p.folder} klasörüne yazamıyor. macOS, Belgeler klasörünü kullanıp kullanamayacağını sorduysa ` +
@@ -304,12 +345,6 @@ const TRAIT_NAMES_TR: readonly string[] = [
   "Topu savunmadan çıkarır",
   "Topu ayaklarıyla oynar"
 ];
-
-const CONCERN_MOTIVES_TR: Partial<Record<number, string>> = {
-  596: "Bir turnuvanın kadrosuna alınmadı",
-  808: "Bir takım arkadaşına haksızlık yapıldığını düşünüyor",
-  926: "Bir takım arkadaşının istediği forma süresini hak etmediğini düşünüyor",
-};
 
 const CLAUSE_NAMES_TR: Partial<Record<number, string>> = {
   0: "Serbest kalma maddesi",
@@ -542,6 +577,7 @@ export const tr: Strings = {
     date_of_birth: "Doğum tarihi",
     asking_price: "İstenen bedel",
     nation: "Uyruk",
+    city_of_birth: "Doğum yeri",
     "reputation.home": "Yerel itibar",
     "reputation.current": "Güncel itibar",
     "reputation.world": "Dünya itibarı",
@@ -572,6 +608,8 @@ export const tr: Strings = {
     "tie.workPermit": "Çalışma izni gerekmeyen ülke",
     club: "Kulüp",
     injuries: "Sakatlıklar",
+    cohesion: "Uyum",
+    tactics: "Taktik aşinalığı",
     bans: "Cezalar",
     retirement: "Emeklilik",
     clause: "Sözleşme maddesi",
@@ -591,9 +629,16 @@ export const tr: Strings = {
     "finance.total_wage_budget": "Toplam maaş bütçesi",
     "stadium.capacity": "Stadyum kapasitesi",
     "stadium.name": "Stadyum adı",
+    "name.first": "Ad",
+    "name.last": "Soyad",
+    "name.common": "Bilinen ad",
+    "name.full": "Tam isim",
     "stadium.seating": "Oturma kapasitesi",
     "stadium.used": "Kullanılan kapasite",
     "stadium.expansion": "Genişleme kapasitesi",
+    "prize.win": "Galibiyet başına lig para ödülü",
+    "prize.draw": "Beraberlik başına lig para ödülü",
+    "prize.loss": "Mağlubiyet başına lig para ödülü",
   },
 
   profile: {
@@ -650,6 +695,10 @@ export const tr: Strings = {
     signed: "İmza tarihi",
     expires: "Bitiş tarihi",
     joined: "Katılım tarihi",
+    extendContract: (years: number) => `${years} yıl uzat`,
+    extendingContract: "Uzatılıyor…",
+    extendContractTitle: (years: number, until: string) =>
+      `Sözleşmeyi ${years} yıl uzatır, ${until} tarihinde biter; Değişiklikler'den geri alınabilir`,
     squadStatus: "Forma süresi",
     squadStatusName: (status) => SQUAD_STATUSES[status] ?? `Durum ${status}`,
     contractType: "Sözleşme türü",
@@ -688,9 +737,12 @@ export const tr: Strings = {
     removeUnhappiness: "Hepsini kaldır",
     removingUnhappiness: "Kaldırılıyor…",
     removeUnhappinessTitle: "FMRTE'nin Remove all düğmesi gibi, mutsuzluk nedenlerinin hepsini listesinden kaldırır; Değişiklikler'den geri alınabilir",
+    removeUnhappinessFollows:
+      "Takım arkadaşlarının onunla ilgili mutsuzluk nedenleri, oyun bir kez ilerleyince kendiliğinden biter: oyunda Devam'a basın",
     concernSince: (date) => `${date} tarihinden beri`,
+    concernAbout: (name) => `${name} hakkında`,
     concernKind: (kind) => (kind === 1 ? "Endişeli" : kind === 2 ? "İçsel" : `Tür ${kind}`),
-    concernMotive: (motive) => CONCERN_MOTIVES_TR[motive] ?? `Neden ${motive}`,
+    concernMotive: (concern: Concern) => reasonText(REASONS_TR, concern, placeNameTR) ?? `Neden ${concern.motive}`,
     clauses: "Primler ve maddeler",
     noClauses: "Prim ya da madde yok",
     loyaltyBonus: "Sadakat primi",
@@ -977,8 +1029,9 @@ export const tr: Strings = {
 
     // The tabs under the header
     tabsLabel: "Kulüp bölümleri",
-    tabs: { overview: "Genel", squad: "Kadro", stadium: "Stadyum" },
+    tabs: { overview: "Genel", squad: "Kadro", staff: "Personel", stadium: "Stadyum" },
     squadLocked: "Kadroyu açmak için düzenlemeyi bitirin",
+    staffLocked: "Personeli açmak için düzenlemeyi bitirin",
 
     facilities: "Tesisler",
 
@@ -1035,6 +1088,83 @@ export const tr: Strings = {
     socialMedia: "Sosyal medya takipçileri",
   },
 
+  clubStaff: {
+    loading: "Personel okunuyor…",
+    empty: "Oyun bu kulüp için personel tutmuyor: bu kayıtta oynanmayan liglerin kulüplerinde personel yoktur.",
+    count: (total, staying) =>
+      staying === 0
+        ? `${format(total)} personel`
+        : `${format(total)} personel · diğerleri serbest bırakılırsa ${format(staying)} kişi kalır`,
+
+    actionsLabel: "Bütün personele yönelik işlemler",
+    releaseAll: (count) => (count === 0 ? "Tüm personeli serbest bırak" : `Tüm personeli serbest bırak (${format(count)})`),
+    releaseAllTitle: "Siz ve yönetim dışında kulübün bütün personelini bir kerede serbest bırak; önce bir pencere sorar",
+    releaseNone: "Bu kulübün personelinden serbest bırakılabilecek kimse yok",
+    hint: "Siz ve yönetim dışında herkes kulüpten hemen ayrılır. Geri alma Değişiklikler bölümünde de var.",
+    released: (count) => `${format(count)} personel serbest bırakıldı`,
+    refused: (name, reason) => `${name}: ${reason}`,
+    undo: "Geri al",
+    undoTitle: "Serbest bırakılan personeli sözleşmeleriyle kulübe geri getir",
+
+    tableLabel: "Kulübün personeli",
+    staysColumn: "Kalıyor",
+    stays: {
+      you: "Siz",
+      board: "Yönetim",
+      player: "Aynı zamanda oyuncu",
+      held: "Kulüp başka bir yerde tutuyor",
+      other: "Serbest bırakılamaz",
+    },
+
+    title: "Tüm personeli serbest bırak",
+    from: "Kulüp",
+    leaving: (count) => `${format(count)} kişi kulüpten ayrılır`,
+    staying: (count) => `${format(count)} kişi kalır`,
+    more: (count) => `ve ${format(count)} kişi daha`,
+    doesHeading: "Ne yapar",
+    does: [
+      "Her biri kulübün personelinden hemen ayrılır ve sözleşmesi sona erer: oyunun kendi kulüpsüz personeli gibi işsiz kalır",
+      "Kimseye ödeme yapılmaz",
+      "Teknik direktörlük ya da futbol direktörlüğü yeri, kulüp doldursun diye boş kalır",
+      "Siz, yönetim ve editörün serbest bırakamadıkları kalır",
+      "Değişiklikler bölümünde listelenir; tek geri alma hepsini aynı sözleşmelerle geri getirir",
+    ],
+    dialogHint: "Hepsini serbest bırak düğmesine basana kadar oyunda hiçbir şey değişmez.",
+    release: "Hepsini serbest bırak",
+    releasing: "Serbest bırakılıyor…",
+    cancel: "İptal",
+
+    moveAll: "Tüm personeli taşı",
+    moveAllTitle:
+      "Siz ve yönetim dışında kulübün bütün personelini bir kerede başka bir kulübe taşı; önce bir pencere sorar",
+    moveNone: "Bu kulübün personelinden taşınabilecek kimse yok",
+    moved: (count, club) => `${format(count)} personel ${club} kulübüne taşındı`,
+    undoMoveTitle: "Taşınan personeli sözleşmeleriyle bu kulübe geri getir",
+    moveTitle: "Tüm personeli taşı",
+    moveSearch: "Personelin taşınacağı kulübü ara",
+    movePick: "Personelin taşınacağı kulübü seçin.",
+    movePlanning: "Kimlerin taşınabileceğine bakılıyor…",
+    movePlan: (count, club) => `${format(count)} personel ${club} kulübüne taşınır`,
+    moveNobody: (club) => `Bu kulübün personelinden ${club} kulübüne taşınabilecek kimse yok.`,
+    moveStays: {
+      managerTaken: (club) => `${club} kulübünün teknik direktörü var`,
+      directorTaken: (club) => `${club} kulübünün futbol direktörü var`,
+      yourClub: (club) => `${club} kulübünü siz yönetiyorsunuz`,
+      other: "Taşınamaz",
+    },
+    moveDoes: [
+      "Her biri yeni kulübe görevinin olduğu yerde katılır: sağlık, antrenörlük ya da gözlem bölümüne",
+      "Görevi, maaşı ve sözleşme bitişi aynı kalır; her sözleşme oyundaki tarihle başlar",
+      "Teknik direktör ya da futbol direktörü yalnızca yeni kulüpteki yeri boşsa katılır; burada boşalan yer, kulüp " +
+        "doldursun diye boş kalır",
+      "Siz, yönetim ve editörün taşıyamadıkları kalır",
+      "Değişiklikler bölümünde listelenir; tek geri alma hepsini bu kulübe geri getirir",
+    ],
+    moveHint: "Hepsini taşı düğmesine basana kadar oyunda hiçbir şey değişmez.",
+    move: "Hepsini taşı",
+    moving: "Taşınıyor…",
+  },
+
   clubList: {
     nav: "Kulüpler",
     count: (total) => `${format(total)} kulüp`,
@@ -1054,6 +1184,8 @@ export const tr: Strings = {
     women: "Kadın",
     columns: {
       name: "İsim",
+      nation: "Ülke",
+      league: "Lig",
       reputation: "İtibar",
       founded: "Kuruluş",
       uid: "UID",
@@ -1063,9 +1195,124 @@ export const tr: Strings = {
       all: "Tüm kulüpler",
       men: "Erkek kulüpleri",
       women: "Kadın kulüpleri",
+      nation: "Ülke",
+      league: "Lig",
+      anyLeague: "Tüm ligler",
+      leagueTitle: "A takımın bu sezon oynadığı lig",
+      reputation: "İtibar",
+      reputationTitle: "Oyunun tuttuğu gibi 0 ile 10.000 arası",
+      minReputation: "En düşük itibar",
+      maxReputation: "En yüksek itibar",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "Milli takımlar",
+    switchLabel: "Kulüpler veya milli takımlar",
+    search: "Ada, koda veya UID'ye göre milli takım ara",
+    summary: (total, shown) =>
+      total > shown ? `Milli takımlar: ${format(total)} · itibara göre ilk ${shown} gösteriliyor` : `Milli takımlar: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "Bu filtreye uyan milli takım yok." : "Milli takım bulunamadı.";
+      }
+      return filtered ? `“${query}” aramasına ve bu filtreye uyan milli takım yok.` : `“${query}” aramasına uyan milli takım yok.`;
+    },
+    /** The small tag on a women's team. */
+    women: "Kadın",
+    columns: {
+      name: "Ülke",
+      code: "Kod",
+      reputation: "İtibar",
+      players: "Oyuncu",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Gösterilecek takımlar",
+      all: "Tüm takımlar",
+      men: "Erkek takımları",
+      women: "Kadın takımları",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Kadın milli takımı",
+    mensTeam: "Erkek milli takımı",
+    reputationShort: "İTB",
+    reputationTitle: "A takımın itibarı, 0 ile 10.000 arası",
+    teamKinds: { 0: "A takım", 9: "U23", 10: "U21", 18: "U20", 11: "U19", 12: "U18" },
+    teamType: (kind) => `Tür ${kind}`,
+    teamsLabel: "Bu milli takımın takımları",
+    teamReputation: (team) => `İtibar (${team})`,
+    teamReputationTitle: "Bu takımın itibarı, 0 ile 10.000 arası",
+    squadHeading: (team, count) => `${team}: ${format(count)} oyuncu`,
+    squadLabel: (team) => `Milli takım oyuncuları: ${team}`,
+    squadNote: "Oyunun bu takım için listelediği oyuncular, oyunun sırasıyla. Çağrılar, kaptanlar ve teknik direktörün sözleşmesi burada düzenlenmez.",
+    actionsHint: "İşlemler A takımın listelediği tüm oyunculara uygulanır. Geri alma Değişiklikler bölümünde de var.",
+    noTeams: "Oyun bu milli takım için hiçbir takım tutmuyor, bu yüzden gösterilecek kadro veya itibar yok.",
+    reading: "Kadro okunuyor…",
+    noPlayers: "Oyun bu takım için oyuncu listelemiyor.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "Milli takımlar oyunun bu sürümünde kullanılamıyor",
+    unavailableBuild: "Oyunun bu sürümünün milli takımları nerede tuttuğunu henüz kimse bulmadı; bu yüzden editör yanlış belleği okumak yerine hiçbirini göstermiyor.",
+    unavailableUnreadable: "Editör, oyunun bu sürümünde milli takımları beklediği yere baktı ama bulduğu şey oyunun verisine benzemiyor; bu yüzden hiçbirini göstermiyor.",
+  },
 
+  leaguePrizes: {
+    title: "Lig para ödülü",
+    league: (league) => `Bu sezon ${league} ödemeleri`,
+    reading: "Ligin para ödülleri oyundan okunuyor… İlk seferde yarım dakika ya da daha uzun sürebilir.",
+    readAgain: "Yeniden oku",
+    readAgainTitle: "Tutarları oyundan yeniden oku: o zamandan beri başlayan bir aşama da ödeme yapıyor olabilir",
+    paysNothing: "Kulübün ligi bu sezon ne sezon sonu sıralamasına göre ne de maç başına para ödülü ödüyor.",
+    stageStarted: "Oynanan aşama",
+    stageFuture: "Henüz başlamamış aşama",
+    alike: (count) => `${format(count)} grup veya aşamada aynı tutarlar`,
+    byPosition: "Sezon sonu sıralamasına göre",
+    place: (place) => `${format(place)}.`,
+    perMatch: "Maç başına",
+    win: "Galibiyet başına",
+    draw: "Beraberlik başına",
+    loss: "Mağlubiyet başına",
+    noList: "Sıralamaya göre ödeme yok.",
+    noPerMatch: "Maç başına ödeme yok.",
+    note: "Eleme turlarının ödülleri (örneğin finalin kazananına ve kaybedenine ödenenler) ve katılım ücreti henüz okunmuyor.",
+    unavailableBuild: "Oyunun bu sürümünün para ödüllerini nerede tuttuğunu henüz kimse kontrol etmedi; bu yüzden editör yanlış belleği okumak yerine hiçbirini göstermiyor.",
+    unavailableUnreadable: "Editör para ödüllerini oyunun bu sürümünde beklediği yerde aradı, ama bulduğu veri oyunun verisine benzemiyor; bu yüzden hiçbirini göstermiyor.",
+    edit: "Tutarları değiştir",
+    editTitle: "Ligin bu aşamasında ödenen tutarları ligdeki her kulüp için değiştir",
+    save: "Tutarları kaydet",
+    saving: "Kaydediliyor…",
+    cancel: "Vazgeç",
+    everyClub: (league) =>
+      `Bu değişiklik yalnızca bu kulübü değil, ${league} içindeki her kulübü etkiler. Oyun bunu kayıtta tutar, ama yalnızca bu sezon için: sonraki sezonu yine kendi tutarlarıyla kurar. Değişiklikler sekmesindeki Geri al eski tutarları geri getirir.`,
+    infoLabel: "Para ödülündeki bir değişiklik ne kadar sürer",
+    invalid: (most) => `0 ile ${most} arasında tam bir tutar girin.`,
+    allNothing: "Hiçbir şey ödemeyen bir aşama artık listelenmez: en az bir tutarı sıfırın üzerinde bırakın.",
+    placeField: (place) => `${format(place)}. sıra için lig para ödülü`,
+    changedIn: (league, groups) =>
+      groups > 1 ? `${league} içindeki her kulüp için, ${format(groups)} grupta` : `${league} içindeki her kulüp için`,
+  },
+
+  sponsorships: {
+    title: "Sponsorluk anlaşmaları",
+    reading: "Kulübün sponsorluk anlaşmaları okunuyor…",
+    none: "Kulübün sponsorluk anlaşması yok.",
+    perSeason: "Sezon başına",
+    total: "Toplam değer",
+    term: "Süre",
+    years: (count) => `${format(count)} yıl`,
+    unnamed: (kind) => `Tür ${format(kind)}`,
+    unnamedTitle: "Bu anlaşma türü henüz oyunun ekranındaki bir adla eşleştirilmedi ve ekran onu göstermiyor olabilir.",
+    ended: "Bitti",
+    endedTitle: "Anlaşma oyundaki tarihten önce bitti. Oyunun Sponsorluk ekranı artık onu göstermiyor.",
+    falls: (percent) => `Küme düşerse %${format(percent)} azalır`,
+    rises: (percent) => `En üst lige çıkılırsa %${format(percent)} artar`,
+    note: "Yalnızca okunur. Bunlar oyunun her anlaşma için tuttuğu tutarlardır. Oyunun Sponsorluk ekranı bitmemiş anlaşmaları listeler.",
+    unavailableBuild: "Oyunun bu sürümünün sponsorluk anlaşmalarını nerede tuttuğunu henüz kimse denetlemedi; bu yüzden editör yanlış belleği okumak yerine hiçbirini göstermiyor.",
+    unavailableUnreadable: "Editör sponsorluk anlaşmalarını oyunun bu sürümünde beklediği yerde aradı, ancak bulduğu şey oyunun verisi gibi okunmuyor; bu yüzden hiçbirini göstermiyor.",
+  },
   app: {
     stage: "beta",
     settingsLabel: "Ayarlar",
@@ -1088,6 +1335,13 @@ export const tr: Strings = {
     detecting: "Football Manager aranıyor…",
     connecting: "Oyuncular, personel ve kulüpler okunuyor…",
     reloading: "Oyuncular, personel ve kulüpler yeniden okunuyor…",
+
+    saveChanged: {
+      title: "Oyundaki kayıt değişti",
+      text:
+        "FMLibreEditor oyunu okuduktan sonra oyun bir kayıt yükledi ya da ana menüye döndü. “Verileri yeniden oku”ya " +
+        "basana kadar oyunda hiçbir şeyi değiştirmez ve dondurulanları tutmaz: gösterdikleri başka bir kayda ait olabilir.",
+    },
 
     refrozen: {
       title: "Geçen seferden yeniden donduruldu",
@@ -1169,15 +1423,24 @@ export const tr: Strings = {
     unknownBuildText:
       "Oyun büyük ihtimalle güncellendi. FMLibreEditor oyunun verilerini buldu ve denetledi, ama denenmediği bir sürüme " +
       "siz izin vermeden yazmaz. Bu sürümü tanıyan yeni bir FMLibreEditor genellikle birkaç gün içinde çıkar.",
-    allowedText: "Düzenleme bu oturum için açık, denetimlerin izin verdiği kadarıyla. Kayıt dosyanızın yedeğini saklayın.",
     failedTitle: "Oyunun verilerinin bir kısmı denetimden geçmedi",
     reloadHint: "Kayıt hâlâ yükleniyorduysa “Verileri yeniden oku” yeniden denetler.",
     noDate: "Oyun içi tarih denetimden geçmedi, bu yüzden yaşlar gösterilmiyor.",
     failed: (names) => `Salt okunur bırakılanlar: ${names}.`,
+    failedCheck: (name, fit, sampled) => `${name} (${format(sampled)} örnekten ${format(fit)} uygun)`,
     join: (names) =>
       names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} ve ${names[names.length - 1]}`,
     allow: "Yine de düzenle",
     allowTitle: "Düzenlemeyi FMLibreEditor kapanana ya da yeniden bağlanana kadar açar. Önce kayıt dosyanızı yedekleyin.",
+  },
+
+  diagnostics: {
+    copy: "Tanılama bilgisini kopyala",
+    copyTitle:
+      "FMLibreEditor'ın oyunda bulduklarını, hata bildirimine yapıştırmanız için kopyalar. İsim ya da dosya yolu " +
+      "içermez.",
+    copied: "Kopyalandı",
+    failed: (reason) => `Tanılama bilgisi kopyalanamadı: ${reason}`,
   },
 
   checks: {
@@ -1191,6 +1454,8 @@ export const tr: Strings = {
     teams: "takımlar",
     staff: "personel",
     clubs: "kulüpler",
+    cohesion: "kulüplerle uyum",
+    tactics: "taktik aşinalığı",
   },
 
   update: {
@@ -1211,8 +1476,16 @@ export const tr: Strings = {
     failed: "Güncellemeler denetlenemedi.",
   },
 
+  star: {
+    title: "FMLibreEditor'ı beğendiniz mi?",
+    text: "GitHub'da bir yıldız, daha çok oyuncuya ulaşmasına ve daha hızlı gelişmesine yardımcı olur.",
+    star: "GitHub'da yıldız ver",
+    dismiss: "Kapat",
+  },
+
   edit: {
     unknownNation: "Bilinmeyen ülke",
+    unknownCity: "Bilinmeyen şehir",
     edit: "Düzenle",
     editTitle: "Bu profilin değerlerini oyunda değiştir",
     startFailed: (reason) => `Düzenleme başlatılamadı: ${reason}`,
@@ -1251,12 +1524,38 @@ export const tr: Strings = {
 
   changes: {
     nav: "Değişiklikler",
-    title: "Bu oturumdaki değişiklikler",
-    hint: "En yeniler üstte. Bir değişiklik yalnızca oyun yazdığı değeri hâlâ tutuyorsa geri alınabilir.",
+    title: "Değişiklikler",
+    hint:
+      "En yenisi en üstte. Uygulama her kariyerin değişikliklerini saklar; yeniden başlatınca da listelenirler. Bir değişiklik, ancak oyun yazdığı değeri hâlâ tutuyorsa geri alınabilir.",
+    /** Under the hint, when the list holds changes from earlier sessions: how many, and how many of them the game did not hold. */
+    earlierNote: (count, missing) =>
+      `Önceki oturumlardan ${format(count)} değişiklik` +
+      (missing > 0 ? `; ${format(missing)} tanesi veriler okunduğunda oyunda yoktu` : "") +
+      ". Bunlar arasındaki transferler, iyileştirmeler, bağlar, maddeler ve isimler geçmiş olarak durur, geri alınamaz.",
+    /** The small tag after the name of an earlier change, and its hover text. */
+    earlierTag: "Önceki",
+    earlierTitle: "Uygulama son bağlandığından önce yazıldı; bu kariyerin geçmişinde saklanıyor",
+    /** Under the status of an earlier change: whether the game held its value when the data was last read. */
+    inGame: "Oyunda",
+    inGameTitle: "Veriler son okunduğunda oyun bu değeri tutuyordu",
+    notInGame: "Oyunda değil",
+    notInGameTitle: "Veriler son okunduğunda oyun bu değeri tutmuyordu: değişiklikten sonra oyun kaydedilmedi ya da oyun değeri o zamandan beri değiştirdi",
+    /** In the place of Undo for an earlier change that cannot be undone from here, and its hover text. */
+    historyOnly: "Geçmiş",
+    historyOnlyTitle: "Uygulama son bağlandığından önce yapıldı: geri almak için oyunun belleğinin o anki hâli gerekiyordu",
+    /** Under a mass edit: how many of its earlier changes the game did not hold. */
+    batchNotInGame: (count) => `${format(count)} tanesi oyunda değil`,
+    /** Empties the list and the history of the career; the question that asks first, and its two answers. */
+    clearHistory: "Geçmişi temizle",
+    clearHistoryTitle: "Bu listeyi boşalt ve bu kariyerin geçmişini unut. Değişiklikler oyunda kalır.",
+    confirmClear: "Bu kariyerin geçmişi temizlensin mi? Değişiklikler oyunda kalır, ama artık buradan geri alınamaz.",
+    keepHistory: "Vazgeç",
+    clearConfirm: "Temizle",
     continueHint: "Oyun değişiklikleri bir kez ilerleyince gösterir: oyunda Devam'a basın.",
     swappedWith: (name) => `Takas: ${name}`,
     released: (name) => `${name} serbest bırakıldı`,
     fee: (amount) => `Bedel ${amount}`,
+    arranged: (date) => `Oyun transferi ${date} tarihinde yapar`,
     optionRemoved: (amount) => `Satın alma opsiyonu (${amount}) kaldırıldı`,
     healed: (count) => `${format(count)} sakatlık iyileştirildi`,
     lifted: (count) => `${format(count)} ceza kaldırıldı`,
@@ -1275,7 +1574,7 @@ export const tr: Strings = {
       change: "Değişiklik",
       status: "Durum",
     },
-    kinds: { player: "Oyuncu", staff: "Personel", club: "Kulüp" } satisfies Record<Entity, string>,
+    kinds: { player: "Oyuncu", staff: "Personel", club: "Kulüp", nationalTeam: "Milli takım" } satisfies Record<EditEntity, string>,
     stored: (change) => `saklanan ${change}`,
     undone: (time) => `Geri alındı: ${time}`,
     undo: "Geri al",
@@ -1296,15 +1595,38 @@ export const tr: Strings = {
     previous: "Önceki",
     next: "Sonraki",
     range: (first, last, total) => `${format(first)}–${format(last)} / ${format(total)}`,
+
+    // Search and filters
+    /** The search box: what it looks through. Its name for assistive technology is the same. */
+    searchPlaceholder: "İsim, UID, alan veya kulüp ile değişiklik ara",
+    /** The name of the three buttons that choose which sessions' changes are listed, for assistive technology. */
+    sessionGroup: "Oturum",
+    sessions: { all: "Tümü", this: "Bu oturum", earlier: "Önceki oturumlar" },
+    /** The check boxes: only changes still in place, and only earlier ones the game did not hold; their hover text. */
+    notUndone: "Geri alınmamış",
+    notUndoneTitle: "Yalnızca hâlâ yerinde olan değişiklikler",
+    notInGameFilterTitle: "Yalnızca veriler son okunduğunda oyunun tutmadığı önceki değişiklikler",
+    /** Takes the search text and every choice away. */
+    clearFilter: "Filtreyi temizle",
+    /** The line beside the title while a search or a filter is on: `matching` of the `total` changes, `undone` of those undone. */
+    filteredCount: (matching, total, undone) => {
+      const count = `${format(matching)} / ${changes(total)}`;
+      return undone === 0 ? count : `${count} · ${format(undone)} geri alındı`;
+    },
+    /** Under a mass edit while a search or a filter is on: how many of its changes they leave. */
+    batchMatching: (matching, total) => `${format(matching)} / ${format(total)} eşleşiyor`,
+    /** In the place of the list when the search and the filters leave no change. */
+    noMatches: "Arama ve filtrelere uyan değişiklik yok.",
   },
 
   export: {
     button: "Dışa aktar",
     buttonTitle: {
       player: "Listedeki oyuncuları bir tablo programı ya da betik için CSV veya JSON dosyasına yaz",
+      staff: "Listedeki personeli bir tablo programı ya da betik için CSV veya JSON dosyasına yaz",
       club: "Listedeki kulüpleri bir tablo programı ya da betik için CSV veya JSON dosyasına yaz",
     },
-    title: { player: "Oyuncuları dışa aktar", club: "Kulüpleri dışa aktar" },
+    title: { player: "Oyuncuları dışa aktar", staff: "Personeli dışa aktar", club: "Kulüpleri dışa aktar" },
     scope: (entity, count) =>
       count === 0
         ? `Arama ve filtrelere uyan ${nouns[entity].plain} yok.`
@@ -1320,6 +1642,7 @@ export const tr: Strings = {
       csvSemicolon: "Ondalıkları virgülle yazan Excel için: Türkçe, İspanyolca ya da Almanca Excel gibi",
       json: {
         player: "Betikler için: pozisyonlar, özellikler ve kişilik ayrı nesneler olarak",
+        staff: "Betikler için: özellikler, kişilik ve sözleşme ayrı nesneler olarak",
         club: "Betikler için: taraftarlar, tesisler, stadyum ve mali durum ayrı nesneler olarak",
       },
     },
@@ -1328,8 +1651,11 @@ export const tr: Strings = {
         "Her oyuncunun yetenekleri, pozisyonları ve pozisyon puanları, 1–20 ölçeğinde özellikleri (gizliler dahil), " +
         "kişiliği, itibarı, milli maçları, sözleşmesi ve maddeleri; oyun tarihiyle birlikte. Paralar oyunun tuttuğu " +
         "gibi sterlin. Oyunda hiçbir şey değişmez.",
+      staff:
+        "Her personelin görevi ve kulübü, yetenekleri, 1–20 ölçeğinde özellikleri, kişiliği, itibarı ve sözleşmesi (maaş " +
+        "ve tarihler); oyun tarihiyle birlikte. Paralar oyunun tuttuğu gibi sterlin. Oyunda hiçbir şey değişmez.",
       club:
-        "Her kulübün itibarı, kuruluş yılı, kombine bilet sayısı, sosyal medya takipçileri, taraftar dağılımı ve " +
+        "Her kulübün ülkesi, ligi, itibarı, kuruluş yılı, kombine bilet sayısı, sosyal medya takipçileri, taraftar dağılımı ve " +
         "özellikleri, tesisleri, stadyumu ve mali durumu: bakiye, transfer bütçesi, haftalık maaş harcaması ile maaş " +
         "bütçesi ve bilet fiyatı; oyun tarihiyle birlikte. FM mali durumu yalnızca oynanan liglerdeki kulüpler için tutar. " +
         "Paralar oyunun tuttuğu gibi sterlin. Oyunda hiçbir şey değişmez.",
@@ -1344,6 +1670,25 @@ export const tr: Strings = {
     show: "Klasörde göster",
     showTitle: "Dosyayı klasöründe göster",
     close: "Kapat",
+
+    /** The export of the Changes view: a CSV file of the changes its search and filters show. */
+    changes: {
+      buttonTitle: "Listenin gösterdiği değişiklikleri bir hesap tablosu veya betik için CSV dosyasına yaz",
+      title: "Değişiklikleri dışa aktar",
+      /** What the export covers: everything the list's search and filters select, or, with none on, the whole history. */
+      scope: (count, filtering) =>
+        count === 0
+          ? "Arama ve filtrelere uyan değişiklik yok."
+          : filtering
+            ? `${changes(count)}: arama ve filtrelerin seçtikleri, en yenisi başta.`
+            : `${changes(count)}: bu kariyerin tüm geçmişi, en yenisi başta.`,
+      contents:
+        "Her değişikliğin saati (yerel saat, UTC'ye göre farkıyla), adı ve UID'si, alanı, eski ve yeni değeri " +
+        "(oyunun sakladığı gibi ve burada gösterildiği gibi), listenin bunların altına yazdığı notlar, dahil olduğu " +
+        "toplu düzenleme, geri alındıysa ne zaman alındığı, önceki bir oturumdan olup olmadığı ve oyunda olup " +
+        "olmadığı. Oyunda hiçbir şey değişmez.",
+      done: (count, file) => `${changes(count)} ${file} dosyasına aktarıldı`,
+    },
   },
 
   massEdit: {
@@ -1395,20 +1740,29 @@ export const tr: Strings = {
     row: (position) => `Değişiklik ${position}`,
     field: "Alan",
     operation: "İşlem",
-    operations: { set: "Ayarla", add: "Ekle", scale: "Ölçekle (%)" } satisfies Record<
+    operations: { set: "Ayarla", add: "Ekle", scale: "Ölçekle (%)", addYears: "Yıl ekle" } satisfies Record<
       MassOperationKind["op"],
       string
     >,
-    values: { set: "Değer", add: "Miktar", scale: "Yüzde" } satisfies Record<MassOperationKind["op"], string>,
+    values: { set: "Değer", add: "Miktar", scale: "Yüzde", addYears: "Yıl" } satisfies Record<
+      MassOperationKind["op"],
+      string
+    >,
     addTitle: "Her değere, gösterildiği gibi eklenir; negatif sayı çıkarır",
     addPointsTitle: "Her değere yüzde puanı olarak eklenir (%70 artı 10, %80 eder); negatif sayı çıkarır",
     rangeHint: (min, max) => `${format(min)}–${format(max)}`,
     amountHint: (max) => `±${format(max)}`,
     ofCurrent: "% (mevcut değerin)",
     percentTitle: "Mevcut değerin yüzdesi: 100 değeri korur, 110 onda bir artırır, 50 yarıya indirir",
+    addYearsTitle:
+      "Her tarihe eklenecek yıl sayısı; gün ve ay aynı kalır, negatif sayı tarihi geri alır. " +
+      "29 Şubat, artık yıl olmayan yıllarda 28 Şubat olur",
+    years: "yıl",
     invalidAdd: (min, max) => `${format(min)} ile ${format(max)} arasında bir tam sayı girin`,
     invalidPercent: (min, max) => `${min} ile ${max} arasında tam sayı bir yüzde girin`,
-    dateSetOnly: "Tarih yalnızca ayarlanabilir",
+    invalidYears: (min: number, max: number) => `${format(min)} ile ${format(max)} arasında tam bir yıl sayısı girin`,
+    dateSetOnly: "Tarih yalnızca ayarlanabilir ya da yıl eklenerek kaydırılabilir",
+    yearsDateOnly: "Yalnızca tarihe yıl eklenebilir",
     addField: "Alan ekle",
     addFieldFull: (max) => `Bir toplu düzenleme en fazla ${max} alanı değiştirir`,
     remove: "Bu alanı kaldır",
@@ -1496,9 +1850,31 @@ export const tr: Strings = {
     to: "Yeni kulüp",
 
     // The switch at the top of the dialog
-    modeLabel: "Transfer veya takas",
-    modeMove: "Kulübe transfer et",
+    modeLabel: "Transfer, şimdi taşı veya takas",
+    modeMove: "Şimdi taşı",
     modeSwap: "Oyuncuyla takas et",
+    modeArrange: "Transfer",
+    arrangeNote:
+      "Transferi oyun, kendi transferleri gibi oyundaki ertesi gün yapar: oyuncunun geçmişinde bu sezonki maçları " +
+      "eski kulübünde kalır, yeni kulübü bonservis bedeliyle görünür ve bedeli oyun öder.",
+    moveNote:
+      "Düzenleyici oyuncuyu hemen taşır. Oyun bunu geçmişine transfer olarak yazmaz: bu sezon, maçlarıyla birlikte " +
+      "yeni kulübün altında ve bedelsiz görünür.",
+    arrangeUnavailable:
+      "Düzenleyici, oyunun bu sürümünde ya da bu sistemde oyunun yapacağı bir transfer ayarlayamıyor: Şimdi taşı, " +
+      "oyuncuyu hemen taşır.",
+    arrangeChecking: "Transfer kontrol ediliyor… İlk seferde oyunun transferlerini bulmak birkaç saniye sürer.",
+    movesOn: (date) => `Oyun transferi ${date} tarihinde yapar`,
+    arrangeFee: (amount) => `Bonservis bedeli ${amount}, o gün oyun tarafından ödenir`,
+    arrangeContract: (wage, expires) => `Sözleşme: haftalık ${wage}, ${expires} tarihine kadar`,
+    arrangeDoes: [
+      "Şimdi anlaşılır: oyun transferi, oyunda ertesi güne geçilince yapar",
+      "Oyuncunun geçmişinde bu sezonki maçları eski kulübünde kalır, yeni kulübü bonservis bedeliyle görünür",
+      "Bedeli oyun o gün öder, kendi transferlerinde olduğu gibi",
+      "O günden itibaren yeni kulüple sözleşme; maaş ve sözleşme bitişi, yeni değer girilmedikçe aynı kalır",
+      "Değişiklikler'de listelenir; o güne kadar tek bir geri alma transferi iptal eder",
+    ],
+    arrangeButton: "Transferi ayarla",
 
     // Choosing the club
     searchLabel: "Transfer edileceği kulübü ara",
@@ -1653,6 +2029,8 @@ export const tr: Strings = {
 
     // The foot
     hint: "Siz transfer etmeden oyunda hiçbir şey değişmez.",
+    arrangeHint: "Siz Transferi ayarla'ya basmadan oyunda hiçbir şey değişmez.",
+    moveNowHint: "Siz Şimdi taşı'ya basmadan oyunda hiçbir şey değişmez.",
     move: "Transfer et",
     moving: "Transfer ediliyor…",
     cancel: "İptal",
@@ -1736,12 +2114,14 @@ export const tr: Strings = {
   release: {
     button: "Serbest bırak",
     buttonTitle: "Bu oyuncuyu oyunda kulübünden serbest bırak: serbest oyuncu olur",
+    staffButtonTitle: "Bu personeli oyunda kulübünden serbest bırak: kulüpsüz kalır",
 
     // The dialog
     title: "Serbest bırak",
     from: "Ayrıldığı kulüp",
     checking: "Serbest bırakma kontrol ediliyor…",
     ready: (club) => `${club} → serbest oyuncu`,
+    staffReady: (club) => `${club} → işsiz`,
     doesHeading: "Serbest bırakma ne yapar",
     does: [
       "Kulübün bütün takımlarından çıkar ve sözleşmesi sona erer: her kulübün alabileceği serbest oyuncu olur",
@@ -1750,11 +2130,52 @@ export const tr: Strings = {
       "Oyunun transfer geçmişinde görünmez",
       "Değişiklikler bölümünde listelenir; tek geri alma oyuncuyu aynı sözleşmeyle geri getirir",
     ],
+    staffDoes: [
+      "Kulübün personelinden hemen ayrılır ve sözleşmesi sona erer: oyunun kendi kulüpsüz personeli gibi işsiz kalır",
+      "Kimseye ödeme yapılmaz",
+      "Teknik direktörlük ya da futbol direktörlüğü yeri, kulüp doldursun diye boş kalır",
+      "Değişiklikler bölümünde listelenir; tek geri alma onu aynı sözleşmeyle geri getirir",
+    ],
 
     // The foot
     hint: "Siz serbest bırakmadan oyunda hiçbir şey değişmez.",
     release: "Serbest bırak",
     releasing: "Serbest bırakılıyor…",
+    cancel: "İptal",
+  },
+
+  rename: {
+    button: "Yeniden adlandır",
+    buttonTitle: "Bu oyuncunun adlarını oyunda değiştir",
+
+    // The dialog
+    title: "Yeniden adlandır",
+    loading: "Adlar okunuyor…",
+    first: "Ad",
+    last: "Soyad",
+    common: "Bilinen ad",
+    commonHint:
+      "Oyunun ad ve soyad yerine gösterdiği isim (Pedri ya da Vinícius Júnior gibi). Yoksa boş bırakın",
+    full: "Tam isim",
+    fullHint: "Profilde yazan tam isim. Yoksa boş bırakın",
+    none: "Yok",
+    required: "Boş bırakılamaz",
+    tooLong: (max: number) => `Çok uzun: en fazla ${max} bayt`,
+    noRoom:
+      "Oyunda şu an bu türden yeni bir ad için yer yok: oyunu kaydedin, kaydı yeniden yükleyin ve tekrar deneyin",
+    unavailable: "Editör oyunun bu sürümünde adları değiştiremiyor",
+    doesHeading: "Yeniden adlandırma ne yapar",
+    does: [
+      "Oyun yeni adı, oyunda Devam'a bastığınızda gösterir",
+      "Oyunu kaydettiğinizde yeni ad kayıtta kalır",
+      "Yeni bir ad, soyad ya da bilinen ad oyunun ad tablolarına girer; oyun onu yalnızca bu oyuncu için kullanır",
+      "Değişiklikler bölümünde her ad ayrı bir satırda listelenir; Geri al eski adı geri getirir",
+    ],
+
+    // The foot
+    hint: "Siz Yeniden adlandır'a basmadan oyunda hiçbir şey değişmez.",
+    rename: "Yeniden adlandır",
+    renaming: "Yeniden adlandırılıyor…",
     cancel: "İptal",
   },
 
@@ -1800,6 +2221,23 @@ export const tr: Strings = {
     cancel: "İptal",
   },
 
+  batchTraits: {
+    title: "Takım özellikleri",
+    addMode: "+ Kadroya ekle",
+    removeMode: "- Kadrodan kaldır",
+    addHint: "Seçilen özellikleri bu takımda henüz sahip olmayan oyunculara ekler. Mevcut özellikler korunur.",
+    removeHint: "Seçilen özellikleri bu takımda sahip olan oyunculardan kaldırır. Diğer özelliklere dokunulmaz.",
+    noneSelected: "Bu modda özellik seçilmedi",
+    selectedCount: (count: number) => `${format(count)} özellik seçildi`,
+    deselectAll: "Seçimi temizle",
+    oppositeModeNote: "Diğer modda seçildi",
+    applyNote: (players: number) => `${format(players)} oyuncuya uygulanacak · 1 tıkla geri alınabilir`,
+    emptySquad: (players: number) => `${format(players)} oyunculu kadro`,
+    cancel: "İptal",
+    apply: "Uygula",
+    applying: "Uygulanıyor…",
+  },
+
   squad: {
     // The switch between the club's teams
     teamsLabel: "Takım",
@@ -1829,11 +2267,61 @@ export const tr: Strings = {
     liftNone: "Bu takımda cezalı oyuncu yok",
     inspireAll: "Hepsine moral ver",
     inspireAllTitle: "Bu takımdaki her oyuncunun moralini en yüksek değer olan 20'ye ayarla; mutsuzluk nedenlerini de kaldır",
+    maxCohesion: "Uyumu tamamla",
+    maxCohesionTitle:
+      "Bu takımdaki her oyuncunun kulüple uyumunu en yüksek değer olan 100'e ayarla. Oyun, takım uyumunu Dinamikler sayfasında bir kez ilerleyince gösterir: oyunda Devam'a basın",
+    cohesionNone:
+      "Editör bu takımın uyumunu okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da oyuncuların hiçbirinin kulüple uyumu yok",
+    cohesionWithout: (count: number) => `${format(count)} oyuncunun henüz kulüple uyumu yok`,
+    maxTactics: "Taktiği tamamla",
+    maxTacticsTitle:
+      "Bu takımdaki her oyuncunun takımın oynadığı taktiği, Taktik Etkinliği ekranının sekiz alanında, haftalarca antrenman yapmış gibi en iyi şekilde bilmesini sağla. Özellikler değişmez. Antrenman eskidikçe, yaklaşık altı hafta sonra alanlar yeniden düşer; başka bir taktik için yeniden basmak gerekir. Oyun bunları bir kez ilerleyince gösterir: oyunda Devam'a basın",
+    tacticsNone:
+      "Editör bu takımın taktiğini ne kadar bildiğini okuyamıyor: oyunun bu sürümü bunun için kontrol edilmedi ya da takım senin seçtiğin bir taktiği oynamıyor",
+    tacticsUntrained: (count: number) =>
+      `${format(count)} oyuncu antrenman yapmıyor (örneğin sakat olduğu için): antrenman geçmişi olduğu gibi kalıyor`,
     refreshAll: "Hepsini dinlendir",
     refreshAllTitle: "Bu takımdaki her oyuncunun enerjisini ve maç kondisyonunu %100'e ayarla, onları tamamen dinlendir (yorgunluk -500)",
+    batchTraits: "Kadro özellikleri",
+    batchTraitsTitle: "Bu takımdaki oyuncular için tercih edilen hareketleri ekle veya kaldır",
     maxAll: "Özellikleri tamamla",
     maxAllTitle:
       "Bu takımdaki her oyuncunun bütün özelliklerini en iyiye çıkar: 20; sakatlık eğilimi ve sertlik için 1",
+    atItsBest: "Takımı en iyi hâline getir",
+    atItsBestTitle:
+      "Tek tıklamayla şunları yapar: “Hepsini iyileştir”, “Hepsine moral ver”, “Hepsini dinlendir”, “Uyumu tamamla” " +
+      "ve “Taktiği tamamla”. Tek bir “Geri al” hepsini geri alır. Özellikler ve cezalar olduğu gibi kalır. " +
+      "Yapılamayan bir adım, örneğin kimse sakat değilken “Hepsini iyileştir”, atlanır ve sonuçta belirtilir. " +
+      "Antrenman eskidikçe, yaklaşık altı hafta sonra taktiğin alanları yeniden düşer; başka bir taktik için yeniden " +
+      "basmak gerekir. Oyun değişiklikleri bir kez ilerleyince gösterir: oyunda Devam'a basın",
+    atItsBestSkipped: (step, reason) => `“${step}” atlandı: ${reason}`,
+    destroy: "Takımı en kötü hâline getir",
+    destroyTitle:
+      "Bu takımdaki her oyuncuyu en kötü hâline getir: moral ve mutluluk, enerji, maç kondisyonu ve yorgunluk, " +
+      "kulüple uyum ve takımın taktiğini sen seçiyorsan taktik bilgisi. Hiçbir değer olduğundan iyi yapılmaz; " +
+      "özellikler, sakatlıklar ve cezalar olduğu gibi kalır. Önce sorar; tek bir “Geri al” hepsini geri alır",
+    destroySteps: {
+      demoralize: "Moral ve mutluluk",
+      exhaust: "Enerji ve maç kondisyonu",
+      minCohesion: "Uyum",
+      minTactics: "Taktik",
+    },
+    moreActions: "Diğer işlemler",
+    moreActionsTitle: "Takımın tamamına yönelik işlemler, tek tek",
+    destroyDialog: {
+      title: "Takım en kötü hâline getirilsin mi?",
+      doesHeading: "Listedeki her oyuncu için, kiralık gönderilenler de dahil",
+      does: [
+        "Moral en düşük değer olan 1'e; mutluluk ve forma süresi mutluluğu -100'e",
+        "Enerji %0'a, maç kondisyonu %35'e, yorgunluk 1000'e",
+        "Kulüple uyum 1'e (uyumu olanlarda)",
+        "Taktik bilgisi en düşüğe (takımın taktiğini sen seçiyorsan)",
+      ],
+      keeps: "Hiçbir değer olduğundan iyi yapılmaz. Özellikler, sakatlıklar ve cezalar olduğu gibi kalır.",
+      ownClub: "Bu, kendi kulübünün takımı.",
+      hint: "Oyun ilerlemeden önce tek bir “Geri al” hepsini geri alır.",
+      cancel: "İptal",
+    },
     hint:
       "İşlemler listedeki her oyuncuyu kapsar, kiralık gönderilenler de dahil. " +
       "Geri alma işlemi Değişiklikler bölümünde de yapılabilir.",
@@ -1900,6 +2388,8 @@ export const tr: Strings = {
       matchSharpness: "Maç kond.",
       jadedness: "Yorgunluk",
       morale: "Moral",
+      cohesion: "Uyum",
+      tactics: "Taktik",
       actions: "Kaptanlık",
     } satisfies Record<SquadSort | "actions", string>,
     sortBy: (by) => `Sırala: ${by}`,
@@ -1914,6 +2404,8 @@ export const tr: Strings = {
       matchSharpness: "maç kondisyonu",
       jadedness: "yorgunluk",
       morale: "moral",
+      cohesion: "uyum",
+      tactics: "taktik aşinalığı",
     } satisfies Record<SquadSort, string>,
 
     // The tags after a name
@@ -1921,6 +2413,11 @@ export const tr: Strings = {
     injuredTitle: (count) => `${format(count)} sakatlık`,
     banned: "Cezalı",
     bannedTitle: (count) => `${format(count)} ceza`,
+    unrest: "Huzursuzluk",
+    unrestTitle: (count) =>
+      count === 1
+        ? "1 takım arkadaşının onunla ilgili bir mutsuzluk nedeni var. Profilindeki Hepsini kaldır düğmesi, oyun bir kez ilerleyince bunu çözer"
+        : `${format(count)} takım arkadaşının onunla ilgili bir mutsuzluk nedeni var. Profilindeki Hepsini kaldır düğmesi, oyun bir kez ilerleyince bunları çözer`,
     onLoan: "Kirada",
     onLoanTitle: "Başka bir kulübe kiralık gönderildi",
     loanee: "Kiralık",
@@ -1973,8 +2470,11 @@ export const tr: Strings = {
     tabs: {
       label: "Gözlem bölümleri",
       recommend: "Transfer önerileri",
+      opportunities: "Fırsatlar",
+      similar: "Benzer oyuncular",
       depth: "Kadro derinliği",
       departures: "Gönderilebilecekler",
+      youth: "Altyapı alımı",
     },
     status: {
       missing: "Eksik",
@@ -2050,7 +2550,7 @@ export const tr: Strings = {
     how: {
       label: "Bu liste nasıl oluşuyor?",
       note: (rule, count) =>
-        `Gözlemci bu mevkide oynayabilen (mevki puanı 10 ve üstü) tüm oyunculara bakar; senin kulübünün ve diğer insan menajerlerin oyuncularını dışarıda bırakır. Bunlardan ${rule} oyuncuları ayırır. Mevkiye en uygun 400 oyuncu için takımına gelme olasılığını hesaplar ve uyum ile olasılığı birlikte en iyi olan ${count} oyuncuyu önerir. Önerilen sıra: %70 uyum, %30 olasılık; 30 yaşın üstünde biraz düşer. Rotasyon ikisini eşit tartar, Gelecek potansiyeli de sayar. Listeyi sıralamak için sütun başlıklarına tıkla; # gözlemcinin kendi sırasıdır.`,
+        `Bu mevkide puanı 10 ve üstü olan (senin ve diğer insan menajerlerin oyuncuları hariç), ${rule} oyuncular. Uyum (%70) ve olasılığa (%30) göre en iyi ${count} oyuncu gösterilir; Rotasyon ikisini eşit tartar, Gelecek potansiyeli de sayar. Sıralamak için bir sütun başlığına tıkla.`,
     },
     purposeRules: {
       firstTeam: "bu mevkide en iyi oyuncundan daha uygun olan",
@@ -2068,6 +2568,7 @@ export const tr: Strings = {
       fit: "uyum",
       probability: "olasılık",
       fee: "bonservis",
+      similarity: "benzerlik",
     },
     backToScoutOrder: "Gözlemcinin sırasına dön",
     showMore: (count) => `${format(count)} öneri daha göster`,
@@ -2129,6 +2630,10 @@ export const tr: Strings = {
       },
       attention: "Dikkat:",
       allFine: "Tüm hatlar dengeli görünüyor.",
+      views: { label: "Kadroyu göster", pitch: "Saha", table: "Tablo" },
+      pitchLabel: "Sahada kadro, hat hat",
+      coverCount: (count) => `${format(count)} oyuncu burada da oynayabilir`,
+      adviceFor: (position) => `${position} için transfer önerileri`,
     },
     departures: {
       intro: "Gözlemcinin kadrodan gönderilmesini önerdiği oyuncular; en önemlisi önce.",
@@ -2157,6 +2662,237 @@ export const tr: Strings = {
       },
       actions: { sell: "Sat", loan: "Kiralık gönder", release: "Serbest bırak" },
       rank: (line, rank) => `${line} · ${rank}.`,
+    },
+    actions: {
+      column: "Eylemler",
+      compare: "Kadronla karşılaştır",
+      compareLabel: (name) => `Kadronla karşılaştır: ${name}`,
+      similar: "Benzer oyuncuları bul",
+      similarLabel: (name) => `Benzerlerini bul: ${name}`,
+      report: "Gözlemci raporu",
+      reportLabel: (name) => `Gözlemci raporu: ${name}`,
+      replacement: "Yerine birini bul",
+      replacementLabel: (name) => `Yerine birini bul: ${name}`,
+      replacementTitle: "Ona benzeyen ve yerini alabilecek oyuncular",
+    },
+    why: {
+      freeAgent: () => "Serbest oyuncu",
+      expiring: (value) => `Sözleşmesi ${value} gün sonra bitiyor`,
+      releaseClause: (value, against) =>
+        against === null ? `Serbest kalma bedeli ${value}` : `Serbest kalma bedeli ${value} (değeri ${against})`,
+      unhappy: (value) => (value === "1" ? "Kulübünde mutsuz" : `Kulübünde mutsuz (${value} neden)`),
+      inTheRed: (value) => `Kulübü ekside (${value})`,
+      listed: () => "Transfer listesinde",
+      loanListed: () => "Kiralık listesinde",
+      wonderkid: (value) => `Potansiyel ${value}`,
+    },
+    verdicts: {
+      better: "İlk tercihinden iyi",
+      close: "İlk tercihine yakın",
+      below: "İlk tercihinin gerisinde",
+      none: "Kadronda bu mevkide oynayan yok",
+    },
+    chances: { likely: "Gelmesi muhtemel", possible: "Gelebilir", hard: "Zor transfer" },
+    opportunities: {
+      kindsLabel: "Fırsat listeleri",
+      kinds: {
+        bosman: "Bosman",
+        releaseClause: "Serbest kalma bedeli",
+        unhappy: "Mutsuzlar",
+        inTheRed: "Borçlu kulüpler",
+        listed: "Transfer listesi",
+        loanListed: "Kiralık listesi",
+        wonderkid: "Geleceğin yıldızları",
+      } satisfies Record<OpportunityKind, string>,
+      hints: {
+        bosman: "Serbest oyuncular ve sözleşmesi altı ay içinde bitenler",
+        releaseClause: "Serbest kalma bedeli değerinin altında",
+        unhappy: "Kulübünde mutsuz",
+        inTheRed: "Kulübünün paraya ihtiyacı var",
+        listed: "Kulübü satmaya hazır",
+        loanListed: "Kulübü kiralık vermeye hazır",
+        wonderkid: "19 yaş ve altı, büyük gelecek vaat ediyor",
+      } satisfies Record<OpportunityKind, string>,
+      countLabel: "Bu listedeki oyuncular",
+      count: (count, more) => (more ? `${format(count)}+` : format(count)),
+      position: "Mevki",
+      anyPosition: "Tüm mevkiler",
+      maxAge: "En yüksek yaş",
+      maxFee: "En yüksek bonservis",
+      betterOnly: "İlk tercihimden iyi",
+      betterOnlyTitle: "Yalnızca mevkisine, oradaki en iyi oyuncundan daha uygun olanlar",
+      summary: (kind, lowest, highest, pool) =>
+        `${kind} · kadronun seviyesine yakın, yeteneği ${lowest}–${highest} olan oyuncular · ${pool} oyuncuya bakıldı`,
+      how: {
+        label: "Bu listeler nasıl oluşuyor?",
+        note: "İlk 11'inin seviyesine yakın oyuncular (30 altından 45 üstüne; senin ve diğer insan menajerlerin oyuncuları hariç), her biri en iyi oynadığı ya da senin seçtiğin mevkide ölçülür. Her liste uyum ve olasılık birlikte tartılarak sıralanır.",
+      },
+      empty: "Bu filtrelerle bu listede kimse yok.",
+      emptyWonderkids: "Bu filtrelerle geleceğin yıldızı yok.",
+      better: "Burada ilk tercihinden iyi",
+      columns: { position: "Mvk", why: "Neden" },
+    },
+    similar: {
+      intro: "Benzerlerini bulmak için bir oyuncu seç: oyuncuların özellikleri, mevkisinin gerektirdiği yerlerde karşılaştırılır.",
+      search: "Karşılaştırılacak oyuncu",
+      searchPlaceholder: "İsimle oyuncu ara…",
+      noMatch: "Bu isimde oyuncu yok.",
+      quickPicks: "Ya da kendi oyuncularından biriyle başla:",
+      change: "Başka oyuncu seç",
+      reference: "Benzerleri aranan",
+      position: "Karşılaştırma mevkisi",
+      cheaper: "Daha ucuz",
+      cheaperTitle: "Yalnızca değeri ondan düşük olanlar",
+      younger: "Daha genç",
+      youngerTitle: "Yalnızca ondan genç olanlar",
+      maxFee: "En yüksek bonservis",
+      value: "Değer",
+      notForSale: "Satılık değil",
+      doesNotPlay: (position) => `${position} mevkisinde oynamıyor: yalnızca özellikleri karşılaştırılıyor.`,
+      summary: (candidates, shown, position) =>
+        `${position} mevkisinde ${candidates} oyuncu oynuyor · en benzer ${shown} oyuncu`,
+      how: {
+        label: "Benzerlik nasıl ölçülüyor?",
+        note: "Gözlemci, mevkinin rollerinin dayandığı özellikleri karşılaştırır; kilit olanlar en çok sayılır. Oyuncunun nerede güçlü, nerede zayıf olduğu seviyesinden daha çok sayılır; bu yüzden daha ucuz ya da daha genç bir oyuncu da çok benzer çıkabilir.",
+      },
+      empty: "Bu ayarlarla benzer oyuncu yok.",
+      columns: { similarity: "Benzerlik", value: "Değer" },
+      similarityTitle: (value) => `%${format(value)} benzer`,
+    },
+    compare: {
+      title: "Kadronla karşılaştır",
+      hint: (position, name) => `${position} mevkisindeki en iyi oyuncun ${name} ile; önce rolün kilit özellikleri.`,
+      noStarter: "Kadronda bu mevkide oynayan yok.",
+      starter: "İlk tercihin",
+      candidate: "Aday",
+      inPossession: "Top bizdeyken",
+      outOfPossession: "Top rakipteyken",
+      add: "Oyuncu ekle",
+      addNone: "Listeden seç…",
+      remove: (name) => `Karşılaştırmadan çıkar: ${name}`,
+      removeShort: "Çıkar",
+      scoutView: "Gözlemcinin görüşü",
+      rows: {
+        fit: "Uyum",
+        position: (position) => `${position} mevkisinde`,
+        roleRating: (role) => `${role} olarak`,
+        probability: "Olasılık",
+        fee: "Tahmini bonservis",
+        wage: "Maaş",
+        contract: "Sözleşme bitişi",
+        verdict: "Değerlendirme",
+      },
+      ownPlayer: "Senin oyuncun",
+      roleAttributes: (roles) => `Rolün özellikleri: ${roles}`,
+      keyAttribute: "Rolün kilit özelliği",
+      versus: (difference) => `İlk tercihine göre ${difference}`,
+      best: "en iyisi",
+      age: (age) => `${format(age)} yaşında`,
+      allAttributes: "Tüm özellikler",
+      loading: "Oyuncular okunuyor…",
+      close: "Kapat",
+    },
+    report: {
+      title: (name) => `Gözlemci raporu: ${name}`,
+      hint: "Görsel olarak kaydet ya da paylaşmak için kopyala.",
+      making: "Rapor hazırlanıyor…",
+      failed: (reason) => `Rapor hazırlanamadı: ${reason}`,
+      alt: (name) => `${name} hakkında gözlemci raporu`,
+      save: "Görsel olarak kaydet",
+      savePdf: "PDF olarak kaydet",
+      saving: "Kaydediliyor…",
+      copy: "Görseli kopyala",
+      copied: "Panoya kopyalandı.",
+      copyFailed: (reason) => `Görsel kopyalanamadı: ${reason}`,
+      similar: "Benzer oyuncuları bul",
+      saved: (file) => `${file} olarak kaydedildi.`,
+      open: "Aç",
+      show: "Klasörde göster",
+      close: "Kapat",
+      heading: "Gözlemci raporu",
+      age: (age) => `${format(age)} yaşında`,
+      freeAgent: "Serbest oyuncu",
+      contract: "sözleşme bitişi",
+      fit: "Uyum",
+      probability: "Olasılık",
+      fee: "Tahmini bonservis",
+      abilities: "MY / PY",
+      value: "Değer",
+      role: "Rol",
+      strengths: "Güçlü yönleri",
+      weaknesses: "Zayıf yönleri",
+      profile: "Karakter",
+      note: "Gözlemci notu",
+      similarity: (value) => `%${format(value)} benzer`,
+      footer: "FMLibreEditor gözlemci raporu · bonservis, maaş ve olasılıklar tahminidir",
+      traits: {
+        consistent: "İstikrarlı",
+        inconsistent: "İstikrarsız",
+        bigGames: "Büyük maç oyuncusu",
+        nervous: "Büyük maçlarda gergin",
+        injuryProne: "Sakatlığa yatkın",
+        robust: "Nadiren sakatlanır",
+        versatile: "Çok yönlü",
+        professional: "Örnek profesyonel",
+        ambitious: "Hırslı",
+        loyal: "Sadık",
+        hotHeaded: "Sinirli",
+      },
+    },
+    youth: {
+      intro: "Oyunun kulübün altyapı alımlarında ürettiği ve hâlâ kulüpte olan oyuncular, kulübe katıldıkları güne göre.",
+      otherClub: "Başka bir kulübe bak",
+      searchLabel: "Bakılacak kulüp",
+      mine: "Kulübüme dön",
+      intakesLabel: "Altyapı alımları",
+      noDay: "Günü bilinmiyor",
+      summary: (count, average, best) => `${format(count)} oyuncu · ortalama potansiyel ${average} · en iyisi: ${best}`,
+      lent: (count) => `${format(count)} oyuncu kirada`,
+      how: {
+        label: "Bu liste nasıl hazırlanıyor?",
+        note: "Oyunun ürettiği, kulübe 17 yaşında ya da daha genç katılan ve başka hiçbir kulüpte yetişmemiş oyuncular, katıldıkları güne göre. Kiralıkta olanlar listede; satılanlar ya da gönderilenler değil.",
+      },
+      unmarked:
+        "Editör, oyunun bu sürümünde ürettiği oyuncuları nasıl işaretlediğini bilmiyor: kulübün oyun veritabanından gelen kendi genç oyuncuları da listede.",
+      empty: (club) => `${club} kulübünde şu an altyapı alımından gelen oyuncu yok.`,
+      emptyHint: "Bir alımın oyuncuları kulüpte kaldıkları sürece burada görünür. Başka bir kulübün altyapı alımını görmek için o kulübe bakabilirsin.",
+      columns: {
+        player: "Oyuncu",
+        position: "Mvk",
+        born: "Doğum",
+        nation: "Uyruk",
+        city: "Doğum yeri",
+        ca: "MY",
+        pa: "PY",
+        actions: "Düzenle",
+      },
+      age: (age) => `${format(age)} yaşında`,
+      joinedAt: (age) => `${format(age)} yaşında katıldı`,
+      onLoan: (club) => `${club} takımında kirada`,
+      youthContract: "Gençlik sözleşmesi",
+      edit: (name) => `${name} düzenle`,
+      editor: {
+        label: (name) => `${name} düzenleniyor`,
+        reading: "Değerleri okunuyor…",
+        dateOfBirth: "Doğum tarihi",
+        nation: "Uyruk",
+        city: "Doğum yeri",
+        noCity: "Oyunda kayıtlı değil",
+        cityHint: "Bu kayıttaki oyuncuların doğduğu şehirler",
+        ca: "Mevcut yetenek",
+        pa: "Potansiyel yetenek",
+        save: "Kaydet",
+        saving: "Kaydediliyor…",
+        cancel: "Vazgeç",
+        profile: "Tüm profil",
+        profileTitle: "Mevkiler, özellikler ve gerisi oyuncunun profilinde",
+        nothing: "Kaydedilecek bir şey yok: hiçbir değer değişmedi.",
+        saved: (count) => `${format(count)} değişiklik kaydedildi.`,
+        failed: (field, reason) => `${field}: ${reason}`,
+        invalid: (field) => `${field}: alabileceği bir değer değil.`,
+      },
+      loading: "Altyapı alımları okunuyor…",
+      failed: (reason) => `Altyapı alımları okunamadı: ${reason}`,
     },
     roles: {
       bgk: "Oyun Kurucu Kaleci",
@@ -2234,6 +2970,163 @@ export const tr: Strings = {
       blocked: () => "Gelişmek için forma şansı lazım",
       unwanted: () => "Forma süresi: ihtiyaç fazlası",
       listed: () => "Zaten transfer listesinde",
+    },
+  },
+
+  /** The command palette and the names of the keys in the keyboard shortcuts (see en.ts). */
+  palette: {
+    button: "Ara",
+    title: "Ara veya komut çalıştır",
+    placeholder: "Oyuncu, personel, kulüp veya komut ara",
+    placeholderCommands: "Komut ara",
+    commands: "Komutlar",
+    goTo: (list: string) => `${list} sekmesine git`,
+    searchList: "Bu listede ara",
+    editProfile: "Bu profili düzenle",
+    doneEditing: "Bu profili düzenlemeyi bitir",
+    applyChanges: "Bu profildeki değişiklikleri uygula",
+    showAll: (count: number, list: string) => `${list}: ${format(count)} sonucun hepsini göster`,
+    searching: "Aranıyor…",
+    empty: (query: string) => `“${query}” ile eşleşen bir şey yok.`,
+    notConnected: "Oyuncu, personel ve kulüp aramak için oyuna bağlanın.",
+    failed: (reason: string) => `Arama yapılamadı: ${reason}`,
+    hintMove: "Gezin",
+    hintOpen: "Aç",
+    hintClose: "Kapat",
+    keys: { ctrl: "Ctrl", shift: "Shift", enter: "Enter", escape: "Esc" },
+  },
+
+  /** "My club", the page the app opens on (see en.ts). */
+  home: {
+    nav: "Kulübüm",
+    loading: "Kulübünüz aranıyor…",
+    failed: (reason: string) => `Kulübünüz aranamadı: ${reason}`,
+    manager: (name: string) => `Teknik direktör: ${name}`,
+    following: "Takip ettiğiniz kulüp",
+    clubsLabel: "Kulüpleriniz",
+    openProfile: "Kulüp profili",
+    openProfileTitle: "Bu kulübü Kulüpler sekmesinde aç: tesisler, finans, stadyum ve daha fazlası",
+    noClubTitle: "Bu kayıtta yönettiğiniz bir kulüp yok",
+    noClubText:
+      "Onun yerine burada takip edeceğiniz bir kulüp seçin: kadrosu, ilgilenilmesi gerekenler ve tüm takıma " +
+      "uygulanan işlemler.",
+    chooseAnother: "Başka kulüp seç",
+    searchLabel: "Takip edilecek kulüp",
+    squad: "Kadro",
+    cards: {
+      label: "İlgilenilmesi gerekenler",
+      lowMorale: "Düşük moral",
+      tired: "Yorgun",
+      contracts: "Sözleşmesi bitenler",
+      injuredHint: "Sakatlığı olan oyuncular",
+      bannedHint: "Cezası olan oyuncular",
+      lowMoraleHint: (below: string) => `Morali ${below} değerinin altında olan oyuncular`,
+      tiredHint: (below: string) => `Enerjisi ${below} değerinin altında olan oyuncular`,
+      unrestHint: "Bazı takım arkadaşlarının memnun olmadığı oyuncular",
+      contractsHint: (months: number) => `Sözleşmesi ${months} ay içinde biten oyuncular`,
+      none: "Yok",
+      more: (count: number) => `ve ${format(count)} kişi daha`,
+    },
+  },
+
+  /** What's new: what a version brings (see en.ts). */
+  whatsNew: {
+    title: (version) => `${version} sürümündeki yenilikler`,
+    updated: "FMLibreEditor güncellendi.",
+    version: (version) => `Sürüm ${version}`,
+    thanks: (names) => `Katkıları için teşekkürler: ${names}.`,
+    allChanges: "Tüm değişiklikler",
+    allChangesTitle: "Bu sürümün notlarının tamamını GitHub'da aç",
+    close: "Tamam",
+    link: "Yenilikler",
+    command: "Bu sürümdeki yenilikler",
+    versions: {
+      "0.5.4": [
+        {
+          title: "Transferler oyuncunun geçmişinde.",
+          text: "Bir oyuncuyu taşırken artık ilk seçenek olan Transfer, transferi oyunun ertesi gününe ayarlıyor. Oyun onu kendi transferlerinden biri gibi yapıyor: bonservis bedelini ödüyor ve transferi oyuncunun kariyer geçmişine işliyor; bu sezon eski kulübünde oynadığı maçlar ayrı bir satırda kalıyor. Şimdi taşı ise oyuncuyu eskisi gibi anında taşıyor.",
+        },
+        {
+          title: "Takımı en iyi ve en kötü hâline getir.",
+          text: "Bir kulübün Kadro sekmesinde tek tuş bütün takımı iyileştiriyor, moralini yükseltiyor, dinlendiriyor, uyumunu ve taktiğini en üste çıkarıyor; Takımı en kötü hâline getir ise bir soru sorduktan sonra tersini yapıyor. İkisini de tek bir Geri al geri alıyor; tek tek işlemler Diğer işlemler menüsünde.",
+        },
+        {
+          title: "Kadro özellikleri.",
+          text: "Bir kulübün Kadro sekmesinde, Diğer işlemler menüsündeki Kadro özellikleri, seçtiğin özellikleri takımdaki her oyuncuya ekliyor ya da onlardan kaldırıyor; oyuncuların diğer özelliklerine dokunmuyor. Tek bir Geri al hepsini geri alıyor.",
+        },
+        {
+          title: "Tüm personeli taşı.",
+          text: "Bir kulübün Personel sekmesi bütün personeli tek seferde başka bir kulübe, herkesi aynı görevinde taşıyor; tek bir Geri al hepsini geri getiriyor.",
+        },
+        {
+          title: "Milli takımlar.",
+          text: "Milli takımın A kadrosuna Hepsini iyileştir, Hepsine moral ver ve Hepsini dinlendir geldi; kadro tablosu enerjiyi, maç kondisyonunu ve morali gösteriyor.",
+        },
+        {
+          title: "Sponsorluk anlaşmaları.",
+          text: "Bir kulübün finansları sponsorluk anlaşmalarını salt okunur olarak listeliyor: her birinin sezon başına ve toplamda ne ödediği, süresi ve küme düşmede neyin değiştiği. Şimdilik Game Pass 0.9.2524.0'da.",
+        },
+        {
+          title: "Düzeltme.",
+          text: "Bazı kariyerlerde personel doğru okunduğu hâlde personel denetimi başarısız oluyor; personel salt okunur kalıyor, iyileştirme, Uyumu tamamla ve Taktiği tamamla reddediliyordu. Artık geçiyor.",
+        },
+      ],
+      "0.5.3": [
+        {
+          title: "FM27'nin 17 Kasım güncellemesi.",
+          text: "Windows'ta ve macOS'ta Game Pass 0.9.2524.0 ve Steam 26620374 sürümleri tanınıyor; güncellemenin yerini değiştirdiği kulüp finansları ve takımınızın oynadığı taktik yeniden okunuyor.",
+        },
+        {
+          title: "Milli takımlar.",
+          text: "Kulüp listesinin üstündeki seçici her ülkenin erkek ve kadın milli takımlarını gösteriyor: takımın kadrosu, genç takımları (U21, U20 ve diğerleri) ve onların kadroları, her birinin düzenleyebileceğiniz itibarıyla.",
+        },
+        {
+          title: "Lig para ödülü.",
+          text: "Bir kulübün genel bakışı, liginin bu sezon sezon sonu sıralamasına göre ve maç başına ne ödediğini gösteriyor; tutarlar sezon bitene kadar ligdeki her kulüp için değiştirilebiliyor.",
+        },
+        {
+          title: "Düzeltme.",
+          text: "Altyapı oyuncuları 2020'den sonra doğmuş bir kayıt, editörün yazmadan önceki denetimine artık takılmıyor.",
+        },
+      ],
+      "0.5.2": [
+        {
+          title: "Kulübüm.",
+          text: "Uygulama yönettiğiniz kulüple açılıyor: ilgilenmeniz gereken oyuncular, kulübün parası ve kadro işlemleri tek yerde. Kendi kulübünüz yoksa bir kulübü takip edebilirsiniz.",
+        },
+        {
+          title: "Komut paleti.",
+          text: "Ctrl+K (Mac'te ⌘K) bir oyuncuyu, personeli, kulübü ya da bir komutu bulur; kısayollarla sekmeler arasında geçebilirsiniz.",
+        },
+        {
+          title: "Gözlem.",
+          text: "Piyasadaki fırsatlar, gözden çıkaracağınız bir oyuncuya benzeyenler, mevkisindeki 1 numaranızla karşılaştırma, resim ya da PDF olarak kaydedilen gözlem raporları, sahada kadro ve altyapı alımları.",
+        },
+        {
+          title: "Oyuncuyu yeniden adlandırın.",
+          text: "Ad, soyad, bilinen ad ve tam ad. Oyun yeni adı kayıtlarında tutar.",
+        },
+        {
+          title: "Sözleşmeler ve personel.",
+          text: "Bir sözleşmeyi tek tıkla beş yıl uzatın ya da toplu düzenlemede birçoğuna yıl ekleyin. Bir personeli ya da kulübün bütün personelini serbest bırakın, tek Geri al ile geri getirin.",
+        },
+        {
+          title: "Taktiği tamamla.",
+          text: "Kulübün Kadro sekmesinde takımın taktik aşinalığını en üste çıkarır. Mutsuzluk nedenleri de artık oyunun kendi sözleriyle yazılıyor.",
+        },
+        {
+          title: "Değişiklikleriniz kalıyor.",
+          text: "Her kariyerin değişiklikleri uygulamayı yeniden açtıktan sonra da Değişiklikler sekmesinde; arayabilir, süzebilir ve dışa aktarabilirsiniz.",
+        },
+        {
+          title: "Kulüp filtreleri.",
+          text: "Ülke, lig ve itibar; Toplu düzenleme ve Dışa aktar, listenin gösterdiği kulüpleri alır.",
+        },
+        {
+          title: "Rusça ve Japonca.",
+          text: "İki dil daha. Steam'in 12 Kasım güncellemesi de artık tanınan bir sürüm.",
+        },
+      ],
     },
   },
 

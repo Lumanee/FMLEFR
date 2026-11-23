@@ -83,6 +83,25 @@ before trusting them.
   - an EN | TR switch in the sidebar;
   - dates and numbers follow the language;
   - the connection and the change log survive the switch.
+- [x] A history of each career's changes: the Changes view lists the changes of earlier sessions too, from a file per
+  career in the app's data folder (one line per change or undo, added as they are made). An earlier change says
+  whether the game held its value when the data was read (the game may not have been saved after it); a change of a
+  value is undone as a new edit back to the old value, with every check, while moves, healing, ties, clauses, names
+  and the like stay as history, as their undo needed the game's memory as it was. Clear history empties it. Loading
+  another career and reading the data again lists that career's history instead: before, the list kept the other
+  career's changes, whose Undo could write to the people with the same UIDs in this one. And once the game has loaded
+  a save, nothing is undone until the data is read again, as no other write is: putting a value back skipped that
+  check.
+- [x] The Changes view can be searched, filtered and exported, as its history grows: a search box (a person's or
+  club's name, a UID, the field, the clubs of a move, the names of a rename), the choices this session / earlier
+  sessions, not undone and not in the game, the count and the pages following them, and a mass edit listed, opened on
+  its changes that pass, when any of them does. Export writes what is shown to a CSV file (comma or semicolon) in the
+  exports folder: the time, the name and UID, the field, the old and new values as stored and as shown, the mass edit,
+  when it was undone, and whether it is from an earlier session and in the game. That file is for people and
+  spreadsheets: it is not the edit package below, which has to be read back.
+- [ ] Edit packages: the changes of the history written to a file, and read into another save of the same database,
+  with a preview as a mass edit has (people found by UID and birth date, nations and cities by name), applied as one
+  batch.
 - [x] Spanish, and flags for the languages:
   - a menu in the masthead, under the flag of the language in use, lists each language with its flag;
   - the system's language is the default where the app has it, English otherwise;
@@ -109,10 +128,12 @@ before trusting them.
   - a version of the game without a build profile is read-only until Edit anyway, with a notice that says so;
   - checks of the layout against the running game before anything is written: what does not check out stays
     read-only, and a date that does not fit the game's contracts is not used, so no age is shown wrong;
-  - `fmlibre-probe health` shows what the checks find;
+  - `fmlibre-probe health` shows what the checks find, and Copy diagnostics in the app copies it for a bug report,
+    with how close a list that was not found came;
   - the in-game date and the retirement manager found without a profile too: the date among the values in the
-    plugin's writable data that read as dates, by the contracts and the current injuries, and the manager's static
-    from where other builds keep it or from its class name;
+    plugin's writable data that read as dates, by the contracts and the current injuries, and told from the values the
+    game keeps for the day before or the day after by where other builds keep it, by how well each fits or by how
+    many places hold each; the manager's static from where other builds keep it or from its class name;
   - `fmlibre-probe profile` writes the profile of a new build and compares it with a built-in one, and
     `FMLIBRE_IGNORE_PROFILES=1` rehearses an update on a build the editor knows;
   - smoke tests in `tools/smoke` that drive the built app against the running game, the same on every storefront.
@@ -169,10 +190,41 @@ before trusting them.
     sharpness to 100%), each undone as one batch.
 - [ ] Next: suspensions ("Unban All"), and the squad status codes past 5 (youth and
   backup roles), once the game's own data names them.
-- [ ] Team cohesion and tactical familiarity (FMLE's "Max Cohesion" and "Max
-  Tactics"). Set aside: no single stored value matched ten clubs' readings, so they
-  look derived (see the Steam notes). The probe's `related`, `nearby` and
-  `team-average` searches are there for another try.
+- [x] Team cohesion: Max cohesion in the squad tab, and each player's cohesion in its
+  table, guarded by the `cohesion` check. No single stored value matched ten clubs'
+  readings because the game works the team's cohesion out from each player's: his entry
+  for the club in the second list of his record of relations, as FM27 Editor found it on
+  Windows (see `cohesion.rs` and the Steam macOS notes). On the Mac Steam save the
+  Dynamics page showed Poor with those entries as they were (a mean of 26), Excellent with
+  all at 100, and fell the day after all were set to 1. Checked on Game Pass 0.9.2409.0
+  too (#140).
+- [ ] Cohesion for players without an entry for their club, such as some moved by an
+  editor: adding one means growing the list, as ties do, since every list read was full.
+  First, whether the game gives them one later.
+- [x] Tactical familiarity (FMLE's "Max Tactics"): Max tactics in the squad tab, and each
+  player's familiarity with the team's tactic in its table, guarded by the `tactics`
+  check. The Tactical Effectiveness screen takes each of the eight areas from two places:
+  the player's record of familiarity and the history of training the training manager
+  keeps, for the options the game works out from the tactic in use (see `familiarity.rs`,
+  `tactical_areas.rs` and the Steam macOS notes). Max tactics writes both, growing the
+  lists of players new to the club into the editor's memory. On the Mac and on Windows,
+  where the maps are MSVC's (`tree.rs`), for the builds whose profiles place the two
+  managers: 27.0.0, 27.0.1 and Steam build 26577676 on the Mac (Apple silicon), Steam
+  builds 26385295 and 26577676 and Game Pass 0.9.2435.0 on Windows. On the others the column stays empty and
+  the button waits.
+- [x] Team at its best in the squad tab: Heal all, Inspire all, Refresh all, Max cohesion and Max tactics as one
+  team action and one batch, undone with one Undo; attributes and bans stay. A step that cannot run (nobody
+  injured, a lock, a build where Max tactics is off) is skipped and named, and the others still run (#227).
+- [ ] Team at its best for one player, in his profile.
+- [x] Destroy in the squad tab, the other way: morale 1, happiness and playing time happiness -100, no energy,
+  35% match sharpness, jadedness 1000, cohesion 1 and the tactic known at its least (where a human picks it), as
+  one team action and one batch after a question, undone with one Undo. No value is made better than it was (a
+  youth intake's lower sharpness stays); attributes, injuries and bans stay. The game itself held each of those
+  values on the Game Pass save of 0.9.2524.0 (energy down to 0.01%, jadedness up to 605). Team at its best,
+  a More actions menu with the single actions and Destroy now share the row, which fits every language.
+- [ ] Destroy for a rival's tactic: the editor reads no familiarity where no human picks the tactic, and the game
+  shows it nowhere, so whether the record alone counts there is not known.
+- [ ] A freeze that holds a team at its worst: Freeze energy and sharpness only keeps them from going down.
 
 ## Phase 7: what FMRTE, FM Live Editor and FM27€0 users reach for (in progress)
 
@@ -209,7 +261,9 @@ changes many at once, and undo.
     mark) or JSON, in `Documents\FMLibreEditor\Exports`, named after the in-game date. A row or object per player:
     abilities, positions and position ratings, attributes on the 1–20 scale, personality, reputation, caps, contract
     and clauses, money in pounds, the in-game date on every row. Only reads; the whole Steam save (37,971 players)
-    takes under a second. The probe writes the same with `players --export FILE`. Staff and clubs could follow.
+    takes under a second. The probe writes the same with `players --export FILE`. The staff and club lists export
+    the same way (`staff --export`, `clubs --export`): a member of staff's job, employer, abilities, attributes,
+    personality, reputation and contract; a club's reputation, supporters, facilities, stadium and finances.
   - [x] Updates from inside the app: an installed Windows copy downloads the new installer, checks its signature
     (Tauri's updater, the key in the repository's secrets) and runs it, then opens again; the release workflow
     signs the installer and writes `latest.json`. Portable copies keep the Download link.
@@ -230,6 +284,12 @@ changes many at once, and undo.
     contract end and men or women, besides the job, the unemployed and the attributes, behind the same Filters
     button. The mass edit follows them. As in the player list, they can be saved under a name, with the sort a
     column header was clicked for (name, age, club, nation, CA or PA).
+  - [x] Extend a contract by five years in one click ([#127](https://github.com/tozmoz/FMLibreEditor/issues/127)):
+    under the dates of a player's or a member of staff's contract, the day it ends moves on by five years (29 February
+    to 28 February in a year without one), one change Changes undoes. The mass edit moves a date by whole years (Add
+    years), so the contracts a list shows are extended at once. A contract without an end, such as the basic contract
+    most doctors and the board have, has no button and is refused. The other two asks of the issue, a player who always
+    accepts a contract and one always interested, are decided by the game's code, which the editor does not change.
 - Transfers, which users asked for next:
   - [x] A move with a fee: the buying club pays it out of its balance and transfer budget, the selling
     club's balance takes it, and one undo takes back the move and the fee (the money by what it changed, as
@@ -282,6 +342,23 @@ changes many at once, and undo.
   - [x] Release a player on a free: he leaves his club's lists, and his team and contract pointers are
     cleared, as the game's own free agents have them. A captaincy he held is left empty; so is one a player
     gives up by moving. Checked on the Mac Steam build and both Windows builds, restored.
+  - [x] Release a member of staff, or all of a club's staff at once (#170): Release in his profile, and Release all
+    staff in the club's new Staff tab, each asking first. He leaves the club's department lists, and its place for a
+    director of football or its senior team's for a manager, left empty for the club to fill, and then has no
+    contract, as the game's own staff without a club have none. The human manager, the board and player-coaches stay.
+    Release all is one batch, which one undo takes back. A contract's end moved to the game's date is no release: on
+    the Windows Steam build the game showed the new end and ended none of four such contracts in six days. Checked in
+    the game on Steam: seven staff of a club no human runs and of the human manager's released, a day played, the game
+    saved and loaded again, and they stayed without a club (see the [staff notes](recon/fm27-staff.md#releasing-staff)).
+    Game Pass and macOS not checked yet.
+  - [x] Move all of a club's staff to another club at once (#170): Move all staff, beside Release all in the club's Staff
+    tab, asks for the club in a dialog that lists who moves and who stays, and why. Each one moves as a move of one
+    does, in his own job and on his contract, the senior team's manager first; a manager or a director of football only
+    into an empty place at the new club. The human manager, the board and player-coaches stay. One batch, which one
+    undo takes back; the probe's `staff-move-all` does the same. Checked in the game on the Mac (Steam): 63 of Real
+    Madrid's 72 staff moved to Barcelona, two days played, the game saved and loaded again: they stayed, and the game
+    let none of Barcelona's own go (see the [staff notes](recon/fm27-staff.md#moving-a-whole-staff)). Windows not
+    checked yet.
   - [x] Sign a free agent: the Transfer dialog, without fee or swap, signs him for a club's senior team
     under a contract the editor makes. The game keeps its contracts in a pool of 200-byte slots, a static of the game
     plugin (one of 279 pools in its data, each chaining its free slots): the editor takes the first free slot as the
@@ -307,6 +384,13 @@ changes many at once, and undo.
   - [x] No work permit needed: England or Scotland as a nation a player needs no work permit in, the relation (109)
     the game gives players of the EU who were in the United Kingdom before Brexit, for as many days as theirs have
     left. In the same dialog, with an (i). Ordinary work permits are kept elsewhere, not yet found.
+  - [x] Names (#79): a player's first, last, common and full name, from the Rename button of his profile. A person
+    points at entries of the game's tables of first, last and common names, which a save keeps by their ids; the full
+    name is a string of his own. A new name is made as the game makes one for a new person: a slot of its pool of
+    entries, the next id at the end of the table's list by id, and weight 0, so that the game never gives it to anyone
+    else. Each list takes 32 new names after a load; the game makes more room as it names people. Checked through a
+    save and a load on Game Pass and on the Mac (Steam, Apple silicon; the Intel half in the file only). See the
+    [notes on names](recon/fm27-names.md), `names.rs`, and the probe's `names` and `rename`.
   - [ ] Place of birth: a pointer to a city record (`+0x2C8` on macOS), whose nation the game shows.
   - [ ] Appearance. FM27 keeps a person's looks as dozens of 3D face values for the match engine
     (`MATCH_PERSON_APPEARANCE_INPUT`: skin tone, hair and eye colours, face shape); set aside.
@@ -325,7 +409,8 @@ changes many at once, and undo.
     gives it again on connecting, on a reload and within seconds of the game loading the save, while it is open;
     undone, or renamed back, it is forgotten. An (i) beside the name, and beside every freeze, says the app has to stay
     open for it.
-  - [ ] Sponsors (#114), ticket prices and prize money. What a competition pays by final position and per match is
+  - [ ] Sponsors (#114), ticket prices and prize money. A club's sponsorship deals are shown, read only, in its
+    finances (see the [sponsorship notes](recon/fm27-sponsorships.md)); changing them is not done. What a competition pays by final position and per match is
     in the settings of its stages (`sicomps::LEAGUE_SETTINGS`, #123), which the probe's `prizes` reads and changes, to
     find out whether the game pays from them: see the [prize money notes](recon/fm27-prize-money.md).
   - [x] Jadedness: how worn out a player is by playing, which rest takes away (an `i16` at player `+0x25A`,
@@ -340,6 +425,12 @@ changes many at once, and undo.
     points at (`+0x30`: a count, then pointers to 28-byte entries); "Remove all" in his profile and the squad tab's
     Inspire set the count to none, which an undo puts back. Three motives are named so far. The contract is laid out
     alike on the Mac, where these and the extras below were read and written too.
+  - [x] Whom a reason to be unhappy is about (#154). A reason a player holds about a teammate names him, by the
+    game's id of the person: the profile shows his name, and the squad tab marks the players their teammates hold
+    reasons about. A group of unhappy players is no more than those entries, and the game ends them itself within two
+    days once the player they are about has none of his own, so Remove all is enough (see the
+    [Steam macOS notes](recon/fm27-steam-macos.md#who-a-reason-to-be-unhappy-is-about)). The other motives and the
+    categories have no names yet.
   - [x] Contract extras: the loyalty bonus (`+0x38`), happiness and playing time happiness, editable, and the list of
     clauses and bonuses (`+0x68`: amount, condition and kind), shown by name. Kinds named against FMRTE's contract
     page for Kane, Haaland, Alex Scott, Courtois and Olise.
@@ -352,5 +443,5 @@ changes many at once, and undo.
     has room: 384 of 53,356 contracts on the Game Pass save. Checked there with Kane, Mbappé and Bisseck, restored.
     The competition bonuses (`+0x80`) are not named or edited yet.
   - [x] Keep a player from retiring (see Wave 2 above).
-  - [ ] Team cohesion and tactical familiarity (see Phase 6).
+  - [x] Team cohesion and tactical familiarity (see Phase 6).
   - [ ] Epic.

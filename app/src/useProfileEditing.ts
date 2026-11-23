@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -16,7 +17,7 @@ import { applyEdits, readValues } from "./editing";
 import { fieldTable } from "./fieldTables";
 import { describeError } from "./format";
 import { editText, fieldLabel } from "./labels";
-import type { EditField, Entity, FieldValues, LoggedChange } from "./types";
+import type { EditEntity, EditField, FieldValues, LoggedChange } from "./types";
 
 /** What the app tells the profiles about editing. */
 export interface EditorState {
@@ -27,15 +28,17 @@ export interface EditorState {
   editable: boolean;
   /** Why nothing can be edited, for the hover of what is turned off: the colophon's note. */
   readOnlyNote: string;
+  /** Whether the editor can arrange a transfer for the game to make on its next day (see `arrangeTransfer`). */
+  arrangesTransfers: boolean;
   /** Called after changes were written or undone: the lists, the open profile and the change log read again. */
   onEdited: () => void;
 }
 
-export const EditorContext = createContext<EditorState>({ editable: false, readOnlyNote: "", onEdited: () => {} });
+export const EditorContext = createContext<EditorState>({ editable: false, readOnlyNote: "", arrangesTransfers: false, onEdited: () => {} });
 
 /** The inputs of the profile being edited (header and body), for the components that draw them. */
 export interface EditSession {
-  entity: Entity;
+  entity: EditEntity;
   /** The keys of the fields that can be edited here. */
   keys: string[];
   /** Whether the field with this key can be edited here. */
@@ -119,8 +122,29 @@ export function askToLeave(proceed: () => void): void {
   }
 }
 
+/** What the keyboard shortcuts and the command palette reach of a profile on show (see `App`). */
+export interface ProfileKeys {
+  /** The profile's panel; null while it has no Edit button. */
+  box: () => Element | null;
+  /** Whether its Edit button can be pressed now: the profile can be edited, and has been read. */
+  canEdit: () => boolean;
+  /** Whether it is being edited. */
+  editing: boolean;
+  /** Whether Apply has something to write. */
+  canApply: boolean;
+  /** Presses Edit: starts the editing, or ends it as Done does. */
+  toggleEdit: () => void;
+  apply: () => void;
+}
+
+/** The profiles on show, the one opened last at the end: a profile opened from a club's squad is over the club's. */
+const openProfiles: RefObject<ProfileKeys | null>[] = [];
+
+/** The profile the keyboard shortcuts are for: the one opened last. Null when none is on show. */
+export const profileOnTop = (): ProfileKeys | null => openProfiles[openProfiles.length - 1]?.current ?? null;
+
 /** The editing of the player, member of staff or club `uid`, as `entity` says. Mount it with `key={uid}`. */
-export function useProfileEditing(entity: Entity, uid: number): ProfileEditing {
+export function useProfileEditing(entity: EditEntity, uid: number): ProfileEditing {
   const { editable, onEdited } = useContext(EditorContext);
   const [stage, setStage] = useState<Stage>("view");
   const [fields, setFields] = useState<EditField[]>([]);
@@ -341,6 +365,25 @@ export function useProfileEditing(entity: Entity, uid: number): ProfileEditing {
       close();
     }
   };
+
+  // What the keyboard shortcuts reach of this profile, kept up to date as soon as a render is on screen.
+  const keys = useRef<ProfileKeys | null>(null);
+  useLayoutEffect(() => {
+    keys.current = {
+      box: () => editButton.current?.closest(".profile") ?? null,
+      canEdit: () => editButton.current !== null && !editButton.current.disabled,
+      editing,
+      canApply: editing && !applying && changes.length > 0 && invalid.length === 0,
+      toggleEdit: () => editButton.current?.click(),
+      apply,
+    };
+  });
+  useEffect(() => {
+    openProfiles.push(keys);
+    return () => {
+      openProfiles.splice(openProfiles.indexOf(keys), 1);
+    };
+  }, []);
 
   return {
     editable,

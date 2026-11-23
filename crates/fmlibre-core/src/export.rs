@@ -1,30 +1,35 @@
-//! Players or clubs written to a file that a spreadsheet or a script reads: CSV, a row each, or JSON, an object each.
-//! What a profile holds that is worth comparing, across players or clubs and over time. For a player: abilities,
-//! positions, the attributes on the 1–20 scale the game shows, personality, reputation, caps, and the contract with its
-//! clauses. For a club: reputation, supporters, facilities, the stadium and the finances. Each with the in-game date
-//! they were read on. Money is in pounds, as the game keeps it. Only reads memory.
+//! Players, staff or clubs written to a file that a spreadsheet or a script reads: CSV, a row each, or JSON, an object
+//! each. What a profile holds that is worth comparing, across players, staff or clubs and over time. For a player:
+//! abilities, positions, the attributes on the 1–20 scale the game shows, personality, reputation, caps, and the contract
+//! with its clauses. For a member of staff: the job, abilities, attributes, personality, reputation and the contract. For
+//! a club: reputation, supporters, facilities, the stadium and the finances. Each with the in-game date they were read
+//! on. Money is in pounds, as the game keeps it. Only reads memory.
+//!
+//! The rows of the Changes view are written the same way, as CSV (see `export_changes`): the window sends the rows its
+//! search and filters show, with the texts only it has (the values as shown, the field's name, the time in its zone).
 
 use std::io::{self, Write};
 
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::{
-    ATTRIBUTE_GROUPS, ClubDetails, ClubSummary, Contract, FmDate, International, PERSONALITY, PlayerDetails,
-    PlayerSummary, RELEASE_CLAUSE, RELEASE_CLAUSES, Reputation, SUPPORTER_MIX, SUPPORTER_TRAITS, Session,
-    read_club_details, read_player_details, release_clause_expiry, release_clause_never_expires,
+    ATTRIBUTE_GROUPS, ClubDetails, ClubSummary, Contract, Entity, FmDate, International, PERSONALITY, PlayerDetails,
+    PlayerSummary, RELEASE_CLAUSE, RELEASE_CLAUSES, Reputation, STAFF_ATTRIBUTE_GROUPS, SUPPORTER_MIX,
+    SUPPORTER_TRAITS, Session, StaffContract, StaffDetails, StaffSummary, job_name, read_club_details,
+    read_player_details, read_staff_details, release_clause_expiry, release_clause_never_expires,
 };
 
-/// How an export writes the players or clubs.
+/// How an export writes the players, staff or clubs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExportFormat {
-    /// Values separated by commas, a row per player or club.
+    /// Values separated by commas, a row per player, member of staff or club.
     Csv,
     /// The same, separated by semicolons: what Excel takes where the comma is the decimal mark (in Turkish, Spanish
     /// or German, say).
     CsvSemicolon,
-    /// An object per player or club, with groups of values (a player's attributes, a club's facilities) as objects of
-    /// their own.
+    /// An object per player, member of staff or club, with groups of values (a player's attributes, a club's
+    /// facilities) as objects of their own.
     Json,
 }
 
@@ -52,10 +57,46 @@ pub struct ExportHeader {
 /// What an export wrote.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Exported {
-    /// The players or clubs written.
+    /// The players, staff, clubs or changes written.
     pub count: usize,
-    /// Players or clubs whose objects had changed since the lists were read: left out.
+    /// Players, staff or clubs whose objects had changed since the lists were read: left out.
     pub skipped: usize,
+}
+
+/// One change of the Changes view, as the window sends it for a CSV export: what the change log holds of it, and the
+/// texts the window shows for it, in its language and its time zone, which only the window knows.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeRow {
+    /// When it was written, as the window writes a moment: the local time with its offset from UTC, ISO 8601.
+    pub time: String,
+    /// The person's name when it was written; the club's, for a change to a club.
+    pub name: String,
+    pub uid: u32,
+    pub entity: Entity,
+    /// The field's key, "attribute.finishing".
+    pub field: String,
+    /// The field's name in the window's language.
+    pub field_label: String,
+    /// The value before and the value written, as the game stores them: an attribute 0–100, a date 20290630, money in
+    /// pounds, a club by its UID.
+    pub old: i64,
+    pub new: i64,
+    /// The same two values as the window shows them: an attribute 1–20, a date as the language writes it, money in the
+    /// chosen currency, a club by its name. Empty where the window has no words for the field.
+    pub old_shown: String,
+    pub new_shown: String,
+    /// What the window says under the two values, apart by " | ": the other player of a swap, a fee, a captaincy's team.
+    pub notes: String,
+    /// The mass edit it was part of, if any.
+    pub batch: Option<u32>,
+    /// When it was undone, written as `time` is, if it was.
+    pub undone_at: Option<String>,
+    /// Whether it was written before the app last connected: listed from the history of the career.
+    pub earlier: bool,
+    /// For an earlier change that is not undone: whether the game held its value when the data was last read. None
+    /// where the app does not look.
+    pub in_game: Option<bool>,
 }
 
 /// The position ratings an export has, in the order of the pitch: each but the sweeper, which the game no longer plays.
@@ -91,6 +132,34 @@ impl Session {
         Ok(exported)
     }
 
+    /// Writes `staff`, in their order, to `out` as `format`. Each is read again, as their profile is; one whose object
+    /// has changed since the lists were read is left out and counted. Only reads memory.
+    pub fn export_staff(
+        &self,
+        staff: &[&StaffSummary],
+        format: ExportFormat,
+        header: &ExportHeader,
+        out: &mut impl Write,
+    ) -> io::Result<Exported> {
+        let mut exported = Exported::default();
+        let details = staff.iter().filter_map(|member| match read_staff_details(&self.process, &self.layout, member) {
+            Ok(Some(details)) => {
+                exported.count += 1;
+                Some(details)
+            }
+            _ => {
+                exported.skipped += 1;
+                None
+            }
+        });
+        match format {
+            ExportFormat::Csv => write_staff_csv(out, header, details, b',')?,
+            ExportFormat::CsvSemicolon => write_staff_csv(out, header, details, b';')?,
+            ExportFormat::Json => write_staff_json(out, header, details)?,
+        }
+        Ok(exported)
+    }
+
     /// Writes `clubs`, in their order, to `out` as `format`. Each is read again, as its profile is; one whose object
     /// has changed since the lists were read is left out and counted. Only reads memory.
     pub fn export_clubs(
@@ -120,7 +189,23 @@ impl Session {
     }
 }
 
-/// A cell of a CSV row, read from a player's or a club's profile.
+/// Writes the changes `changes`, in their order, to `out` as CSV with commas or with semicolons: a row of the names of
+/// the columns, then a row per change. The change log is the editor's own, so nothing is read from the game, and every
+/// row is written. JSON is not one of the formats of the change log: asking for it is an error.
+pub fn export_changes(changes: Vec<ChangeRow>, format: ExportFormat, out: &mut impl Write) -> io::Result<Exported> {
+    let separator = match format {
+        ExportFormat::Csv => b',',
+        ExportFormat::CsvSemicolon => b';',
+        ExportFormat::Json => {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "the change log is exported as CSV"));
+        }
+    };
+    let count = changes.len();
+    write_rows(out, &change_columns(), changes.into_iter(), separator)?;
+    Ok(Exported { count, skipped: 0 })
+}
+
+/// A cell of a CSV row, read from a player's, a member of staff's or a club's profile.
 type Cell<T> = Box<dyn Fn(&T) -> String>;
 
 /// The columns of a CSV export, in order: the name of each, and how it reads a profile.
@@ -196,6 +281,50 @@ fn csv_columns(game_date: Option<FmDate>) -> Columns<PlayerDetails> {
     columns
 }
 
+impl Columns<StaffDetails> {
+    /// A column read from the contract: empty for a member of staff without one.
+    fn contract(&mut self, name: &str, cell: fn(&StaffContract) -> String) {
+        self.add(name, move |d| d.contract.as_ref().map(cell).unwrap_or_default());
+    }
+}
+
+/// The columns of a staff export: who they are, their job and employer, then what their profile shows.
+fn staff_columns(game_date: Option<FmDate>) -> Columns<StaffDetails> {
+    let mut columns = Columns::<StaffDetails>::default();
+    columns.add("game_date", move |_| game_date.map(iso).unwrap_or_default());
+    columns.add("uid", |d| d.summary.uid.to_string());
+    columns.add("name", |d| d.summary.name.clone());
+    columns.add("full_name", |d| d.summary.full_name.clone().unwrap_or_default());
+    columns.add("date_of_birth", |d| d.summary.date_of_birth.map(iso).unwrap_or_default());
+    columns.add("age", |d| text(d.summary.age));
+    columns.add("nationality", |d| d.summary.nation.clone().unwrap_or_default());
+    columns.add("club", |d| d.summary.club.clone().unwrap_or_default());
+    columns.add("job_code", |d| text(staff_job(d)));
+    columns.add("job", |d| staff_job(d).and_then(job_name).unwrap_or_default().to_owned());
+    columns.add("human_manager", |d| d.summary.is_human.to_string());
+    columns.add("current_ability", |d| d.summary.current_ability.to_string());
+    columns.add("potential_ability", |d| d.summary.potential_ability.to_string());
+    for key in STAFF_ATTRIBUTE_GROUPS.iter().flat_map(|(_, keys)| keys.iter().copied()) {
+        columns.add(key, move |d| text(d.attributes.get(key).map(|attribute| attribute.value)));
+    }
+    for key in PERSONALITY {
+        columns.add(key, move |d| text(d.personality.get(key)));
+    }
+    columns.add("reputation_home", |d| d.reputation.home.to_string());
+    columns.add("reputation_current", |d| d.reputation.current.to_string());
+    columns.add("reputation_world", |d| d.reputation.world.to_string());
+    columns.contract("wage_per_week_gbp", |c| c.wage.to_string());
+    columns.contract("contract_signed", |c| c.signed.map(iso).unwrap_or_default());
+    columns.contract("contract_expires", |c| c.expires.map(iso).unwrap_or_default());
+    columns.contract("contract_joined", |c| c.joined.map(iso).unwrap_or_default());
+    columns
+}
+
+/// The job of a member of staff: the contract's, as the profile reads it, or the list's.
+fn staff_job(d: &StaffDetails) -> Option<u8> {
+    d.contract.map(|c| c.job).or(d.summary.job)
+}
+
 /// The facilities a club export has, in the order of the club profile; corporate only where the club has the full
 /// finance record.
 const FACILITIES: [&str; 5] = ["training", "youth_facilities", "youth_coaching", "youth_recruitment", "corporate"];
@@ -209,6 +338,8 @@ fn club_columns(game_date: Option<FmDate>, decimal_mark: char) -> Columns<ClubDe
     columns.add("name", |d| d.summary.name.clone());
     columns.add("short_name", |d| d.summary.short_name.clone().unwrap_or_default());
     columns.add("women", |d| d.summary.women.to_string());
+    columns.add("nation", |d| d.summary.nation.clone().unwrap_or_default());
+    columns.add("league", |d| d.summary.league.clone().unwrap_or_default());
     columns.add("reputation", |d| text(d.summary.reputation));
     columns.add("founded", |d| text(d.summary.founded));
     columns.add("season_tickets", |d| text(d.season_tickets));
@@ -244,6 +375,28 @@ fn club_columns(game_date: Option<FmDate>, decimal_mark: char) -> Columns<ClubDe
     columns
 }
 
+/// The columns of a change log export: when and to whom, what was changed from and to what (as the game stores it and
+/// as the window showed it), and where the change stands.
+fn change_columns() -> Columns<ChangeRow> {
+    let mut columns = Columns::<ChangeRow>::default();
+    columns.add("time", |c| c.time.clone());
+    columns.add("name", |c| c.name.clone());
+    columns.add("uid", |c| c.uid.to_string());
+    columns.add("entity", |c| c.entity.to_string());
+    columns.add("field", |c| c.field.clone());
+    columns.add("field_label", |c| c.field_label.clone());
+    columns.add("old", |c| c.old.to_string());
+    columns.add("new", |c| c.new.to_string());
+    columns.add("old_shown", |c| c.old_shown.clone());
+    columns.add("new_shown", |c| c.new_shown.clone());
+    columns.add("notes", |c| c.notes.clone());
+    columns.add("mass_edit", |c| text(c.batch));
+    columns.add("undone_at", |c| c.undone_at.clone().unwrap_or_default());
+    columns.add("earlier", |c| c.earlier.to_string());
+    columns.add("in_game", |c| text(c.in_game));
+    columns
+}
+
 /// Writes the players as CSV: a row of column names, then a row per player, each cell apart by `separator`.
 fn write_csv(
     out: &mut impl Write,
@@ -252,6 +405,16 @@ fn write_csv(
     separator: u8,
 ) -> io::Result<()> {
     write_rows(out, &csv_columns(header.game_date), players, separator)
+}
+
+/// Writes the staff as CSV: a row of column names, then a row per member of staff, each cell apart by `separator`.
+fn write_staff_csv(
+    out: &mut impl Write,
+    header: &ExportHeader,
+    staff: impl Iterator<Item = StaffDetails>,
+    separator: u8,
+) -> io::Result<()> {
+    write_rows(out, &staff_columns(header.game_date), staff, separator)
 }
 
 /// Writes the clubs as CSV: a row of column names, then a row per club, each cell apart by `separator`.
@@ -310,6 +473,22 @@ fn write_json(
     for (i, details) in players.enumerate() {
         out.write_all(if i == 0 { b"\n    " } else { b",\n    " })?;
         serde_json::to_writer(&mut *out, &JsonPlayer::from(&details))?;
+    }
+    writeln!(out, "\n  ]\n}}")
+}
+
+/// Writes the staff as JSON: where they come from, then the staff, one object to a line.
+fn write_staff_json(
+    out: &mut impl Write,
+    header: &ExportHeader,
+    staff: impl Iterator<Item = StaffDetails>,
+) -> io::Result<()> {
+    write_json_header(out, header)?;
+    writeln!(out, "  \"attributeScale\": \"1-20\",")?;
+    write!(out, "  \"staff\": [")?;
+    for (i, details) in staff.enumerate() {
+        out.write_all(if i == 0 { b"\n    " } else { b",\n    " })?;
+        serde_json::to_writer(&mut *out, &JsonStaff::from(&details))?;
     }
     writeln!(out, "\n  ]\n}}")
 }
@@ -449,6 +628,72 @@ impl<'a> From<&'a PlayerDetails> for JsonPlayer<'a> {
     }
 }
 
+/// A member of staff as a JSON export writes them.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonStaff<'a> {
+    uid: u32,
+    name: &'a str,
+    full_name: Option<&'a str>,
+    date_of_birth: Option<String>,
+    age: Option<u16>,
+    nationality: Option<&'a str>,
+    club: Option<&'a str>,
+    /// The game's code for the job; a player-coach's coaching jobs are the code plus one.
+    job: Option<u8>,
+    job_name: Option<&'static str>,
+    /// The manager the player controls in this save.
+    human_manager: bool,
+    current_ability: u16,
+    potential_ability: i16,
+    /// 1–20, in the game's groups; only those the build's layout places.
+    attributes: InOrder<&'static str, u8>,
+    personality: InOrder<&'static str, Option<u8>>,
+    reputation: Reputation,
+    contract: Option<JsonStaffContract>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonStaffContract {
+    /// Pounds.
+    wage_per_week: i32,
+    signed: Option<String>,
+    expires: Option<String>,
+    joined: Option<String>,
+}
+
+impl<'a> From<&'a StaffDetails> for JsonStaff<'a> {
+    fn from(d: &'a StaffDetails) -> Self {
+        let s = &d.summary;
+        let attributes = STAFF_ATTRIBUTE_GROUPS.iter().flat_map(|(_, keys)| keys.iter().copied());
+        let job = staff_job(d);
+        Self {
+            uid: s.uid,
+            name: &s.name,
+            full_name: s.full_name.as_deref(),
+            date_of_birth: s.date_of_birth.map(iso),
+            age: s.age,
+            nationality: s.nation.as_deref(),
+            club: s.club.as_deref(),
+            job,
+            job_name: job.and_then(job_name),
+            human_manager: s.is_human,
+            current_ability: s.current_ability,
+            potential_ability: s.potential_ability,
+            attributes: InOrder(attributes.filter_map(|key| Some((key, d.attributes.get(key)?.value))).collect()),
+            personality: InOrder(PERSONALITY.iter().map(|&key| (key, d.personality.get(key).copied())).collect()),
+            reputation: d.reputation,
+            contract: d.contract.map(|c| JsonStaffContract {
+                wage_per_week: c.wage,
+                signed: c.signed.map(iso),
+                expires: c.expires.map(iso),
+                joined: c.joined.map(iso),
+            }),
+        }
+    }
+}
+
 /// A club as a JSON export writes it.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -457,6 +702,12 @@ struct JsonClub<'a> {
     name: &'a str,
     short_name: Option<&'a str>,
     women: bool,
+    /// The nation the club is from, and its UID.
+    nation: Option<&'a str>,
+    nation_uid: Option<u32>,
+    /// The league its senior team plays in this season, and its UID.
+    league: Option<&'a str>,
+    league_uid: Option<u32>,
     /// 0–10000, of the senior team.
     reputation: Option<u16>,
     founded: Option<u16>,
@@ -513,6 +764,10 @@ impl<'a> From<&'a ClubDetails> for JsonClub<'a> {
             name: &c.name,
             short_name: c.short_name.as_deref(),
             women: c.women,
+            nation: c.nation.as_deref(),
+            nation_uid: c.nation_uid,
+            league: c.league.as_deref(),
+            league_uid: c.league_uid,
             reputation: c.reputation,
             founded: c.founded,
             season_tickets: d.season_tickets,
@@ -645,8 +900,8 @@ fn contract_type_name(code: u8) -> Option<&'static str> {
         2 => "Amateur contract",
         3 => "Youth contract",
         4 => "Non-contract",
+        8 | 11 => "Senior contract",
         10 => "Senior minimum salary contract",
-        11 => "Senior contract",
         _ => return None,
     })
 }
@@ -812,6 +1067,11 @@ mod tests {
                 women: false,
                 reputation: Some(7_200),
                 founded: Some(1900),
+                nation: Some("Netherlands".to_owned()),
+                nation_uid: Some(157),
+                league: Some("Eredivisie".to_owned()),
+                league_uid: Some(14),
+                league_nation: Some("Netherlands".to_owned()),
                 address: 0,
             },
             season_tickets: Some(42_000),
@@ -842,10 +1102,66 @@ mod tests {
         club.summary.name = "Amateurs, Zaterdag".to_owned();
         club.summary.short_name = None;
         club.summary.reputation = None;
+        (club.summary.league, club.summary.league_uid, club.summary.league_nation) = (None, None, None);
         club.facilities.remove("corporate");
         club.finances = None;
         club.stadium = None;
         club
+    }
+
+    /// A manager with a contract, and one out of work: no club, no contract.
+    fn arteta() -> StaffDetails {
+        let summary = StaffSummary {
+            uid: 2_000_073_164,
+            name: "Mikel Arteta".to_owned(),
+            full_name: Some("Mikel Arteta Amatriain".to_owned()),
+            date_of_birth: Some(FmDate { year: 1982, month: 3, day: 26 }),
+            age: Some(44),
+            nation: Some("Spain".to_owned()),
+            nation_uid: Some(796),
+            nation_address: 0,
+            club: Some("Arsenal".to_owned()),
+            club_uid: Some(602),
+            job: Some(16),
+            current_ability: 160,
+            potential_ability: 170,
+            is_human: false,
+            attributes: Vec::new(),
+            contract_expires: Some(FmDate { year: 2027, month: 6, day: 30 }),
+            woman: Some(false),
+            address: 0,
+            shift: 0,
+        };
+        let attributes = STAFF_ATTRIBUTE_GROUPS
+            .iter()
+            .flat_map(|(_, keys)| keys.iter())
+            .filter(|&&key| key != "data_analysis")
+            .map(|&key| (key.to_owned(), Attribute::from_raw(80)))
+            .collect();
+        StaffDetails {
+            summary,
+            reputation: Reputation { home: 8200, current: 7900, world: 7500 },
+            personality: PERSONALITY.iter().map(|&key| (key, 17)).collect(),
+            attributes,
+            contract: Some(StaffContract {
+                wage: 160_000,
+                signed: Some(FmDate { year: 2024, month: 9, day: 12 }),
+                expires: Some(FmDate { year: 2027, month: 6, day: 30 }),
+                joined: Some(FmDate { year: 2019, month: 12, day: 20 }),
+                job: 16,
+            }),
+        }
+    }
+
+    fn out_of_work() -> StaffDetails {
+        let mut member = arteta();
+        member.summary.uid = 42;
+        member.summary.name = "Gennaro Gattuso".to_owned();
+        member.summary.club = None;
+        member.summary.club_uid = None;
+        member.summary.job = None;
+        member.contract = None;
+        member
     }
 
     fn header() -> ExportHeader {
@@ -926,9 +1242,10 @@ mod tests {
             assert!(squad_status_name(code).is_some(), "{code}");
         }
         assert_eq!(squad_status_name(4), Some("Squad player"));
-        for code in [0, 1, 2, 3, 4, 10, 11] {
+        for code in [0, 1, 2, 3, 4, 8, 10, 11] {
             assert!(contract_type_name(code).is_some(), "{code}");
         }
+        assert_eq!(contract_type_name(8), contract_type_name(11));
     }
 
     #[test]
@@ -962,6 +1279,68 @@ mod tests {
     }
 
     #[test]
+    fn staff_csv_has_a_header_and_rows_of_the_same_length() {
+        let mut out = Vec::new();
+        write_staff_csv(&mut out, &header(), [arteta(), out_of_work()].into_iter(), b',').unwrap();
+        let text = String::from_utf8(out).unwrap();
+        let text = text.strip_prefix('\u{FEFF}').expect("a byte order mark");
+        let lines: Vec<&str> = text.split("\r\n").filter(|line| !line.is_empty()).collect();
+        assert_eq!(lines.len(), 3);
+        let header: Vec<&str> = lines[0].split(',').collect();
+        assert_eq!(&header[..4], ["game_date", "uid", "name", "full_name"]);
+        assert!(header.contains(&"tactical_knowledge") && header.contains(&"ambition"));
+        let row: Vec<&str> = lines[1].split(',').collect();
+        assert_eq!(row.len(), header.len());
+        let cell = |row: &[&str], name: &str| row[header.iter().position(|&column| column == name).unwrap()].to_owned();
+        assert_eq!(cell(&row, "game_date"), "2027-01-02");
+        assert_eq!(cell(&row, "job_code"), "16");
+        assert_eq!(cell(&row, "job"), "Manager");
+        assert_eq!(cell(&row, "human_manager"), "false");
+        assert_eq!(cell(&row, "tactical"), "16");
+        // An attribute the layout does not place is empty.
+        assert_eq!(cell(&row, "data_analysis"), "");
+        assert_eq!(cell(&row, "ambition"), "17");
+        assert_eq!(cell(&row, "reputation_world"), "7500");
+        assert_eq!(cell(&row, "wage_per_week_gbp"), "160000");
+        assert_eq!(cell(&row, "contract_expires"), "2027-06-30");
+        // Without a club or a contract, those cells are empty, and the row is as long as the header.
+        let row: Vec<&str> = lines[2].split(',').collect();
+        assert_eq!(row.len(), header.len());
+        assert_eq!(cell(&row, "club"), "");
+        assert_eq!(cell(&row, "job_code"), "");
+        assert_eq!(cell(&row, "job"), "");
+        assert_eq!(cell(&row, "wage_per_week_gbp"), "");
+    }
+
+    #[test]
+    fn staff_json_reads_back_in_order() {
+        let mut out = Vec::new();
+        write_staff_json(&mut out, &header(), [arteta(), out_of_work()].into_iter()).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["gameDate"], "2027-01-02");
+        assert_eq!(value["attributeScale"], "1-20");
+        assert_eq!(value["staff"].as_array().unwrap().len(), 2);
+        let manager = &value["staff"][0];
+        assert_eq!(manager["job"], 16);
+        assert_eq!(manager["jobName"], "Manager");
+        assert_eq!(manager["humanManager"], false);
+        assert_eq!(manager["attributes"]["tactical"], 16);
+        assert!(manager["attributes"].get("data_analysis").is_none());
+        assert_eq!(manager["reputation"]["world"], 7500);
+        assert_eq!(manager["contract"]["wagePerWeek"], 160_000);
+        assert_eq!(manager["contract"]["joined"], "2019-12-20");
+        let free = &value["staff"][1];
+        assert_eq!(free["club"], serde_json::Value::Null);
+        assert_eq!(free["job"], serde_json::Value::Null);
+        assert_eq!(free["contract"], serde_json::Value::Null);
+        // The object keeps the order it was written in: the UID first, the attributes in the game's groups.
+        let line = text.lines().find(|line| line.contains("2000073164")).unwrap();
+        assert!(line.trim_start().starts_with("{\"uid\":2000073164,\"name\":\"Mikel Arteta\""));
+        assert!(line.find("\"attacking\"").unwrap() < line.find("\"physiotherapy\"").unwrap());
+    }
+
+    #[test]
     fn club_csv_has_a_header_and_a_row_of_the_same_length() {
         let mut out = Vec::new();
         write_club_csv(&mut out, &header(), [ajax(), amateurs()].into_iter(), b';').unwrap();
@@ -977,6 +1356,8 @@ mod tests {
         assert_eq!(cell(&row, "game_date"), "2027-01-02");
         assert_eq!(cell(&row, "short_name"), "Ajax");
         assert_eq!(cell(&row, "women"), "false");
+        assert_eq!(cell(&row, "nation"), "Netherlands");
+        assert_eq!(cell(&row, "league"), "Eredivisie");
         assert_eq!(cell(&row, "supporters_hardcore_pct"), "10");
         assert_eq!(cell(&row, "supporter_loyalty"), "14");
         assert_eq!(cell(&row, "training_facilities"), "17");
@@ -993,6 +1374,7 @@ mod tests {
         assert_eq!(cell(&row, "corporate_facilities"), "");
         assert_eq!(cell(&row, "stadium_capacity"), "");
         assert_eq!(cell(&row, "reputation"), "");
+        assert_eq!(cell(&row, "league"), "");
     }
 
     #[test]
@@ -1043,5 +1425,138 @@ mod tests {
         assert!(line.find("\"hardcore\"").unwrap() < line.find("\"casual\"").unwrap());
         let facilities = line.find("\"facilities\"").unwrap();
         assert!(line[facilities..].find("\"training\"").unwrap() < line[facilities..].find("\"corporate\"").unwrap());
+    }
+
+    /// A change of this session, and one from an earlier session that was undone and had been part of a mass edit.
+    fn change_rows() -> Vec<ChangeRow> {
+        vec![
+            ChangeRow {
+                time: "2027-01-02T14:05:09+03:00".to_owned(),
+                name: "Bukayo Saka".to_owned(),
+                uid: 28122642,
+                entity: Entity::Player,
+                field: "attribute.finishing".to_owned(),
+                field_label: "Finishing".to_owned(),
+                old: 70,
+                new: 85,
+                old_shown: "14".to_owned(),
+                new_shown: "17".to_owned(),
+                notes: String::new(),
+                batch: None,
+                undone_at: None,
+                earlier: false,
+                in_game: None,
+            },
+            ChangeRow {
+                time: "2027-01-01T09:30:00+03:00".to_owned(),
+                name: "AFC Ajax".to_owned(),
+                uid: 1013,
+                entity: Entity::Club,
+                field: "finance.transfer_budget".to_owned(),
+                field_label: "Transfer budget".to_owned(),
+                old: 5_000_000,
+                new: 25_000_000,
+                old_shown: "£5,000,000".to_owned(),
+                new_shown: "£25,000,000".to_owned(),
+                notes: "Fee £5,000,000".to_owned(),
+                batch: Some(3),
+                undone_at: Some("2027-01-02T10:00:00+03:00".to_owned()),
+                earlier: true,
+                in_game: Some(false),
+            },
+        ]
+    }
+
+    #[test]
+    fn changes_csv_has_a_header_and_rows_of_the_same_length() {
+        let mut out = Vec::new();
+        let exported = export_changes(change_rows(), ExportFormat::CsvSemicolon, &mut out).unwrap();
+        assert_eq!(exported, Exported { count: 2, skipped: 0 });
+        let text = String::from_utf8(out).unwrap();
+        let text = text.strip_prefix('\u{FEFF}').expect("a byte order mark");
+        let lines: Vec<&str> = text.split("\r\n").filter(|line| !line.is_empty()).collect();
+        assert_eq!(lines.len(), 3);
+        let header: Vec<&str> = lines[0].split(';').collect();
+        assert_eq!(
+            header,
+            [
+                "time",
+                "name",
+                "uid",
+                "entity",
+                "field",
+                "field_label",
+                "old",
+                "new",
+                "old_shown",
+                "new_shown",
+                "notes",
+                "mass_edit",
+                "undone_at",
+                "earlier",
+                "in_game"
+            ]
+        );
+        let cell = |row: &[&str], name: &str| row[header.iter().position(|&column| column == name).unwrap()].to_owned();
+        // A change made on its own, this session: nothing in the cells that do not apply.
+        let row: Vec<&str> = lines[1].split(';').collect();
+        assert_eq!(row.len(), header.len());
+        assert_eq!(cell(&row, "time"), "2027-01-02T14:05:09+03:00");
+        assert_eq!(cell(&row, "uid"), "28122642");
+        assert_eq!(cell(&row, "entity"), "player");
+        assert_eq!(cell(&row, "field"), "attribute.finishing");
+        assert_eq!((cell(&row, "old"), cell(&row, "new")), ("70".to_owned(), "85".to_owned()));
+        assert_eq!((cell(&row, "old_shown"), cell(&row, "new_shown")), ("14".to_owned(), "17".to_owned()));
+        assert_eq!(cell(&row, "notes"), "");
+        assert_eq!(cell(&row, "mass_edit"), "");
+        assert_eq!(cell(&row, "undone_at"), "");
+        assert_eq!(cell(&row, "earlier"), "false");
+        assert_eq!(cell(&row, "in_game"), "");
+        // An undone change of an earlier session that the game did not hold, from a mass edit; with commas in its
+        // shown amounts, which a file with semicolons leaves as they are.
+        let row: Vec<&str> = lines[2].split(';').collect();
+        assert_eq!(row.len(), header.len());
+        assert_eq!(cell(&row, "entity"), "club");
+        assert_eq!(cell(&row, "old_shown"), "£5,000,000");
+        assert_eq!(cell(&row, "notes"), "Fee £5,000,000");
+        assert_eq!(cell(&row, "mass_edit"), "3");
+        assert_eq!(cell(&row, "undone_at"), "2027-01-02T10:00:00+03:00");
+        assert_eq!(cell(&row, "earlier"), "true");
+        assert_eq!(cell(&row, "in_game"), "false");
+    }
+
+    #[test]
+    fn changes_csv_with_commas_quotes_what_holds_one() {
+        let mut changes = change_rows();
+        changes[1].name = "Amateurs, \"Zaterdag\"".to_owned();
+        let mut out = Vec::new();
+        export_changes(changes, ExportFormat::Csv, &mut out).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains(",\"Amateurs, \"\"Zaterdag\"\"\","));
+        assert!(text.contains(",\"£5,000,000\",\"£25,000,000\",\"Fee £5,000,000\","));
+        // The first change holds no comma, so it is written as it is.
+        assert!(text.contains(
+            "2027-01-02T14:05:09+03:00,Bukayo Saka,28122642,player,attribute.finishing,Finishing,70,85,14,17,,,,false,\r\n"
+        ));
+    }
+
+    #[test]
+    fn the_change_log_is_not_written_as_json() {
+        let mut out = Vec::new();
+        let err = export_changes(change_rows(), ExportFormat::Json, &mut out).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn the_window_sends_changes_in_camel_case_without_what_does_not_apply() {
+        // As `JSON.stringify` writes a row of the window: a value that is undefined is not there at all.
+        let sent = r#"{"time":"2027-01-02T14:05:09+03:00","name":"Bukayo Saka","uid":28122642,"entity":"player",
+            "field":"attribute.finishing","fieldLabel":"Finishing","old":70,"new":85,"oldShown":"14","newShown":"17",
+            "notes":"","batch":null,"undoneAt":null,"earlier":false}"#;
+        let row: ChangeRow = serde_json::from_str(sent).unwrap();
+        assert_eq!(row.entity, Entity::Player);
+        assert_eq!((row.old, row.new), (70, 85));
+        assert_eq!((row.batch, row.undone_at, row.in_game), (None, None, None));
     }
 }

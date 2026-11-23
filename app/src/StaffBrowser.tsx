@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Ability } from "./Ability";
+import { ExportButton } from "./ExportDialog";
 import { formatDate } from "./format";
 import { jobLabel, profileText, staffListText } from "./labels";
-import { ListBrowser } from "./ListBrowser";
+import { ListBrowser, type ListRequest } from "./ListBrowser";
 import { MassEditButton } from "./MassEditDialog";
 import { ClubLogo, NationFlag, PICTURE_SIZE, WithPicture } from "./Picture";
 import { restored, useSnapshot } from "./restore";
@@ -27,10 +28,12 @@ interface StaffBrowserProps {
   active: boolean;
   /** Whether the game's layout tells women from men, for the filter that keeps to one of them. */
   genderKnown: boolean;
+  /** What the command palette asks of the list (see `ListRequest`). */
+  request: ListRequest<StaffSummary> | null;
 }
 
 /** The staff table with the profile of the selected member of staff beside it. */
-export function StaffBrowser({ version, active, genderKnown }: StaffBrowserProps) {
+export function StaffBrowser({ version, active, genderKnown, request }: StaffBrowserProps) {
   // The filters and the sort start as they were before the language was switched, if it was (see `restore.ts`).
   const [fields, setFields] = useState(() => restored("staffFields", readStaffFields));
   // Null until a header is clicked: no order is asked for, and the search answers with the human manager first.
@@ -60,6 +63,7 @@ export function StaffBrowser({ version, active, genderKnown }: StaffBrowserProps
       name="staff"
       command="search_staff"
       requestArgs={{ filter, order: order ?? undefined }}
+      request={request}
       version={version}
       active={active}
       placeholder={text.search}
@@ -87,7 +91,12 @@ export function StaffBrowser({ version, active, genderKnown }: StaffBrowserProps
           }
         />
       }
-      toolbarActions={(list) => <MassEditButton entity="staff" filters={{ staffFilter: filter }} list={list} />}
+      toolbarActions={(list) => (
+        <>
+          <ExportButton entity="staff" list={list} args={{ filter, order: order ?? undefined }} />
+          <MassEditButton entity="staff" filters={{ staffFilter: filter }} list={list} />
+        </>
+      )}
       tableClass="staff-grid"
       header={
         <>

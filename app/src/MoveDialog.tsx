@@ -1,10 +1,13 @@
 // Transferring a player to another club: the button in the header of his profile, and the dialog it opens. The dialog
 // picks the club (and, if wanted, a fee and a new wage and contract end), asks the game whether the move can be made
-// before it offers it, and makes it: the buying club pays the fee to the selling one. The transfer is logged like any
+// before it offers it, and makes it: the buying club pays the fee to the selling one. The move is logged like any
 // change, and one undo from the Changes view takes back the move and the fee.
 //
-// A switch at the top of the dialog makes it a swap instead: after the club it picks one of the club's players, who
-// goes the other way, and each keeps his own contract.
+// A switch at the top of the dialog chooses what it makes. Transfer arranges the move for the game to make on its next
+// day, as it makes its own: the player's history keeps this season's matches with his old club and lists the new club
+// with the fee, and the game pays the fee, so the dialog shows no money and offers no room to make. It is there only
+// for a player who has a club, and where the editor can arrange it. Move now makes the move at once, as described
+// above. Swap picks after the club one of the club's players, who goes the other way, and each keeps his own contract.
 //
 // A full squad list is made bigger. Where the editor cannot make it bigger (see `Session::growth`), a club whose squad
 // list is full cannot take one more player: the dialog then offers to make room, in a box where the refusal would be:
@@ -22,12 +25,14 @@ import { createPortal } from "react-dom";
 import { Ability } from "./Ability";
 import { call } from "./api";
 import {
+  arrangeTransfer,
   dateFromNumber,
   isoFromNumber,
   movePlayer,
   moveStaff,
   numberFromDate,
   offeredStaffJobs,
+  planArrangedTransfer,
   planClubMove,
   planClubSwap,
   planStaffMove,
@@ -61,6 +66,7 @@ import {
 } from "./moveTerms";
 import { ReputationMeter } from "./ProfileParts";
 import type {
+  ArrangedPreview,
   ClubPage,
   ClubSummary,
   Contract,
@@ -168,11 +174,12 @@ const PARTNER_LIMIT = 50;
 /** How long the search waits after the last key, so that a burst of keys asks the game once. */
 const SEARCH_DELAY = 150;
 
-/** What the dialog makes: a move to a club, or a swap with one of its players. */
-type Mode = "move" | "swap";
+/** What the dialog makes: a transfer the game makes on its next day, a move to a club now, or a swap with one of its players. */
+type Mode = "arrange" | "move" | "swap";
 
-/** The two ends of the switch at the top of the dialog. */
+/** The choices of the switch at the top of the dialog. */
 const MODES: readonly { id: Mode; label: string }[] = [
+  { id: "arrange", label: text.modeArrange },
   { id: "move", label: text.modeMove },
   { id: "swap", label: text.modeSwap },
 ];
@@ -195,10 +202,13 @@ type FoundPlayers = { query: string; page: PlayerPage } | { query: string; error
 /** The players a club with a full squad list can release to make room, as the game listed them, or why it could not. */
 type Makers = { club: number; outcome: { rows: RoomMaker[] } | { error: string } };
 
-/** What the game said to the plan of a move or a swap, for the club and terms or the player it was asked about. */
+/**
+ * What the game said to the plan of a move, a swap or an arranged transfer, for the club and terms or the player it
+ * was asked about.
+ */
 interface Planned {
   key: string;
-  outcome: { preview: MovePreview } | { error: string };
+  outcome: { preview: MovePreview } | { arranged: ArrangedPreview } | { error: string };
 }
 
 /**
@@ -223,6 +233,10 @@ const makerLabel = (row: RoomMaker) =>
   ]
     .filter(Boolean)
     .join(" · ");
+
+/** The same for an arranged transfer: the club, the terms and the fee, under a prefix that no move plan has. */
+const arrangeKey = (club: number, terms: MoveTerms, fee: number | undefined) =>
+  `arrange:${planKey(club, terms, fee, undefined)}`;
 
 /** The same for a swap, which depends on the player picked alone (his club is the club picked). */
 const swapKey = (partner: number) => `swap:${partner}`;
@@ -480,6 +494,9 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
   // him; a member of staff in the job picked.
   const staff = kind === "staff";
   const signing = player.club === null;
+  // Only a player who has a club can be transferred by the game, and only where the editor can arrange it.
+  const { arrangesTransfers } = useContext(EditorContext);
+  const canArrange = !staff && !signing && arrangesTransfers;
   // The job a member of staff has now, if any.
   const ownJob = staff ? (player.job ?? null) : null;
   const base = useId();
@@ -504,7 +521,7 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
   const wasWageShown = wasWage === null ? null : toShown(wasWage);
   const wasExpires = contract?.expires ? numberFromDate(contract.expires) : null;
 
-  const [mode, setMode] = useState<Mode>("move");
+  const [mode, setMode] = useState<Mode>(canArrange ? "arrange" : "move");
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found | null>(null);
   // The row Enter picks.
@@ -583,11 +600,12 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
   const staffTerms = staff && signing ? terms : undefined;
 
   const swap = mode === "swap";
+  const arrange = mode === "arrange";
 
   // Making room: the club picked for a move has a full squad list. Its players that can be released are listed, and
   // the one picked (at first, the one suggested) is released in the same move. While none is picked yet, there is no
   // plan to ask. A free agent signed takes no one's place.
-  const fullClub = !swap && !staff && !signing && club !== null && full?.club === club.uid ? club.uid : null;
+  const fullClub = !swap && !arrange && !staff && !signing && club !== null && full?.club === club.uid ? club.uid : null;
   const makersHere = fullClub !== null && makers?.club === fullClub ? makers.outcome : null;
   const makerRows = makersHere !== null && "rows" in makersHere ? makersHere.rows : null;
   const leaver = makerRows && (makerRows.find((row) => row.uid === releasePick) ?? makerRows[0] ?? null);
@@ -595,29 +613,36 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
   // The box is there while the players are listed, and once some can be released; with none, the refusal stands.
   const offerRoom = fullClub !== null && (makersHere === null || (makerRows !== null && makerRows.length > 0));
 
-  // What the plan is for: for a move, null while there is no club, or an input cannot be sent; for a swap, null while
-  // no player is picked. Move or Swap is offered only for a plan the game made for what is picked now, so a change
-  // takes it back at once, before the new plan is asked.
+  // What the plan is for: for a move or an arranged transfer, null while there is no club, or an input cannot be sent;
+  // for a swap, null while no player is picked. The button is offered only for a plan the game made for what is picked
+  // now, so a change takes it back at once, before the new plan is asked.
   const key = swap
     ? partner !== null
       ? swapKey(partner.uid)
       : null
-    : club !== null && valid && !needsJob && (fullClub === null || release !== undefined)
+    : arrange
+      ? club !== null && valid
+        ? arrangeKey(club.uid, terms, fee)
+        : null
+      : club !== null && valid && !needsJob && (fullClub === null || release !== undefined)
       ? planKey(club.uid, terms, fee, release, askedJob)
       : null;
   const outcome = key !== null && planned?.key === key ? planned.outcome : null;
-  const preview = outcome !== null && "preview" in outcome ? outcome.preview : null;
-  const canMove = preview !== null && !moving;
+  const planMade = outcome !== null && ("preview" in outcome || "arranged" in outcome);
+  const canMove = planMade && !moving;
 
-  // What the button makes, for the plan it is offered for: the swap with the player picked, or the move to the club
-  // (releasing the player picked, to make room; for a member of staff, in the job picked).
+  // What the button makes, for the plan it is offered for: the swap with the player picked, the transfer arranged for
+  // the game, or the move to the club (releasing the player picked, to make room; for a member of staff, in the job
+  // picked).
   const make = swap
     ? partner && (() => swapPlayers(player.uid, partner.uid))
     : club &&
       (() =>
-        staff
-          ? moveStaff(player.uid, club.uid, askedJob, staffTerms)
-          : movePlayer(player.uid, club.uid, terms, fee, release));
+        arrange
+          ? arrangeTransfer(player.uid, club.uid, terms, fee)
+          : staff
+            ? moveStaff(player.uid, club.uid, askedJob, staffTerms)
+            : movePlayer(player.uid, club.uid, terms, fee, release));
 
   // The clubs on show. Until the search has answered for what is typed they are the last ones: Enter leaves them alone.
   const rows = found !== null && "page" in found ? found.page.rows : [];
@@ -677,7 +702,7 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
   // players the club can release, and asks again with the one picked.
   const waitingForLeaver = fullClub !== null && release === undefined;
   useEffect(() => {
-    if (swap || club === null || !valid || needsJob || waitingForLeaver) {
+    if (swap || arrange || club === null || !valid || needsJob || waitingForLeaver) {
       return;
     }
     let cancelled = false;
@@ -705,7 +730,32 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [swap, staff, signing, player.uid, club, valid, needsJob, askedJob, wage, expires, fee, release, waitingForLeaver, replans]);
+  }, [swap, arrange, staff, signing, player.uid, club, valid, needsJob, askedJob, wage, expires, fee, release, waitingForLeaver, replans]);
+
+  // The same for a transfer arranged for the game, which has no room to make: the plan is asked again only for a
+  // change of the club, the terms or the fee.
+  useEffect(() => {
+    if (!arrange || club === null || !valid) {
+      return;
+    }
+    let cancelled = false;
+    const asked = termsOf(wage, expires);
+    const answer = (result: Planned["outcome"]) => {
+      if (!cancelled) {
+        setPlanned({ key: arrangeKey(club.uid, asked, fee), outcome: result });
+      }
+    };
+    const timer = setTimeout(() => {
+      planArrangedTransfer(player.uid, club.uid, asked, fee).then(
+        (made) => answer({ arranged: made }),
+        (e) => answer({ error: describeError(e) }),
+      );
+    }, PLAN_DELAY);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [arrange, player.uid, club, valid, wage, expires, fee, replans]);
 
   // The players a club with a full squad list can release, asked once the plan found it full, and again after a move
   // the game refused.
@@ -872,6 +922,17 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
   const feeNote =
     feeVerdict.status === "invalid" ? { message: text.feeInvalid(formatAmount(MAX_FEE_SHOWN)), invalid: true } : null;
 
+  // Where the clubs of an arranged transfer lead, the day the game makes it, its fee and the contract.
+  const arrangedRoute = (made: ArrangedPreview) => {
+    const lines = [text.route(made.from.name, made.to.name), text.movesOn(formatDate(dateFromNumber(made.moveDay)))];
+    if (made.fee > 0) {
+      lines.push(text.arrangeFee(formatMoney(made.fee)));
+    }
+    const { wage: pounds, expires: end } = made.contract;
+    lines.push(text.arrangeContract(formatMoney(pounds), formatDate(dateFromNumber(end))));
+    return lines.join("\n");
+  };
+
   // Where the clubs of a move that can be made lead, who is released to make room, and what its fee does to their
   // money; for a swap, who goes where; for a free agent, the contract made for him.
   const route = (made: MovePreview) => {
@@ -946,10 +1007,21 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
           : noLeaver !== null
             ? { tone: "refused", message: noLeaver }
             : outcome === null
-              ? { tone: "pending", message: swap ? text.swapChecking : signing ? text.signChecking : text.checking }
+              ? {
+                  tone: "pending",
+                  message: swap
+                    ? text.swapChecking
+                    : arrange
+                      ? text.arrangeChecking
+                      : signing
+                        ? text.signChecking
+                        : text.checking,
+                }
               : "error" in outcome
                 ? { tone: "refused", message: outcome.error }
-                : { tone: "ok", message: route(outcome.preview) };
+                : "arranged" in outcome
+                  ? { tone: "ok", message: arrangedRoute(outcome.arranged) }
+                  : { tone: "ok", message: route(outcome.preview) };
   // A failed move is told for the club and terms it was tried with only (a swap: for the player picked).
   const failure = moveError !== null && moveError.key === key ? moveError.message : null;
 
@@ -984,20 +1056,29 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
 
         <div className="modal-body">
           {!staff && !signing && (
-            <div className="move-mode" role="group" aria-label={text.modeLabel}>
-              {MODES.map(({ id: kindOfMove, label }) => (
-                <button
-                  key={kindOfMove}
-                  ref={kindOfMove === "swap" ? swapModeButton : undefined}
-                  type="button"
-                  aria-pressed={kindOfMove === mode}
-                  disabled={moving}
-                  onClick={() => setMode(kindOfMove)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="move-mode" role="group" aria-label={text.modeLabel}>
+                {MODES.filter(({ id: kindOfMove }) => kindOfMove !== "arrange" || canArrange).map(
+                  ({ id: kindOfMove, label }) => (
+                    <button
+                      key={kindOfMove}
+                      ref={kindOfMove === "swap" ? swapModeButton : undefined}
+                      type="button"
+                      aria-pressed={kindOfMove === mode}
+                      disabled={moving}
+                      onClick={() => setMode(kindOfMove)}
+                    >
+                      {label}
+                    </button>
+                  ),
+                )}
+              </div>
+              {!swap && (
+                <p className="move-note">
+                  {arrange ? text.arrangeNote : arrangesTransfers ? text.moveNote : text.arrangeUnavailable}
+                </p>
+              )}
+            </>
           )}
 
           <section className="move-section" aria-labelledby={id("from")}>
@@ -1272,15 +1353,17 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
             <ul className="move-facts">
               {(swap
                 ? text.swapDoes
-                : staff
-                  ? signing
-                    ? text.staffSignDoes
-                    : text.staffDoes
-                  : signing
-                    ? text.signDoes
-                    : offerRoom
-                      ? text.makeRoomDoes
-                      : text.does
+                : arrange
+                  ? text.arrangeDoes
+                  : staff
+                    ? signing
+                      ? text.staffSignDoes
+                      : text.staffDoes
+                    : signing
+                      ? text.signDoes
+                      : offerRoom
+                        ? text.makeRoomDoes
+                        : text.does
               ).map((line) => (
                 <li key={line}>{line}</li>
               ))}
@@ -1295,7 +1378,17 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
         )}
 
         <footer className="modal-foot">
-          <span className="move-foot-note">{swap ? text.swapHint : signing ? text.signHint : text.hint}</span>
+          <span className="move-foot-note">
+            {swap
+              ? text.swapHint
+              : arrange
+                ? text.arrangeHint
+                : signing
+                  ? text.signHint
+                  : staff
+                    ? text.hint
+                    : text.moveNowHint}
+          </span>
           <button ref={moveButton} type="button" className="primary" disabled={!canMove} onClick={() => void move()}>
             {moving
               ? swap
@@ -1305,11 +1398,15 @@ function MoveDialog({ player, kind, contract, onMoved, onClose }: MoveDialogProp
                   : text.moving
               : swap
                 ? text.swap
-                : leaver !== null
-                  ? text.moveAndRelease(leaver.name)
-                  : signing
-                    ? text.sign
-                    : text.move}
+                : arrange
+                  ? text.arrangeButton
+                  : leaver !== null
+                    ? text.moveAndRelease(leaver.name)
+                    : signing
+                      ? text.sign
+                      : staff
+                        ? text.move
+                        : text.modeMove}
           </button>
           <button ref={cancelButton} type="button" disabled={moving} onClick={onClose}>
             {text.cancel}

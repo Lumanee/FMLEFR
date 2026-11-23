@@ -25,6 +25,11 @@ export function fieldName(dict: Strings, key: string): string {
       const position = own(dict.positions, name);
       return position === undefined ? key : dict.edit.positionRating(position);
     }
+    case "prize": {
+      // A final position's amount: `prize.place.3`; the amounts per match are in `fields`.
+      const place = Number(key.split(".")[2]);
+      return name === "place" && Number.isInteger(place) ? dict.leaguePrizes.placeField(place) : key;
+    }
     default:
       return key;
   }

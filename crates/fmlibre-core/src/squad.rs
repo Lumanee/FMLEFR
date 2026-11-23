@@ -197,7 +197,7 @@ impl Session {
     }
 
     /// The teams of `club`, each pointing back at it.
-    fn team_objects(&self, club: &ClubSummary) -> Result<Vec<u64>, MoveError> {
+    pub(crate) fn team_objects(&self, club: &ClubSummary) -> Result<Vec<u64>, MoveError> {
         let (c, t) = (&self.layout.club, &self.layout.team);
         let not_a_club = || MoveError::NotAClub { uid: club.uid };
         if self.process.read_u32(club.address + c.uid)? != club.uid {
@@ -218,7 +218,7 @@ impl Session {
         Ok(teams)
     }
 
-    fn team_object(&self, club: &ClubSummary, index: usize) -> Result<u64, MoveError> {
+    pub(crate) fn team_object(&self, club: &ClubSummary, index: usize) -> Result<u64, MoveError> {
         self.team_objects(club)?.get(index).copied().ok_or(MoveError::NoTeam { index })
     }
 
@@ -244,7 +244,10 @@ impl Session {
             age_limit: (age_limit != NO_AGE_LIMIT).then_some(age_limit),
             captain: self.captain_uid(u64_at(t.captain), players),
             vice_captain: self.captain_uid(u64_at(t.vice_captain), players),
-            players: elements.into_iter().filter_map(|object| self.squad_member(club, team, object, players)).collect(),
+            players: elements
+                .into_iter()
+                .filter_map(|object| self.squad_member(Some(club), team, object, players))
+                .collect(),
         })
     }
 
@@ -258,8 +261,15 @@ impl Session {
         players.get(uid).filter(|player| player.address + p.identity() + player.shift == block).map(|player| player.uid)
     }
 
-    /// The player at `object` in the list of `team`, if the index has him at that address.
-    fn squad_member(&self, club: &ClubSummary, team: u64, object: u64, players: &PlayerIndex) -> Option<SquadMember> {
+    /// The player at `object` in the list of `team`, if the index has him at that address. A national team has no club:
+    /// with `club` unset he is on loan to no one, and plays for the team whatever his own team is.
+    pub(crate) fn squad_member(
+        &self,
+        club: Option<&ClubSummary>,
+        team: u64,
+        object: u64,
+        players: &PlayerIndex,
+    ) -> Option<SquadMember> {
         let (p, t) = (&self.layout.player, &self.layout.team);
         let player = p.person_block_shifts.iter().find_map(|&shift| {
             let uid = self.process.read_u32(object + p.at(p.uid, shift)).ok()?;
@@ -284,15 +294,15 @@ impl Session {
             .flatten()
             .and_then(club_of);
         let playing = club_of(plays_for);
-        let loan = match (playing, employer) {
-            (Some(playing), Some(employer)) if playing != employer => {
+        let loan = match (club, playing, employer) {
+            (Some(club), Some(playing), Some(employer)) if playing != employer => {
                 Some(if playing == club.address { Loan::In } else { Loan::Out })
             }
             _ => None,
         };
         Some(SquadMember {
             uid: player.uid,
-            plays_here: plays_for == team,
+            plays_here: club.is_none() || plays_for == team,
             loan,
             condition: u16_at(p.condition),
             match_sharpness: u16_at(p.match_sharpness),

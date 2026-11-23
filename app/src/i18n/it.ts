@@ -10,9 +10,11 @@
 // with its noun in gender and number ("1 modifica applicata", "3 modifiche applicate"; "1 giocatore escluso", "3
 // giocatori esclusi"), so the sentences with a count are written out for one and for many.
 
-import type { Entity } from "../types";
+import type { Concern, Entity, OpportunityKind } from "../types";
 import type { ErrorTexts, Strings } from "./en";
 import { fieldName } from "./fieldNames";
+import { reasonText } from "./reasons";
+import { REASONS_IT } from "./reasons/it";
 
 const numbers = new Intl.NumberFormat("it-IT");
 const percents = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 });
@@ -84,6 +86,7 @@ const CONTRACT_TYPES: Partial<Record<number, string>> = {
   2: "Contratto dilettantistico",
   3: "Contratto giovanile",
   4: "Senza contratto",
+  8: "Contratto senior",
   10: "Contratto senior a salario minimo",
   11: "Contratto senior",
 };
@@ -101,7 +104,8 @@ const recordFeminine = (entity: string | undefined) =>
 
 /** The reasons the Rust side gives for a field that cannot be changed some way. */
 const UNSUPPORTED: Partial<Record<string, string>> = {
-  "a date can only be set": "una data si può solo impostare",
+  "a date can only be set or moved by years": "una data si può solo impostare o spostare di anni",
+  "only a date can be moved by years": "solo una data si può spostare di anni",
   "it is changed one person at a time": "si cambia una persona alla volta",
   "the new value is not one of the game's own records of that kind":
     "il nuovo valore non è uno dei record del gioco di quel tipo",
@@ -165,13 +169,6 @@ const CLAUSE_NAMES_IT: Partial<Record<number, string>> = {
   56: "Rescissione per mancata promozione attivata",
   58: "Non mostrata nel gioco (58)",
   63: "Non mostrata nel gioco (63)",
-};
-
-/** Reasons to be unhappy, by the codes the game keeps them as (see `en.ts`). */
-const CONCERN_MOTIVES_IT: Partial<Record<number, string>> = {
-  596: "Escluso dalla lista di una competizione",
-  808: "Pensa che un compagno sia stato trattato ingiustamente",
-  926: "Non crede che un compagno meriti il minutaggio che vuole",
 };
 
 /** Players' traits (preferred moves), by their bit in the game's mask (see `en.ts`); the game's Italian names. */
@@ -250,12 +247,20 @@ const checkName = (key: string | undefined) => {
 const jobName = (code: string | undefined) => (it.jobs as Partial<Record<number, string>>)[Number(code)] ?? code;
 
 const errors: ErrorTexts = {
+  "team.nobodyInjured": () => "Nessuno in questa squadra è infortunato.",
+  "team.noCohesion": () =>
+    "L'editor non riesce a leggere l'affiatamento di questa squadra: questa versione del gioco non è stata verificata, oppure nessuno dei suoi giocatori ha affiatamento con la società.",
+  "team.noTactics": () =>
+    "L'editor non riesce a leggere quanto questa squadra conosce la sua tattica: questa versione del gioco non è stata verificata, oppure la squadra non gioca una tattica scelta da te.",
   "guard.unknownBuild": () =>
     "FMLibreEditor non è stato verificato con questa versione del gioco, quindi non vi scrive. «Modifica comunque», " +
     "nell'avviso in alto, attiva la modifica.",
   "guard.failed": (p) =>
     `${checkName(p.check)}: non hanno superato i controlli in questa versione del gioco, quindi FMLibreEditor non ` +
     "li cambia.",
+  "guard.saveChanged": () =>
+    "Il gioco ha caricato un salvataggio, o è tornato al menu principale, da quando FMLibreEditor lo ha letto, quindi " +
+    "non cambia nulla finché non ricarichi i dati.",
   "edit.unknownField": (p) => `Qui non c'è nessun campo modificabile chiamato «${p.field}».`,
   "edit.outOfRange": (p) => `${p.value} non è un valore valido per ${field(p.field)}: accetta da ${p.min} a ${p.max}.`,
   "edit.notADate": (p) => `${p.value} non è una data valida per ${field(p.field)}.`,
@@ -297,6 +302,14 @@ const errors: ErrorTexts = {
   "sign.poolFull": () =>
     "Il gioco non ha posto per un altro contratto finché non ne crea uno lui, come fa con il passare dei giorni: " +
     "continua di un giorno nel gioco e riprova.",
+  "arrange.unknown": () => "L'editor non trova dove il gioco tiene i suoi trasferimenti in questa versione del gioco.",
+  "arrange.underWay": () => "Il giocatore ha già uno spostamento concordato, o un'offerta ancora senza risposta.",
+  "arrange.noMemory": () =>
+    "L'editor non ha potuto prendere memoria nel gioco per questo: il sistema non gli ha lasciato eseguire al suo posto " +
+    "le funzioni del gioco.",
+  "arrange.made": () =>
+    "Il gioco ha già fatto questo trasferimento, o ha cambiato ciò che la preparazione aveva scritto: non si può " +
+    "annullare.",
   "sign.noModel": () =>
     "La società non ha in prima squadra nessun giocatore con un contratto normale su cui modellare quello nuovo.",
   "sign.noDate": () => "L'editor non riesce a leggere la data del gioco, da cui parte il nuovo contratto.",
@@ -330,6 +343,14 @@ const errors: ErrorTexts = {
   "staff.noRoom": (p) =>
     `La lista ${STAFF_DEPARTMENTS[p.department] ?? `di ${p.department}`} della società non ha posto per nessun altro ` +
     `(ora ${p.staff}) e l'editor qui non può ingrandirla.`,
+  "names.unknown": () =>
+    "L'editor non trova dove il gioco tiene i nomi delle persone in questa versione, quindi non può cambiarli.",
+  "names.noRoom": (p) =>
+    `Al momento il gioco non ha posto per un altro nuovo ${({ first: "nome", last: "cognome", common: "nome comune" } as Record<string, string>)[p.table] ?? "nome"}. ` +
+    "Ne fa da solo man mano che arrivano nuovi giocatori e staff; oppure salva la partita, ricarica il salvataggio e riprova.",
+  "names.same": () => "È già questo il nome.",
+  "names.bad": (p) =>
+    `Un nome o un cognome non può essere vuoto, e nessun nome può iniziare o finire con uno spazio, contenere caratteri di controllo o superare ${p.max} byte.`,
   "stadium.none": () => "Non si riesce a leggere lo stadio in cui gioca la prima squadra della società.",
   "stadium.shared": (p) =>
     `${p.holders} elementi del gioco condividono questo nome; non si può cambiare solo per lo stadio.`,
@@ -402,6 +423,8 @@ const errors: ErrorTexts = {
   "app.dataChanged": () => `Questi dati sono cambiati nel gioco; ${reload}.`,
   "app.noChange": (p) => `La modifica ${p.id} non esiste.`,
   "app.alreadyUndone": () => "Questa modifica è già stata annullata.",
+  "app.historyOnly": () => "Questa modifica è stata fatta prima dell'ultima connessione dell'app e per annullarla serviva la memoria del gioco com'era allora: rimettila a mano.",
+  "app.history": (p) => `Impossibile cancellare la cronologia: ${p.reason}`,
   "export.failed": (p) => `Non è stato possibile scrivere il file: ${p.reason}`,
   "export.notAllowed": (p) =>
     `FMLibreEditor non può scrivere in ${p.folder}. Se macOS ha chiesto se può usare la tua cartella Documenti, ` +
@@ -599,6 +622,7 @@ export const it: Strings = {
     date_of_birth: "Data di nascita",
     asking_price: "Prezzo richiesto",
     nation: "Nazionalità",
+    city_of_birth: "Città di nascita",
     "reputation.home": "Reputazione casalinga",
     "reputation.current": "Reputazione attuale",
     "reputation.world": "Reputazione mondiale",
@@ -629,6 +653,8 @@ export const it: Strings = {
     "tie.workPermit": "Senza permesso di lavoro in",
     club: "Società",
     injuries: "Infortuni",
+    cohesion: "Affiatamento",
+    tactics: "Familiarità tattica",
     bans: "Squalifiche",
     retirement: "Ritiro",
     clause: "Clausola del contratto",
@@ -648,9 +674,16 @@ export const it: Strings = {
     "finance.total_wage_budget": "Budget stipendi complessivo",
     "stadium.capacity": "Capienza dello stadio",
     "stadium.name": "Nome dello stadio",
+    "name.first": "Nome",
+    "name.last": "Cognome",
+    "name.common": "Nome comune",
+    "name.full": "Nome completo",
     "stadium.seating": "Posti a sedere",
     "stadium.used": "Capienza utilizzata",
     "stadium.expansion": "Capienza massima ampliabile",
+    "prize.win": "Premio del campionato per la vittoria",
+    "prize.draw": "Premio del campionato per il pareggio",
+    "prize.loss": "Premio del campionato per la sconfitta",
   },
 
   profile: {
@@ -707,6 +740,10 @@ export const it: Strings = {
     signed: "Firmato",
     expires: "Scadenza",
     joined: "Arrivo",
+    extendContract: (years: number) => `Prolunga di ${years} anni`,
+    extendingContract: "In corso…",
+    extendContractTitle: (years: number, until: string) =>
+      `Il contratto dura ${years} anni in più, fino al ${until}; si può annullare in Modifiche`,
     squadStatus: "Stato in rosa",
     squadStatusName: (status) => SQUAD_STATUSES[status] ?? `Stato ${status}`,
     contractType: "Tipo di contratto",
@@ -747,9 +784,12 @@ export const it: Strings = {
     removingUnhappiness: "Rimozione…",
     removeUnhappinessTitle:
       "Toglie dalla sua lista ogni motivo di scontento, come fa Rimuovi tutto di FMRTE; si può annullare in Modifiche",
+    removeUnhappinessFollows:
+      "I motivi che i compagni hanno su di lui finiscono da soli quando il gioco va avanti: premi Continua nel gioco",
     concernSince: (date) => `dal ${date}`,
+    concernAbout: (name) => `riguarda ${name}`,
     concernKind: (kind) => (kind === 1 ? "Preoccupato" : kind === 2 ? "Interno" : `Tipo ${kind}`),
-    concernMotive: (motive) => CONCERN_MOTIVES_IT[motive] ?? `Motivo ${motive}`,
+    concernMotive: (concern: Concern) => reasonText(REASONS_IT, concern) ?? `Motivo ${concern.motive}`,
     clauses: "Bonus e clausole",
     noClauses: "Nessun bonus o clausola",
     loyaltyBonus: "Bonus fedeltà",
@@ -1050,8 +1090,9 @@ export const it: Strings = {
     reputationTitle: "Reputazione",
 
     tabsLabel: "Sezioni della società",
-    tabs: { overview: "Panoramica", squad: "Rosa", stadium: "Stadio" },
+    tabs: { overview: "Panoramica", squad: "Rosa", staff: "Staff", stadium: "Stadio" },
     squadLocked: "Termina la modifica per aprire la rosa",
+    staffLocked: "Termina la modifica per aprire lo staff",
 
     facilities: "Strutture",
 
@@ -1113,6 +1154,90 @@ export const it: Strings = {
     socialMedia: "Follower sui social media",
   },
 
+  clubStaff: {
+    loading: "Lettura dello staff…",
+    empty: "Il gioco non tiene staff per questa società: le società dei campionati non giocati in questa partita non ne hanno.",
+    count: (total, staying) => {
+      const all = total === 1 ? "1 membro dello staff" : `${format(total)} membri dello staff`;
+      return staying === 0 ? all : `${all} · ${format(staying)} ${staying === 1 ? "resta" : "restano"} se gli altri vengono svincolati`;
+    },
+
+    actionsLabel: "Azioni su tutto lo staff",
+    releaseAll: (count) => (count === 0 ? "Svincola tutto lo staff" : `Svincola tutto lo staff (${format(count)})`),
+    releaseAllTitle: "Svincola in una volta tutto lo staff della società, tranne te e la dirigenza; prima lo chiede una finestra",
+    releaseNone: "Nessuno dello staff di questa società può essere svincolato",
+    hint: "Tutti tranne te e la dirigenza lasciano subito la società. Il ripristino è anche nella vista Modifiche.",
+    released: (count) => (count === 1 ? "1 membro dello staff svincolato" : `${format(count)} membri dello staff svincolati`),
+    refused: (name, reason) => `${name}: ${reason}`,
+    undo: "Ripristina",
+    undoTitle: "Riporta alla società lo staff svincolato, con i suoi contratti",
+
+    tableLabel: "Lo staff della società",
+    staysColumn: "Resta",
+    stays: {
+      you: "Tu",
+      board: "La dirigenza",
+      player: "Anche giocatore",
+      held: "Tenuto dalla società",
+      other: "Non svincolabile",
+    },
+
+    title: "Svincola tutto lo staff",
+    from: "Società",
+    leaving: (count) => (count === 1 ? "1 lascia la società" : `${format(count)} lasciano la società`),
+    staying: (count) => (count === 1 ? "1 resta" : `${format(count)} restano`),
+    more: (count) => `e altri ${format(count)}`,
+    doesHeading: "Cosa fa",
+    does: [
+      "Ognuno lascia subito lo staff della società e il suo contratto finisce: disoccupato, come lo staff senza società del gioco",
+      "Nessuno viene pagato",
+      "Un posto da allenatore o da direttore sportivo resta vuoto, che la società riempirà",
+      "Restano tu, la dirigenza e chi l'editor non può svincolare",
+      "Compare in Modifiche, dove un solo annullamento li riporta tutti con gli stessi contratti",
+    ],
+    dialogHint: "Nel gioco non cambia nulla finché non premi Svincola tutti.",
+    release: "Svincola tutti",
+    releasing: "Svincolo…",
+    cancel: "Annulla",
+
+    moveAll: "Trasferisci tutto lo staff",
+    moveAllTitle:
+      "Trasferisce in una volta tutto lo staff della società in un'altra società, tranne te e la dirigenza; prima lo " +
+      "chiede una finestra",
+    moveNone: "Nessuno dello staff di questa società può essere trasferito",
+    moved: (count, club) =>
+      count === 1
+        ? `1 membro dello staff trasferito alla società ${club}`
+        : `${format(count)} membri dello staff trasferiti alla società ${club}`,
+    undoMoveTitle: "Riporta a questa società lo staff trasferito, con i suoi contratti",
+    moveTitle: "Trasferisci tutto lo staff",
+    moveSearch: "Cerca la società in cui trasferire lo staff",
+    movePick: "Scegli la società in cui viene trasferito lo staff.",
+    movePlanning: "Verifica di chi può essere trasferito…",
+    movePlan: (count, club) =>
+      count === 1
+        ? `1 membro dello staff passa alla società ${club}`
+        : `${format(count)} membri dello staff passano alla società ${club}`,
+    moveNobody: (club) => `Nessuno dello staff di questa società può passare alla società ${club}.`,
+    moveStays: {
+      managerTaken: (club) => `La società ${club} ha già un allenatore`,
+      directorTaken: (club) => `La società ${club} ha già un direttore sportivo`,
+      yourClub: (club) => `Guidi la società ${club}`,
+      other: "Non trasferibile",
+    },
+    moveDoes: [
+      "Ognuno entra nella nuova società dove c'è il suo ruolo: nello staff medico, tecnico o degli osservatori",
+      "Stesso stipendio e stessa scadenza; ogni contratto è datato dalla data del gioco",
+      "Un allenatore o un direttore sportivo entra solo dove il posto nella nuova società è libero; un posto lasciato " +
+        "qui resta vuoto, che la società riempirà",
+      "Restano tu, la dirigenza e chi l'editor non può trasferire",
+      "Compare in Modifiche, dove un solo annullamento li riporta tutti in questa società",
+    ],
+    moveHint: "Nel gioco non cambia nulla finché non premi Trasferisci tutti.",
+    move: "Trasferisci tutti",
+    moving: "Trasferimento…",
+  },
+
   clubList: {
     nav: "Società",
     count: (total) => `${format(total)} società`,
@@ -1130,6 +1255,8 @@ export const it: Strings = {
     women: "Donne",
     columns: {
       name: "Nome",
+      nation: "Nazione",
+      league: "Campionato",
       reputation: "Reputazione",
       founded: "Fondazione",
       uid: "UID",
@@ -1139,9 +1266,124 @@ export const it: Strings = {
       all: "Tutte le società",
       men: "Club maschili",
       women: "Club femminili",
+      nation: "Nazione",
+      league: "Campionato",
+      anyLeague: "Qualsiasi campionato",
+      leagueTitle: "Il campionato in cui gioca la prima squadra in questa stagione",
+      reputation: "Reputazione",
+      reputationTitle: "Da 0 a 10.000, come la conserva il gioco",
+      minReputation: "Reputazione minima",
+      maxReputation: "Reputazione massima",
     },
   },
+  /** The Clubs tab's national teams: each nation's men's and women's team, its senior team's squad and reputation. */
+  national: {
+    /** The button of the Clubs tab's switch that lists them, and the palette's command to go there. */
+    nav: "Nazionali",
+    switchLabel: "Società o nazionali",
+    search: "Cerca nazionali per nome, sigla o UID",
+    summary: (total, shown) =>
+      total > shown ? `Nazionali: ${format(total)} · le prime ${shown} per reputazione` : `Nazionali: ${format(total)}`,
+    /** The message under an empty table; `filtered` is whether a filter is in effect. */
+    empty: (query, filtered) => {
+      if (query === "") {
+        return filtered ? "Nessuna nazionale corrisponde a questo filtro." : "Nessuna nazionale trovata.";
+      }
+      return filtered ? `Nessuna nazionale corrisponde a «${query}» con questo filtro.` : `Nessuna nazionale corrisponde a «${query}».`;
+    },
+    /** The small tag on a women's team. */
+    women: "Donne",
+    columns: {
+      name: "Nazione",
+      code: "Sigla",
+      reputation: "Reputazione",
+      players: "Giocatori",
+      uid: "UID",
+    },
+    filters: {
+      /** The label of the select of which teams to show. */
+      kind: "Nazionali da mostrare",
+      all: "Tutte le nazionali",
+      men: "Nazionali maschili",
+      women: "Nazionali femminili",
+    },
+    /** In the header of a profile, by the name. */
+    womensTeam: "Nazionale femminile",
+    mensTeam: "Nazionale maschile",
+    reputationShort: "REP",
+    reputationTitle: "Reputazione della prima squadra, da 0 a 10.000",
+    teamKinds: { 0: "Prima squadra", 9: "Under 23", 10: "Under 21", 18: "Under 20", 11: "Under 19", 12: "Under 18" },
+    teamType: (kind) => `Tipo ${kind}`,
+    teamsLabel: "Squadre di questa nazionale",
+    teamReputation: (team) => `Reputazione (${team})`,
+    teamReputationTitle: "Reputazione di questa squadra, da 0 a 10.000",
+    squadHeading: (team, count) => `${team}: ${format(count)} ${count === 1 ? "giocatore" : "giocatori"}`,
+    squadLabel: (team) => `Giocatori della nazionale: ${team}`,
+    squadNote: "I giocatori che il gioco elenca per questa squadra, nel suo ordine. Convocazioni, capitani e contratto del CT non si modificano qui.",
+    actionsHint: "Le azioni riguardano tutti i giocatori che la prima squadra elenca. Il ripristino è anche nella vista Modifiche.",
+    noTeams: "Il gioco non ha squadre per questa nazionale: non c'è una rosa né una reputazione da mostrare.",
+    reading: "Lettura della rosa…",
+    noPlayers: "Il gioco non elenca giocatori per questa squadra.",
+    /** Where the tab cannot show national teams: why, for a version of the game the editor has not been checked with. */
+    unavailableTitle: "Le nazionali non sono disponibili su questa versione del gioco",
+    unavailableBuild: "Nessuno ha ancora trovato dove questa versione del gioco tiene le nazionali, quindi l'editor non ne mostra invece di leggere la memoria sbagliata.",
+    unavailableUnreadable: "L'editor ha guardato dove si aspetta le nazionali su questa versione del gioco, ma ciò che ha trovato non sembra del gioco, quindi non ne mostra.",
+  },
 
+  leaguePrizes: {
+    title: "Montepremi del campionato",
+    league: (league) => `Cosa paga ${league} in questa stagione`,
+    reading: "Lettura dei premi del campionato dal gioco… La prima volta può volerci mezzo minuto o più.",
+    readAgain: "Rileggi",
+    readAgainTitle: "Rileggi gli importi dal gioco: una fase iniziata nel frattempo potrebbe pagare anche lei",
+    paysNothing: "Il campionato della società non paga premi per posizione finale né per partita in questa stagione.",
+    stageStarted: "Fase in corso",
+    stageFuture: "Fase non ancora iniziata",
+    alike: (count) => `Gli stessi importi in ${format(count)} gironi o fasi`,
+    byPosition: "Per posizione finale",
+    place: (place) => `${format(place)}º`,
+    perMatch: "Per partita",
+    win: "Premio per la vittoria",
+    draw: "Premio per il pareggio",
+    loss: "Premio per la sconfitta",
+    noList: "Nulla per posizione finale.",
+    noPerMatch: "Nulla per partita.",
+    note: "I premi dei turni a eliminazione diretta, come quelli di una finale, e la partecipazione monetaria non sono ancora letti.",
+    unavailableBuild: "Nessuno ha ancora verificato dove questa versione del gioco tiene i premi in denaro, quindi l'editor non ne mostra piuttosto che leggere la memoria sbagliata.",
+    unavailableUnreadable: "L'editor ha cercato i premi in denaro dove li aspetta in questa versione del gioco, ma ciò che ha trovato non si legge come quelli del gioco, quindi non ne mostra.",
+    edit: "Modifica importi",
+    editTitle: "Modifica quanto paga questa fase del campionato, a tutte le società che vi giocano",
+    save: "Salva importi",
+    saving: "Salvataggio…",
+    cancel: "Annulla",
+    everyClub: (league) =>
+      `Cambia quanto ${league} paga a tutte le società che vi giocano, non solo a questa. Il gioco lo tiene nel salvataggio, ma solo per questa stagione: la prossima la imposta di nuovo con i suoi importi. Ripristina in Modifiche rimette gli importi di prima.`,
+    infoLabel: "Quanto dura una modifica del montepremi",
+    invalid: (most) => `Inserisci un importo intero da 0 a ${most}.`,
+    allNothing: "Una fase che non paga nulla non viene più elencata: lascia almeno un importo sopra lo zero.",
+    placeField: (place) => `Premio del campionato per il ${format(place)}º posto`,
+    changedIn: (league, groups) =>
+      groups > 1 ? `Per tutte le società di ${league}, in ${format(groups)} gironi` : `Per tutte le società di ${league}`,
+  },
+
+  sponsorships: {
+    title: "Sponsorizzazioni",
+    reading: "Lettura delle sponsorizzazioni della società…",
+    none: "La società non ha sponsorizzazioni.",
+    perSeason: "Per stagione",
+    total: "Valore totale",
+    term: "Durata",
+    years: (count) => (count === 1 ? "1 anno" : `${format(count)} anni`),
+    unnamed: (kind) => `Tipo ${format(kind)}`,
+    unnamedTitle: "Nessuno ha ancora associato questo tipo di accordo a un nome nella schermata del gioco, e la schermata potrebbe non mostrarlo.",
+    ended: "Terminato",
+    endedTitle: "L'accordo è terminato prima della data del gioco. La schermata Sponsorizzazioni del gioco non lo mostra più.",
+    falls: (percent) => `Cala del ${format(percent)}% in caso di retrocessione`,
+    rises: (percent) => `Aumenta del ${format(percent)}% in caso di promozione in massima divisione`,
+    note: "Sola lettura. Sono gli importi che il gioco conserva per ogni accordo. La sua schermata Sponsorizzazioni mostra gli accordi non ancora terminati.",
+    unavailableBuild: "Nessuno ha ancora verificato dove questa versione del gioco tenga le sponsorizzazioni, quindi l'editor non le mostra per non leggere la memoria sbagliata.",
+    unavailableUnreadable: "L'editor ha cercato le sponsorizzazioni dove se le aspetta in questa versione del gioco, ma ciò che ha trovato non sembra quello del gioco, quindi non le mostra.",
+  },
   app: {
     stage: "beta",
     settingsLabel: "Impostazioni",
@@ -1164,6 +1406,14 @@ export const it: Strings = {
     detecting: "Ricerca di Football Manager…",
     connecting: "Lettura di giocatori, staff e società…",
     reloading: "Nuova lettura di giocatori, staff e società…",
+
+    saveChanged: {
+      title: "Il salvataggio del gioco è cambiato",
+      text:
+        "Il gioco ha caricato un salvataggio, o è tornato al menu principale, da quando FMLibreEditor lo ha letto. " +
+        "Finché non ricarichi i dati, non cambia nulla nel gioco e non mantiene nulla di congelato: ciò che mostra " +
+        "potrebbe appartenere a un altro salvataggio.",
+    },
 
     refrozen: {
       title: "Congelato di nuovo dall'ultima volta",
@@ -1249,17 +1499,26 @@ export const it: Strings = {
       "Probabilmente il gioco è stato aggiornato. FMLibreEditor ha trovato i dati del gioco e li ha controllati, ma non " +
       "scrive in una versione con cui non è stato provato finché non lo consenti tu. Di solito un nuovo FMLibreEditor " +
       "arriva entro pochi giorni.",
-    allowedText: "La modifica è attiva per questa sessione, nei limiti dei controlli. Tieni un backup del salvataggio.",
     failedTitle: "Alcuni dati del gioco non hanno superato i controlli",
     reloadHint: "Se un salvataggio era ancora in caricamento, Ricarica i dati controlla di nuovo.",
     noDate: "La data del gioco non ha superato i controlli, quindi le età non sono mostrate.",
     failed: (names) => `In sola lettura: ${names}.`,
+    failedCheck: (name, fit, sampled) => `${name} (${format(fit)} su ${format(sampled)} in regola)`,
     join: (names) =>
       names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}`,
     allow: "Modifica comunque",
     allowTitle:
       "Attiva la modifica finché FMLibreEditor non viene chiuso o non si connette di nuovo. Fai prima un backup del " +
       "salvataggio.",
+  },
+
+  diagnostics: {
+    copy: "Copia diagnostica",
+    copyTitle:
+      "Copia quello che FMLibreEditor ha trovato nel gioco, da incollare in una segnalazione di bug. Non contiene " +
+      "nomi né percorsi.",
+    copied: "Copiato",
+    failed: (reason) => `Non è stato possibile copiare la diagnostica: ${reason}`,
   },
 
   checks: {
@@ -1273,6 +1532,8 @@ export const it: Strings = {
     teams: "le squadre",
     staff: "lo staff",
     clubs: "le società",
+    cohesion: "l'affiatamento con le società",
+    tactics: "la familiarità tattica",
   },
 
   update: {
@@ -1293,8 +1554,16 @@ export const it: Strings = {
     failed: "Non è stato possibile controllare gli aggiornamenti.",
   },
 
+  star: {
+    title: "Ti piace FMLibreEditor?",
+    text: "Una stella su GitHub lo aiuta a raggiungere più giocatori e a crescere più in fretta.",
+    star: "Metti una stella su GitHub",
+    dismiss: "No, grazie",
+  },
+
   edit: {
     unknownNation: "Nazione sconosciuta",
+    unknownCity: "Città sconosciuta",
     edit: "Modifica",
     editTitle: "Cambia i valori di questo profilo nel gioco",
     startFailed: (reason) => `Non è stato possibile iniziare la modifica: ${reason}`,
@@ -1333,12 +1602,36 @@ export const it: Strings = {
 
   changes: {
     nav: "Modifiche",
-    title: "Modifiche di questa sessione",
-    hint: "Dalla più recente. Una modifica si può annullare solo finché il gioco ha ancora il valore che ha scritto.",
+    title: "Modifiche",
+    hint:
+      "Dalla più recente. L'app conserva le modifiche di ogni carriera, quindi vengono elencate di nuovo dopo un riavvio. Una modifica si può annullare solo finché il gioco ha ancora il valore che ha scritto.",
+    /** Under the hint, when the list holds changes from earlier sessions: how many, and how many of them the game did not hold. */
+    earlierNote: (count, missing) =>
+      `${changeCount(count)} di sessioni precedenti` + (missing > 0 ? `, ${format(missing)} di queste non erano nel gioco quando sono stati letti i dati` : "") + ". Trasferimenti, cure, vincoli, clausole e nomi restano come cronologia, senza Ripristina.",
+    /** The small tag after the name of an earlier change, and its hover text. */
+    earlierTag: "Precedente",
+    earlierTitle: "Scritta prima dell'ultima connessione dell'app e conservata nella cronologia di questa carriera",
+    /** Under the status of an earlier change: whether the game held its value when the data was last read. */
+    inGame: "Nel gioco",
+    inGameTitle: "Il gioco aveva questo valore quando i dati sono stati letti l'ultima volta",
+    notInGame: "Non nel gioco",
+    notInGameTitle: "Il gioco non aveva questo valore quando i dati sono stati letti l'ultima volta: il gioco non è stato salvato dopo la modifica, oppure da allora ha cambiato il valore",
+    /** In the place of Undo for an earlier change that cannot be undone from here, and its hover text. */
+    historyOnly: "Cronologia",
+    historyOnlyTitle: "Fatta prima dell'ultima connessione dell'app: per annullarla serviva la memoria del gioco com'era allora",
+    /** Under a mass edit: how many of its earlier changes the game did not hold. */
+    batchNotInGame: (count) => `${format(count)} non nel gioco`,
+    /** Empties the list and the history of the career; the question that asks first, and its two answers. */
+    clearHistory: "Cancella cronologia",
+    clearHistoryTitle: "Svuota questo elenco e dimentica la cronologia di questa carriera. Le modifiche restano nel gioco.",
+    confirmClear: "Cancellare la cronologia di questa carriera? Le modifiche restano nel gioco, ma da qui non si potranno più annullare.",
+    keepHistory: "Mantieni",
+    clearConfirm: "Cancella",
     continueHint: "Il gioco mostra una modifica quando va avanti: premi Continua nel gioco.",
     swappedWith: (name) => `Scambiato con ${name}`,
     released: (name) => `${name} svincolato`,
     fee: (amount) => `Costo ${amount}`,
+    arranged: (date) => `Il gioco fa lo spostamento il ${date}`,
     optionRemoved: (amount) => `Diritto di riscatto (${amount}) tolto`,
     healed: (count) => (count === 1 ? "1 infortunio guarito" : `${format(count)} infortuni guariti`),
     lifted: (count) => (count === 1 ? "1 squalifica revocata" : `${format(count)} squalifiche revocate`),
@@ -1357,7 +1650,7 @@ export const it: Strings = {
       change: "Modifica",
       status: "Stato",
     },
-    kinds: { player: "Giocatore", staff: "Staff", club: "Società" },
+    kinds: { player: "Giocatore", staff: "Staff", club: "Società", nationalTeam: "Nazionale" },
     stored: (change) => `valore interno ${change}`,
     undone: (time) => `Annullata alle ${time}`,
     undo: "Ripristina",
@@ -1378,15 +1671,38 @@ export const it: Strings = {
     previous: "Precedente",
     next: "Successiva",
     range: (first, last, total) => `${format(first)}–${format(last)} di ${format(total)}`,
+
+    // Search and filters
+    /** The search box: what it looks through. Its name for assistive technology is the same. */
+    searchPlaceholder: "Cerca modifiche per nome, UID, campo o società",
+    /** The name of the three buttons that choose which sessions' changes are listed, for assistive technology. */
+    sessionGroup: "Sessione",
+    sessions: { all: "Tutte", this: "Questa sessione", earlier: "Sessioni precedenti" },
+    /** The check boxes: only changes still in place, and only earlier ones the game did not hold; their hover text. */
+    notUndone: "Non annullate",
+    notUndoneTitle: "Solo le modifiche ancora in vigore",
+    notInGameFilterTitle: "Solo le modifiche precedenti che il gioco non aveva all'ultima lettura dei dati",
+    /** Takes the search text and every choice away. */
+    clearFilter: "Azzera filtro",
+    /** The line beside the title while a search or a filter is on: `matching` of the `total` changes, `undone` of those undone. */
+    filteredCount: (matching, total, undone) => {
+      const count = `${format(matching)} di ${changeCount(total)}`;
+      return undone === 0 ? count : `${count} · ${format(undone)} annullat${feminine(undone)}`;
+    },
+    /** Under a mass edit while a search or a filter is on: how many of its changes they leave. */
+    batchMatching: (matching, total) => `${format(matching)} su ${format(total)} ${matching === 1 ? "corrisponde" : "corrispondono"}`,
+    /** In the place of the list when the search and the filters leave no change. */
+    noMatches: "Nessuna modifica corrisponde alla ricerca e ai filtri.",
   },
 
   export: {
     button: "Esporta",
     buttonTitle: {
       player: "Scrive in un file CSV o JSON i giocatori mostrati dall'elenco, per un foglio di calcolo o uno script",
+      staff: "Scrive in un file CSV o JSON i membri dello staff mostrati dall'elenco, per un foglio di calcolo o uno script",
       club: "Scrive in un file CSV o JSON le società mostrate dall'elenco, per un foglio di calcolo o uno script",
     },
-    title: { player: "Esporta giocatori", club: "Esporta società" },
+    title: { player: "Esporta giocatori", staff: "Esporta staff", club: "Esporta società" },
     scope: (entity, count) =>
       count === 0
         ? `${nouns[entity].feminine ? "Nessuna" : "Nessun"} ${nouns[entity].one} corrisponde alla ricerca e ai filtri.`
@@ -1402,6 +1718,7 @@ export const it: Strings = {
       csvSemicolon: "Per Excel dove i decimali si scrivono con la virgola: in italiano, spagnolo o tedesco, per esempio",
       json: {
         player: "Per gli script: ruoli, attributi e personalità come oggetti a sé",
+        staff: "Per gli script: attributi, personalità e contratto come oggetti a sé",
         club: "Per gli script: tifosi, strutture, stadio e finanze come oggetti a sé",
       },
     },
@@ -1410,8 +1727,12 @@ export const it: Strings = {
         "Per ogni giocatore: abilità, ruoli e valutazioni per ruolo, attributi sulla scala 1–20 (anche quelli " +
         "nascosti), personalità, reputazione, presenze e contratto con le sue clausole, con la data del gioco. Il " +
         "denaro è in sterline, come lo tiene il gioco. Nel gioco non cambia nulla.",
+      staff:
+        "Per ogni membro dello staff: ruolo e società, abilità, attributi sulla scala 1–20, personalità, reputazione e " +
+        "contratto (stipendio e date), con la data del gioco. Il denaro è in sterline, come lo tiene il gioco. Nel gioco " +
+        "non cambia nulla.",
       club:
-        "Per ogni società: reputazione, anno di fondazione, abbonamenti, follower sui social media, composizione e " +
+        "Per ogni società: nazione, campionato, reputazione, anno di fondazione, abbonamenti, follower sui social media, composizione e " +
         "caratteristiche dei tifosi, strutture, stadio e finanze (saldo, budget trasferimenti, spesa e budget " +
         "settimanali per gli stipendi, prezzo del biglietto), con la data del gioco. FM tiene le finanze solo per le " +
         "società dei campionati in gioco. Il denaro è in sterline, come lo tiene il gioco. Nel gioco non cambia nulla.",
@@ -1432,6 +1753,25 @@ export const it: Strings = {
     show: "Mostra nella cartella",
     showTitle: "Mostra il file nella sua cartella",
     close: "Chiudi",
+
+    /** The export of the Changes view: a CSV file of the changes its search and filters show. */
+    changes: {
+      buttonTitle: "Scrivi le modifiche mostrate dall'elenco in un file CSV, per un foglio di calcolo o uno script",
+      title: "Esporta modifiche",
+      /** What the export covers: everything the list's search and filters select, or, with none on, the whole history. */
+      scope: (count, filtering) =>
+        count === 0
+          ? "Nessuna modifica corrisponde alla ricerca e ai filtri."
+          : filtering
+            ? `${changeCount(count)}: ciò che selezionano la ricerca e i filtri, dalla più recente.`
+            : `${changeCount(count)}: l'intera cronologia di questa carriera, dalla più recente.`,
+      contents:
+        "Per ogni modifica: l'ora (locale, con il suo scarto da UTC), il nome e l'UID, il campo, il valore " +
+        "precedente e quello nuovo come li conserva il gioco e come sono mostrati qui, le note che l'elenco " +
+        "riporta sotto, la modifica multipla di cui faceva parte, quando è stata annullata e se risale a una " +
+        "sessione precedente ed è nel gioco. Nel gioco non cambia nulla.",
+      done: (count, file) => `Esportat${feminine(count)} ${changes(count)} in ${file}`,
+    },
   },
 
   massEdit: {
@@ -1483,17 +1823,23 @@ export const it: Strings = {
     row: (position) => `Modifica ${position}`,
     field: "Campo",
     operation: "Operazione",
-    operations: { set: "Imposta a", add: "Aggiungi", scale: "Porta a %" },
-    values: { set: "Valore", add: "Quantità", scale: "Percentuale" },
+    operations: { set: "Imposta a", add: "Aggiungi", scale: "Porta a %", addYears: "Aggiungi anni" },
+    values: { set: "Valore", add: "Quantità", scale: "Percentuale", addYears: "Anni" },
     addTitle: "Si aggiunge a ogni valore così come è mostrato; un numero negativo toglie",
     addPointsTitle: "Punti percentuali aggiunti a ogni valore (70% più 10 fa 80%); un numero negativo toglie",
     rangeHint: (min, max) => `${format(min)}–${format(max)}`,
     amountHint: (max) => `±${format(max)}`,
     ofCurrent: "% dell'attuale",
     percentTitle: "Una percentuale del valore attuale: 100 lo lascia com'è, 110 lo alza di un decimo, 50 lo dimezza",
+    addYearsTitle:
+      "Anni aggiunti a ogni data, che mantiene giorno e mese; un numero negativo la sposta indietro. " +
+      "Il 29 febbraio diventa 28 febbraio in un anno che non lo ha",
+    years: "anni",
     invalidAdd: (min, max) => `Inserisci un numero intero da ${format(min)} a ${format(max)}`,
     invalidPercent: (min, max) => `Inserisci una percentuale intera da ${min} a ${max}`,
-    dateSetOnly: "Una data si può solo impostare",
+    invalidYears: (min: number, max: number) => `Inserisci un numero intero di anni da ${format(min)} a ${format(max)}`,
+    dateSetOnly: "Una data si può solo impostare o spostare di anni",
+    yearsDateOnly: "Solo una data si può spostare di anni",
     addField: "Aggiungi un campo",
     addFieldFull: (max) => `Una modifica multipla cambia al massimo ${max} campi`,
     remove: "Rimuovi questo campo",
@@ -1574,9 +1920,32 @@ export const it: Strings = {
     from: "Da",
     to: "A",
 
-    modeLabel: "Trasferimento o scambio",
-    modeMove: "Trasferisci in una società",
+    modeLabel: "Trasferimento, sposta subito o scambio",
+    modeMove: "Sposta subito",
     modeSwap: "Scambia con un giocatore",
+    modeArrange: "Trasferimento",
+    arrangeNote:
+      "Il gioco fa il trasferimento al giorno successivo, come fa con i suoi: la cronologia del giocatore conserva le " +
+      "partite di questa stagione con la vecchia società, riporta la nuova società con il costo, e il gioco paga il " +
+      "costo.",
+    moveNote:
+      "L'editor lo sposta subito. La cronologia del gioco non lo riporta: questa stagione appare sotto la nuova " +
+      "società, senza costo.",
+    arrangeUnavailable:
+      "Questa versione del gioco, o questo sistema, non permette all'editor di preparare un trasferimento che farà il " +
+      "gioco: Sposta subito lo sposta subito.",
+    arrangeChecking: "Controllo del trasferimento… la prima volta, trovare i trasferimenti del gioco richiede qualche secondo.",
+    movesOn: (date) => `Il gioco fa lo spostamento il ${date}`,
+    arrangeFee: (amount) => `Costo ${amount}, pagato dal gioco quel giorno`,
+    arrangeContract: (wage, expires) => `Contratto: ${wage} a settimana fino al ${expires}`,
+    arrangeDoes: [
+      "Concordato ora: il gioco fa lo spostamento quando arriva al giorno successivo",
+      "La sua cronologia conserva le partite di questa stagione con la vecchia società e riporta la nuova società con il costo",
+      "Il gioco paga il costo quel giorno, come per i suoi trasferimenti",
+      "Contratto con la nuova società da quel giorno; stipendio e scadenza cambiano solo se ne imposti di nuovi",
+      "Riportato in Modifiche, dove un solo ripristino lo annulla fino a quel giorno",
+    ],
+    arrangeButton: "Prepara trasferimento",
 
     // La scelta del club
     searchLabel: "Cerca la società in cui trasferirlo",
@@ -1737,6 +2106,8 @@ export const it: Strings = {
 
     // Il piè di pagina
     hint: "Nel gioco non cambia nulla finché non premi Trasferisci.",
+    arrangeHint: "Nel gioco non cambia nulla finché non premi Prepara trasferimento.",
+    moveNowHint: "Nel gioco non cambia nulla finché non premi Sposta subito.",
     move: "Trasferisci",
     moving: "Trasferimento…",
     cancel: "Annulla",
@@ -1821,12 +2192,14 @@ export const it: Strings = {
   release: {
     button: "Svincola",
     buttonTitle: "Svincola questo giocatore dalla sua società nel gioco: diventa svincolato",
+    staffButtonTitle: "Svincola questo membro dello staff dalla sua società nel gioco: resta senza società",
 
     // La finestra
     title: "Svincolo",
     from: "Lascia",
     checking: "Verifica dello svincolo…",
     ready: (club) => `${club} → svincolato`,
+    staffReady: (club) => `${club} → disoccupato`,
     doesHeading: "Cosa fa lo svincolo",
     does: [
       "Lascia ogni squadra della società e il contratto finisce: uno svincolato che qualsiasi società può tesserare",
@@ -1835,11 +2208,52 @@ export const it: Strings = {
       "La cronologia dei trasferimenti del gioco non lo riporta",
       "Compare in Modifiche, dove un solo annullamento riporta il giocatore con lo stesso contratto",
     ],
+    staffDoes: [
+      "Lascia subito lo staff della società e il contratto finisce: disoccupato, come lo staff senza società del gioco",
+      "Nessuno viene pagato",
+      "Un posto da allenatore o da direttore sportivo resta vuoto, che la società riempirà",
+      "Compare in Modifiche, dove un solo annullamento lo riporta con lo stesso contratto",
+    ],
 
     // Il piè di pagina
     hint: "Nel gioco non cambia nulla finché non premi Svincola.",
     release: "Svincola",
     releasing: "Svincolo…",
+    cancel: "Annulla",
+  },
+
+  rename: {
+    button: "Rinomina",
+    buttonTitle: "Cambia i nomi di questo giocatore nel gioco",
+
+    // La finestra
+    title: "Rinomina",
+    loading: "Lettura dei nomi…",
+    first: "Nome",
+    last: "Cognome",
+    common: "Nome comune",
+    commonHint:
+      "Il nome che il gioco mostra al posto di nome e cognome, come per Pedri o Vinícius Júnior. Lascia vuoto per nessuno",
+    full: "Nome completo",
+    fullHint: "Il nome per intero, come lo riporta il profilo. Lascia vuoto per nessuno",
+    none: "Nessuno",
+    required: "Non può essere vuoto",
+    tooLong: (max: number) => `Troppo lungo: al massimo ${max} byte`,
+    noRoom:
+      "Al momento il gioco non ha posto per un altro nome nuovo di questo tipo: salva la partita, ricarica il salvataggio e riprova",
+    unavailable: "L'editor non può cambiare i nomi in questa versione del gioco",
+    doesHeading: "Cosa fa",
+    does: [
+      "Il gioco mostra il nuovo nome quando premi Continua nel gioco",
+      "Il nome resta quando salvi la partita",
+      "Un nuovo nome, cognome o nome comune entra nelle tabelle dei nomi del gioco, dove il gioco lo usa solo per questo giocatore",
+      "Compare in Modifiche, una riga per nome, dove Ripristina rimette il nome precedente",
+    ],
+
+    // Il piè di pagina
+    hint: "Nel gioco non cambia nulla finché non premi Rinomina.",
+    rename: "Rinomina",
+    renaming: "Rinomina in corso…",
     cancel: "Annulla",
   },
 
@@ -1887,6 +2301,23 @@ export const it: Strings = {
     cancel: "Annulla",
   },
 
+  batchTraits: {
+    title: "Caratteristiche della squadra",
+    addMode: "+ Aggiungi alla rosa",
+    removeMode: "- Rimuovi dalla rosa",
+    addHint: "Applica le caratteristiche selezionate ai giocatori della squadra che non le hanno. Le caratteristiche esistenti rimangono invariate.",
+    removeHint: "Rimuove le caratteristiche selezionate dai giocatori della squadra che le hanno. Le altre caratteristiche non vengono toccate.",
+    noneSelected: "Nessuna caratteristica selezionata in questa modalità",
+    selectedCount: (count: number) => (count === 1 ? "1 caratteristica selezionata" : `${format(count)} caratteristiche selezionate`),
+    deselectAll: "Deseleziona tutto",
+    oppositeModeNote: "Selezionata nell'altra modalità",
+    applyNote: (players: number) => `Si applica a ${format(players)} giocatori · Si può annullare con 1 clic`,
+    emptySquad: (players: number) => `Rosa di ${format(players)} giocatori`,
+    cancel: "Annulla",
+    apply: "Applica",
+    applying: "Applicazione in corso…",
+  },
+
   squad: {
     teamsLabel: "Squadra",
     teams: {
@@ -1917,14 +2348,69 @@ export const it: Strings = {
     inspireAll: "Motiva tutti",
     inspireAllTitle:
       "Porta a 20, il massimo, il morale di ogni giocatore di questa squadra e toglie i suoi motivi di scontento",
+    cohesionWithout: (count: number) =>
+      count === 1
+        ? "1 giocatore non ha ancora affiatamento con la società"
+        : `${format(count)} giocatori non hanno ancora affiatamento con la società`,
+    maxCohesion: "Massimo affiatamento",
+    maxCohesionTitle:
+      "Porta a 100, il massimo, l'affiatamento con la società di ogni giocatore di questa squadra. Il gioco mostra l'affiatamento della squadra nella pagina Dinamiche quando va avanti: premi Continua nel gioco",
+    cohesionNone:
+      "L'editor non riesce a leggere l'affiatamento di questa squadra: questa versione del gioco non è stata verificata, oppure nessuno dei suoi giocatori ha affiatamento con la società",
+    maxTactics: "Tattica al massimo",
+    maxTacticsTitle:
+      "Fa conoscere al meglio a ogni giocatore di questa squadra la tattica che gioca, nelle otto aree della schermata Efficacia tattica, come farebbero settimane di allenamento. Gli attributi restano come sono. Le aree tornano a calare man mano che l'allenamento invecchia, dopo circa sei settimane, e un'altra tattica chiede un altro clic. Il gioco le mostra quando va avanti: premi Continua nel gioco",
+    tacticsNone:
+      "L'editor non riesce a leggere quanto questa squadra conosce la sua tattica: questa versione del gioco non è stata verificata, oppure la squadra non gioca una tattica scelta da te",
+    tacticsUntrained: (count: number) =>
+      count === 1
+        ? "1 giocatore non si allena (per esempio perché infortunato): il suo storico di allenamento resta com'è"
+        : `${format(count)} giocatori non si allenano (per esempio perché infortunati): il loro storico di allenamento resta com'è`,
     refreshAll: "Rigenera tutti",
     refreshAllTitle:
       "Porta al 100% energia e forma partita di ogni giocatore di questa squadra e lo fa riposare del tutto " +
       "(stanchezza -500)",
+    batchTraits: "Caratteristiche della rosa",
+    batchTraitsTitle: "Aggiungi o rimuovi movimenti preferiti per i giocatori di questa squadra",
     maxAll: "Attributi al massimo",
     maxAllTitle:
       "Porta ogni attributo di ogni giocatore di questa squadra al suo meglio: 20, e 1 per propensione agli infortuni " +
       "e fallosità",
+    atItsBest: "Squadra al top",
+    atItsBestTitle:
+      "Guarisci tutti, Motiva tutti, Rigenera tutti, Massimo affiatamento e Tattica al massimo con un solo clic, che un " +
+      "solo Ripristina annulla. Gli attributi e le squalifiche restano come sono. Un passo che non si può eseguire, come " +
+      "Guarisci tutti quando nessuno è infortunato, viene saltato e il risultato lo dice. Le aree della tattica tornano " +
+      "a calare man mano che l'allenamento invecchia, dopo circa sei settimane, e un'altra tattica chiede un altro clic. " +
+      "Il gioco mostra le modifiche quando va avanti: premi Continua nel gioco",
+    atItsBestSkipped: (step, reason) => `${step} saltato: ${reason}`,
+    destroy: "Squadra a pezzi",
+    destroyTitle:
+      "Porta ogni giocatore di questa squadra al suo peggio: morale e felicità, energia, forma partita e stanchezza, " +
+      "affiatamento con la società e, se scegli tu la tattica della squadra, quanto la conosce. Nessun valore " +
+      "migliora; attributi, infortuni e squalifiche restano. Prima chiede, e un solo Ripristina annulla tutto",
+    destroySteps: {
+      demoralize: "Morale e felicità",
+      exhaust: "Energia e forma partita",
+      minCohesion: "Affiatamento",
+      minTactics: "Tattica",
+    },
+    moreActions: "Altre azioni",
+    moreActionsTitle: "Le azioni su tutta la squadra, una alla volta",
+    destroyDialog: {
+      title: "Mandare la squadra a pezzi?",
+      doesHeading: "Per ogni giocatore dell'elenco, anche quelli in prestito altrove",
+      does: [
+        "Morale a 1, il minimo; felicità e felicità per il minutaggio a -100",
+        "Energia allo 0%, forma partita al 35% e stanchezza a 1000",
+        "Affiatamento con la società a 1, per chi ce l'ha",
+        "Quanto conosce la tattica al minimo, se scegli tu la tattica della squadra",
+      ],
+      keeps: "Nessun valore migliora. Attributi, infortuni e squalifiche restano come sono.",
+      ownClub: "È una squadra della tua società.",
+      hint: "Un solo Ripristina annulla tutto, prima che il gioco vada avanti.",
+      cancel: "Annulla",
+    },
     hint:
       "Le azioni riguardano ogni giocatore dell'elenco, anche quelli in prestito altrove. Si possono annullare anche " +
       "nella vista Modifiche.",
@@ -1990,6 +2476,8 @@ export const it: Strings = {
       matchSharpness: "Forma",
       jadedness: "Stanch.",
       morale: "Morale",
+      cohesion: "Affiat.",
+      tactics: "Tattica",
       actions: "Fascia di capitano",
     },
     sortBy: (by) => `Ordina per ${by}`,
@@ -2003,6 +2491,8 @@ export const it: Strings = {
       matchSharpness: "forma partita",
       jadedness: "stanchezza",
       morale: "morale",
+      cohesion: "affiatamento",
+      tactics: "familiarità tattica",
     },
 
     // Le etichette dopo un nome, con il loro significato come testo al passaggio del mouse
@@ -2010,6 +2500,11 @@ export const it: Strings = {
     injuredTitle: (count) => (count === 1 ? "1 infortunio" : `${format(count)} infortuni`),
     banned: "Squalificato",
     bannedTitle: (count) => (count === 1 ? "1 squalifica" : `${format(count)} squalifiche`),
+    unrest: "Malumori",
+    unrestTitle: (count) =>
+      count === 1
+        ? "1 compagno ha un motivo di scontento che lo riguarda. Rimuovi tutto, nel suo profilo, lo risolve quando il gioco va avanti"
+        : `${format(count)} compagni hanno un motivo di scontento che lo riguarda. Rimuovi tutto, nel suo profilo, li risolve quando il gioco va avanti`,
     onLoan: "In prestito",
     onLoanTitle: "In prestito a un'altra società",
     loanee: "In prestito qui",
@@ -2062,8 +2557,11 @@ export const it: Strings = {
     tabs: {
       label: "Sezioni degli osservatori",
       recommend: "Consigli di mercato",
+      opportunities: "Occasioni",
+      similar: "Giocatori simili",
       depth: "Profondità della rosa",
       departures: "Giocatori da cedere",
+      youth: "Nuovi giovani",
     },
     status: {
       missing: "Scoperto",
@@ -2140,12 +2638,7 @@ export const it: Strings = {
     how: {
       label: "Come viene fatto questo elenco?",
       note: (rule, count) =>
-        `L'osservatore guarda ogni giocatore che può giocare in questo ruolo (con una valutazione di almeno 10), ` +
-        `escludendo i giocatori della tua società e quelli degli altri allenatori umani. Di questi tiene quelli che ${rule}. ` +
-        `Per i 400 più adatti calcola quanto è probabile che ognuno venga da te, poi consiglia i migliori ${count} per ` +
-        "idoneità e probabilità insieme. Ordine consigliato: 70% idoneità e 30% probabilità, un po' meno per i " +
-        "giocatori oltre i 30 anni; Turnover pesa le due cose allo stesso modo e Futuro tiene conto anche del " +
-        "potenziale. Fai clic sul titolo di una colonna per ordinare l'elenco; # è l'ordine dell'osservatore.",
+        `Giocatori valutati 10 o più in questo ruolo (non della tua società né degli altri allenatori umani) che ${rule}. I migliori ${count} sono mostrati per idoneità (70%) e probabilità (30%); Turnover pesa le due cose allo stesso modo, Futuro conta anche il potenziale. Fai clic sul titolo di una colonna per ordinare.`,
     },
     purposeRules: {
       firstTeam: "sono più adatti al ruolo del tuo miglior giocatore lì",
@@ -2163,6 +2656,7 @@ export const it: Strings = {
       fit: "idoneità",
       probability: "probabilità",
       fee: "costo",
+      similarity: "somiglianza",
     },
     backToScoutOrder: "Torna all'ordine dell'osservatore",
     showMore: (count) => `Mostra altri ${format(count)}`,
@@ -2226,6 +2720,10 @@ export const it: Strings = {
       },
       attention: "Da guardare:",
       allFine: "Ogni reparto sembra equilibrato.",
+      views: { label: "Mostra la rosa come", pitch: "Campo", table: "Tabella" },
+      pitchLabel: "La rosa in campo, reparto per reparto",
+      coverCount: (count) => `${format(count)} ${count === 1 ? "può" : "possono"} coprire`,
+      adviceFor: (position) => `Consigli di mercato per ${position}`,
     },
     departures: {
       intro: "I giocatori che il tuo osservatore lascerebbe andare, prima i più urgenti.",
@@ -2254,6 +2752,245 @@ export const it: Strings = {
       },
       actions: { sell: "Vendi", loan: "Manda in prestito", release: "Svincola" },
       rank: (line, rank) => `${line} · ${rank}º`,
+    },
+    actions: {
+      column: "Azioni",
+      compare: "Confronta con la tua rosa",
+      compareLabel: (name) => `Confronta ${name} con la tua rosa`,
+      similar: "Trova giocatori simili",
+      similarLabel: (name) => `Trova giocatori come ${name}`,
+      report: "Rapporto dell'osservatore",
+      reportLabel: (name) => `Rapporto dell'osservatore su ${name}`,
+      replacement: "Trova un sostituto",
+      replacementLabel: (name) => `Trova un sostituto per ${name}`,
+      replacementTitle: "Giocatori come lui, che potrebbero prendere il suo posto",
+    },
+    why: {
+      freeAgent: () => "Svincolato",
+      expiring: (value) => `Il contratto scade tra ${value} ${value === "1" ? "giorno" : "giorni"}`,
+      releaseClause: (value, against) =>
+        against === null ? `Clausola di rescissione ${value}` : `Clausola di rescissione ${value} (valore ${against})`,
+      unhappy: (value) =>
+        value === "1" ? "Scontento nella sua società" : `Scontento nella sua società (${value} motivi)`,
+      inTheRed: (value) => `La sua società è in rosso (${value})`,
+      listed: () => "In lista trasferimenti",
+      loanListed: () => "In lista prestiti",
+      wonderkid: (value) => `Potenziale ${value}`,
+    },
+    verdicts: {
+      better: "Meglio del tuo n. 1",
+      close: "Vicino al tuo n. 1",
+      below: "Peggio del tuo n. 1",
+      none: "Nessuno nella tua rosa gioca qui",
+    },
+    chances: { likely: "Probabile che arrivi", possible: "Potrebbe arrivare", hard: "Difficile da ingaggiare" },
+    opportunities: {
+      kindsLabel: "Elenchi di occasioni",
+      kinds: {
+        bosman: "Bosman",
+        releaseClause: "Clausole di rescissione",
+        unhappy: "Scontenti",
+        inTheRed: "Società in rosso",
+        listed: "Lista trasferimenti",
+        loanListed: "Lista prestiti",
+        wonderkid: "Wonderkid",
+      } satisfies Record<OpportunityKind, string>,
+      hints: {
+        bosman: "Svincolati e contratti che scadono entro sei mesi",
+        releaseClause: "Clausola di rescissione sotto il suo valore",
+        unhappy: "Scontento nella sua società",
+        inTheRed: "La sua società ha bisogno di soldi",
+        listed: "La sua società lo venderebbe",
+        loanListed: "La sua società lo manderebbe in prestito",
+        wonderkid: "19 anni o meno, con un grande futuro",
+      } satisfies Record<OpportunityKind, string>,
+      countLabel: "Giocatori in questo elenco",
+      count: (count, more) => (more ? `${format(count)}+` : format(count)),
+      position: "Ruolo",
+      anyPosition: "Qualsiasi ruolo",
+      maxAge: "Età max",
+      maxFee: "Costo max",
+      betterOnly: "Meglio del mio n. 1",
+      betterOnlyTitle: "Solo giocatori più adatti al ruolo del tuo miglior giocatore lì",
+      summary: (kind, lowest, highest, pool) =>
+        `${kind} · giocatori con abilità ${lowest}–${highest}, intorno al livello della tua rosa · ${pool} esaminati`,
+      how: {
+        label: "Come sono fatti questi elenchi?",
+        note: "Giocatori vicini al livello dei tuoi migliori undici (da 30 sotto a 45 sopra), non della tua società né degli altri allenatori umani, ognuno valutato nel ruolo in cui rende meglio o in quello che scegli tu. Ogni elenco è ordinato per idoneità e probabilità insieme.",
+      },
+      empty: "Nessuno in questo elenco con questi filtri.",
+      emptyWonderkids: "Nessun wonderkid con questi filtri.",
+      better: "Meglio del tuo n. 1 qui",
+      columns: { position: "Ruolo", why: "Perché" },
+    },
+    similar: {
+      intro:
+        "Scegli un giocatore per trovarne altri come lui: si confrontano gli attributi dove ne ha bisogno il suo ruolo.",
+      search: "Giocatore da confrontare",
+      searchPlaceholder: "Cerca un giocatore per nome…",
+      noMatch: "Nessun giocatore con questo nome.",
+      quickPicks: "Oppure parti da uno dei tuoi giocatori:",
+      change: "Scegli un altro giocatore",
+      reference: "Giocatori come",
+      position: "Confronta come",
+      cheaper: "Più economici",
+      cheaperTitle: "Solo giocatori che valgono meno di lui",
+      younger: "Più giovani",
+      youngerTitle: "Solo giocatori più giovani di lui",
+      maxFee: "Costo max",
+      value: "Valore",
+      notForSale: "Non in vendita",
+      doesNotPlay: (position) => `Non gioca come ${position}: si confrontano solo i suoi attributi.`,
+      summary: (candidates, shown, position) => `${candidates} giocatori giocano come ${position} · i ${shown} più simili`,
+      how: {
+        label: "Come si misura la somiglianza?",
+        note: "L'osservatore confronta gli attributi su cui si basano i ruoli della posizione, quelli chiave di più. Dove un giocatore è forte e dove è debole conta più del suo livello, quindi anche uno più economico o più giovane può essere molto simile.",
+      },
+      empty: "Nessuno di simile con queste impostazioni.",
+      columns: { similarity: "Simile", value: "Valore" },
+      similarityTitle: (value) => `${format(value)}% simile`,
+    },
+    compare: {
+      title: "Confronta con la tua rosa",
+      hint: (position, name) =>
+        `Contro ${name}, il tuo miglior giocatore come ${position}. Prima gli attributi chiave del ruolo.`,
+      noStarter: "Nessuno nella tua rosa gioca in questo ruolo.",
+      starter: "Il tuo n. 1",
+      candidate: "Candidato",
+      inPossession: "In possesso",
+      outOfPossession: "Non in possesso",
+      add: "Aggiungi un giocatore",
+      addNone: "Scegli dall'elenco…",
+      remove: (name) => `Togli ${name} dal confronto`,
+      removeShort: "Togli",
+      scoutView: "Il parere dell'osservatore",
+      rows: {
+        fit: "Idoneità",
+        position: (position) => `Come ${position}`,
+        roleRating: (role) => `Come ${role}`,
+        probability: "Probabilità",
+        fee: "Costo stim.",
+        wage: "Stipendio",
+        contract: "Contratto fino al",
+        verdict: "Verdetto",
+      },
+      ownPlayer: "Il tuo giocatore",
+      roleAttributes: (roles) => `Gli attributi del ruolo: ${roles}`,
+      keyAttribute: "Un attributo chiave del ruolo",
+      versus: (difference) => `${difference} rispetto al tuo n. 1`,
+      best: "il migliore",
+      age: (age) => `${format(age)} anni`,
+      allAttributes: "Tutti gli attributi",
+      loading: "Lettura dei giocatori…",
+      close: "Chiudi",
+    },
+    report: {
+      title: (name) => `Rapporto dell'osservatore: ${name}`,
+      hint: "Salvalo come immagine o copialo per condividerlo.",
+      making: "Stesura del rapporto…",
+      failed: (reason) => `Impossibile creare il rapporto: ${reason}`,
+      alt: (name) => `Il rapporto dell'osservatore su ${name}`,
+      save: "Salva come immagine",
+      savePdf: "Salva come PDF",
+      saving: "Salvataggio…",
+      copy: "Copia l'immagine",
+      copied: "Copiato negli appunti.",
+      copyFailed: (reason) => `Impossibile copiare l'immagine: ${reason}`,
+      similar: "Trova giocatori simili",
+      saved: (file) => `Salvato come ${file}.`,
+      open: "Apri",
+      show: "Mostra nella cartella",
+      close: "Chiudi",
+      heading: "Rapporto dell'osservatore",
+      age: (age) => `${format(age)} anni`,
+      freeAgent: "Svincolato",
+      contract: "contratto fino al",
+      fit: "Idoneità",
+      probability: "Probabilità",
+      fee: "Costo stim.",
+      abilities: "AA / AP",
+      value: "Valore",
+      role: "Ruolo",
+      strengths: "Punti di forza",
+      weaknesses: "Punti deboli",
+      profile: "Carattere",
+      note: "Nota dell'osservatore",
+      similarity: (value) => `${format(value)}% simile`,
+      footer: "Rapporto dell'osservatore FMLibreEditor · costi, stipendi e probabilità sono stime",
+      traits: {
+        consistent: "Costante",
+        inconsistent: "Incostante",
+        bigGames: "Giocatore da grandi partite",
+        nervous: "Teso nelle grandi partite",
+        injuryProne: "Soggetto a infortuni",
+        robust: "Raramente infortunato",
+        versatile: "Duttile",
+        professional: "Professionista esemplare",
+        ambitious: "Ambizioso",
+        loyal: "Leale",
+        hotHeaded: "Irascibile",
+      },
+    },
+    /** "Nuovi giovani": i giocatori che il gioco ha creato nei nuovi giovani di una società, per giorno di arrivo, e le loro modifiche. */
+    youth: {
+      intro: "I giocatori che il gioco ha creato nei nuovi giovani della società e che sono ancora lì, per giorno di arrivo.",
+      otherClub: "Guarda un'altra società",
+      searchLabel: "Società da guardare",
+      mine: "Torna alla mia società",
+      intakesLabel: "Nuovi giovani",
+      /** A day nothing says. */
+      noDay: "Giorno sconosciuto",
+      /** `best` is a name and the potential in brackets. */
+      summary: (count, average, best) =>
+        `${count === 1 ? "1 giocatore" : `${format(count)} giocatori`} · potenziale medio ${average} · migliore: ${best}`,
+      lent: (count) => (count === 1 ? "1 in prestito" : `${format(count)} in prestito`),
+      how: {
+        label: "Come viene creato questo elenco?",
+        note: "Giocatori creati dal gioco, arrivati in questa società a 17 anni o meno e non cresciuti in nessun'altra società, per giorno di arrivo. Quelli in prestito sono elencati; quelli venduti o lasciati andare no.",
+      },
+      unmarked:
+        "L'editor non sa come questa versione del gioco segna i giocatori che crea: vengono elencati anche i giovani della società presi dal database del gioco.",
+      empty: (club) => `${club} al momento non ha giocatori dei nuovi giovani.`,
+      emptyHint: "I giocatori dei nuovi giovani compaiono qui finché sono in società. Guarda un'altra società per vedere i suoi nuovi giovani.",
+      columns: {
+        player: "Giocatore",
+        position: "Ruolo",
+        born: "Nato il",
+        nation: "Nazionalità",
+        city: "Città di nascita",
+        ca: "AA",
+        pa: "AP",
+        actions: "Modifica",
+      },
+      age: (age) => `${format(age)} anni`,
+      joinedAt: (age) => `arrivato a ${format(age)} anni`,
+      onLoan: (club) => `In prestito presso ${club}`,
+      youthContract: "Contratto giovanile",
+      edit: (name) => `Modifica ${name}`,
+      editor: {
+        label: (name) => `Modifica di ${name}`,
+        reading: "Lettura dei suoi valori…",
+        dateOfBirth: "Data di nascita",
+        nation: "Nazionalità",
+        city: "Città di nascita",
+        /** The city select of a player without a city: the game keeps none for him, and the editor sets none. */
+        noCity: "Nessuna nel gioco",
+        /** Above the cities of the nation picked: they are the ones people of the save were born in. */
+        cityHint: "Città in cui sono nate persone di questo salvataggio",
+        ca: "Abilità attuale",
+        pa: "Abilità potenziale",
+        save: "Salva",
+        saving: "Salvataggio…",
+        cancel: "Annulla",
+        profile: "Profilo completo",
+        profileTitle: "Ruoli, attributi e il resto, nel profilo del giocatore",
+        nothing: "Niente da salvare: nessun valore è stato modificato.",
+        saved: (count) => (count === 1 ? "1 modifica salvata." : `${format(count)} modifiche salvate.`),
+        failed: (field, reason) => `${field}: ${reason}`,
+        invalid: (field) => `${field}: non è un valore valido.`,
+      },
+      loading: "Lettura dei nuovi giovani…",
+      failed: (reason) => `Impossibile leggere i nuovi giovani: ${reason}`,
     },
     roles: {
       bgk: "Portiere di costruzione",
@@ -2332,6 +3069,163 @@ export const it: Strings = {
       unwanted: () => "Stato in rosa: in esubero",
       listed: () => "Già in lista trasferimenti",
     },
+  },
+
+  /** The command palette and the names of the keys in the keyboard shortcuts (see en.ts). */
+  palette: {
+    button: "Cerca",
+    title: "Cerca o esegui un comando",
+    placeholder: "Cerca giocatori, staff, società e comandi",
+    placeholderCommands: "Cerca comandi",
+    commands: "Comandi",
+    goTo: (list: string) => `Vai a ${list}`,
+    searchList: "Cerca in questo elenco",
+    editProfile: "Modifica questo profilo",
+    doneEditing: "Termina la modifica di questo profilo",
+    applyChanges: "Applica le modifiche a questo profilo",
+    showAll: (count: number, list: string) => `Mostra tutti i ${format(count)} risultati in ${list}`,
+    searching: "Ricerca…",
+    empty: (query: string) => `Nessun risultato per “${query}”.`,
+    notConnected: "Connettiti al gioco per cercare giocatori, staff e società.",
+    failed: (reason: string) => `La ricerca non è riuscita: ${reason}`,
+    hintMove: "Spostati",
+    hintOpen: "Apri",
+    hintClose: "Chiudi",
+    keys: { ctrl: "Ctrl", shift: "Maiusc", enter: "Invio", escape: "Esc" },
+  },
+
+  /** "My club", the page the app opens on (see en.ts). */
+  home: {
+    nav: "La mia società",
+    loading: "Ricerca della tua società…",
+    failed: (reason: string) => `Non è stato possibile cercare la tua società: ${reason}`,
+    manager: (name: string) => `Allenatore: ${name}`,
+    following: "Una società che segui",
+    clubsLabel: "Le tue società",
+    openProfile: "Profilo della società",
+    openProfileTitle: "Apri questa società nella scheda Società: strutture, finanze, stadio e altro",
+    noClubTitle: "Non alleni nessuna società in questo salvataggio",
+    noClubText:
+      "Scegli invece una società da seguire qui: la sua rosa, chi ha bisogno di attenzione e le azioni su tutta la " +
+      "squadra.",
+    chooseAnother: "Scegli un'altra società",
+    searchLabel: "Società da seguire",
+    squad: "Rosa",
+    cards: {
+      label: "Chi ha bisogno di attenzione",
+      lowMorale: "Morale basso",
+      tired: "Stanchi",
+      contracts: "Contratti in scadenza",
+      injuredHint: "Giocatori con un infortunio",
+      bannedHint: "Giocatori con una squalifica",
+      lowMoraleHint: (below: string) => `Giocatori con il morale sotto ${below}`,
+      tiredHint: (below: string) => `Giocatori con l'energia sotto ${below}`,
+      unrestHint: "Giocatori di cui alcuni compagni sono scontenti",
+      contractsHint: (months: number) => `Giocatori il cui contratto scade entro ${months} mesi`,
+      none: "Nessuno",
+      more: (count: number) => `e altri ${format(count)}`,
+    },
+  },
+
+  /** What's new: what a version brings (see en.ts). */
+  whatsNew: {
+    title: (version: string) => `Novità della versione ${version}`,
+    updated: "FMLibreEditor è stato aggiornato.",
+    version: (version: string) => `Versione ${version}`,
+    thanks: (names: string) => `Grazie a ${names}.`,
+    allChanges: "Tutte le modifiche",
+    allChangesTitle: "Apri su GitHub le note complete di questa versione",
+    close: "Ho capito",
+    link: "Novità",
+    command: "Novità di questa versione",
+    versions: {
+      "0.5.4": [
+        {
+          title: "I trasferimenti nella carriera del giocatore.",
+          text: "Trasferimento, ora la prima scelta quando sposti un giocatore, prepara il trasferimento per il giorno dopo nel gioco. Il gioco lo esegue come uno dei suoi: paga il costo del cartellino e registra il trasferimento nella storia della sua carriera, con le partite di questa stagione nella vecchia società in una riga a parte. Sposta subito lo sposta ancora all'istante.",
+        },
+        {
+          title: "Squadra al top, e a pezzi.",
+          text: "Nella scheda Rosa di una società, un solo clic guarisce, motiva e rigenera tutta la squadra e porta affiatamento e tattica al massimo; Squadra a pezzi, dopo una domanda, fa il contrario. Un solo Ripristina annulla l'una o l'altra, e le singole azioni sono in Altre azioni.",
+        },
+        {
+          title: "Caratteristiche della rosa.",
+          text: "Nella scheda Rosa di una società, sotto Altre azioni, Caratteristiche della rosa dà a tutti i giocatori della squadra le caratteristiche che scegli, o gliele toglie, e lascia le altre come sono. Un solo Ripristina lo annulla.",
+        },
+        {
+          title: "Trasferisci tutto lo staff.",
+          text: "La scheda Staff di una società trasferisce tutto il suo staff a un'altra società in una volta, ognuno nello stesso ruolo, e un solo Ripristina li riporta tutti indietro.",
+        },
+        {
+          title: "Nazionali.",
+          text: "La rosa della prima squadra di una nazionale ha Guarisci tutti, Motiva tutti e Rigenera tutti, e la sua tabella mostra energia, forma partita e morale.",
+        },
+        {
+          title: "Sponsorizzazioni.",
+          text: "Le finanze di una società elencano le sue sponsorizzazioni, in sola lettura: quanto paga ciascuna a stagione e in totale, la durata e cosa cambia con una retrocessione. Per ora su Game Pass 0.9.2524.0.",
+        },
+        {
+          title: "Correzione.",
+          text: "In alcune carriere il controllo dello staff falliva anche se lo staff era letto bene, lasciandolo in sola lettura e rifiutando guarigioni, Massimo affiatamento e Tattica al massimo. Ora passa.",
+        },
+      ],
+      "0.5.3": [
+        {
+          title: "L'aggiornamento di FM27 del 17 novembre.",
+          text: "Su Windows e macOS, Game Pass 0.9.2524.0 e la build Steam 26620374 sono versioni conosciute, e le finanze delle società e la tattica della tua squadra si leggono di nuovo dove l'aggiornamento le ha spostate.",
+        },
+        {
+          title: "Nazionali.",
+          text: "Il selettore sopra l'elenco delle società mostra le nazionali maschili e femminili di ogni paese: la rosa di una nazionale, le sue giovanili (Under 21, Under 20 e le altre) con le loro rose, e la reputazione di ciascuna, che puoi modificare.",
+        },
+        {
+          title: "Montepremi del campionato.",
+          text: "La panoramica di una società mostra quanto paga il suo campionato in questa stagione, per piazzamento finale e per partita, e gli importi si possono cambiare per tutte le società del campionato fino alla fine della stagione.",
+        },
+        {
+          title: "Correzione.",
+          text: "Un salvataggio con giovani nati dopo il 2020 non fallisce più il controllo che l'editor fa prima di scrivere.",
+        },
+      ],
+      "0.5.2": [
+        {
+          title: "La mia società.",
+          text: "L'app si apre sulla società che alleni: chi merita un'occhiata, il suo denaro e le azioni sulla rosa, tutto in un posto. Se non hai una società tua, puoi seguirne una.",
+        },
+        {
+          title: "Tavolozza dei comandi.",
+          text: "Ctrl+K (⌘K su Mac) trova un giocatore, un membro dello staff, una società o un comando, e con le scorciatoie ti sposti tra le schede.",
+        },
+        {
+          title: "Osservatori.",
+          text: "Occasioni sul mercato, giocatori simili a uno che lasceresti partire, un confronto con il tuo numero 1 nel suo ruolo, rapporti dell'osservatore da salvare come immagine o PDF, la rosa in campo e i nuovi giovani.",
+        },
+        {
+          title: "Rinomina un giocatore.",
+          text: "Nome, cognome, nome comune e nome completo. Il gioco tiene il nuovo nome nei suoi salvataggi.",
+        },
+        {
+          title: "Contratti e staff.",
+          text: "Prolunga un contratto di cinque anni con un clic, oppure aggiungi anni a molti con una modifica multipla. Svincola un membro dello staff, o tutto lo staff di una società, e riportali indietro con un solo Ripristina.",
+        },
+        {
+          title: "Tattica al massimo.",
+          text: "Nella scheda Rosa di una società, porta la familiarità tattica della squadra al massimo. I motivi di scontento ora sono scritti come li scrive il gioco.",
+        },
+        {
+          title: "Le tue modifiche restano.",
+          text: "Le modifiche di ogni carriera restano nella scheda Modifiche dopo un riavvio, e puoi cercarle, filtrarle ed esportarle.",
+        },
+        {
+          title: "Filtri delle società.",
+          text: "Nazione, campionato e reputazione. Modifica multipla ed Esporta prendono le società che l'elenco mostra.",
+        },
+        {
+          title: "Russo e giapponese.",
+          text: "Altre due lingue. Anche l'aggiornamento di Steam del 12 novembre è ora una build conosciuta.",
+        },
+      ],
+    } as Record<string, { title: string; text: string }[]>,
   },
 
   errors,

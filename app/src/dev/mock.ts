@@ -1,26 +1,43 @@
 // Stand-ins for the Rust commands so the UI can be developed in a plain browser
 // (`npm run dev`) without the game or Tauri. Every player here is made up.
 
-import { dateFromNumber, numberFromDate } from "../editing";
+import { dateFromNumber, numberFromDate, plusYears } from "../editing";
 import { fold } from "../format";
-import { scoutingOverview, scoutingSuggest } from "./mockScouting";
+import { scoutingOpportunities, scoutingOverview, scoutingSimilar, scoutingSuggest, youthIntakes } from "./mockScouting";
 import type {
   ApplyReport,
+  ArrayRef,
   AttributeBound,
   ClubMoney,
   FeePlan,
   Nation,
   BridgeInfo,
   CaptainRole,
+  City,
   ClubTeam,
+  EditEntity,
+  NationalProfile,
+  NationalSide,
+  NationalStatus,
+  NationalTeamSummary,
   ScoutRequest,
+  SimilarRequest,
   SquadPlayer,
   TeamAction,
   TeamFreeze,
+  TeamReport,
   FreezeKind,
   ClubDetails,
   ClubFilter,
+  CompetitionPrizes,
+  League,
+  LeaguePrizes,
+  ClubSponsorships,
+  Sponsorship,
+  LeaguePrizesSet,
+  PrizeInput,
   ClubPage,
+  ClubStaffRow,
   ClubSummary,
   CheckKey,
   ConnectionInfo,
@@ -40,6 +57,8 @@ import type {
   PlayerOrder,
   PlayerPage,
   PlayerSummary,
+  NameKind,
+  PersonNames,
   Refrozen,
   ReloadInfo,
   StaffDetails,
@@ -59,8 +78,10 @@ import type {
   MassOperationKind,
   MassPreview,
   MassReport,
+  ArrangedPreview,
   ClubName,
   MovePreview,
+  OpportunityRequest,
   MoveTerms,
   PlannedChange,
   RoomMaker,
@@ -98,6 +119,42 @@ const nationAddress = (nation: string) => 0x7f00_0000 + ALL_NATIONS.indexOf(nati
 
 /** The fixture nation a nation field's value stands for. */
 const nationAt = (address: number) => ALL_NATIONS.find((nation) => nationAddress(nation) === address);
+
+/** A few cities of each fixture nation, which fixture people were born in. */
+const CITIES: Record<string, string[]> = {
+  Türkiye: ["İstanbul", "Ankara", "İzmir", "Bursa", "Trabzon", "Antalya", "Kayseri"],
+  Spain: ["Madrid", "Barcelona", "Sevilla", "Valencia", "Bilbao"],
+  Germany: ["Berlin", "Hamburg", "München", "Köln", "Dortmund"],
+  Brazil: ["São Paulo", "Rio de Janeiro", "Belo Horizonte", "Porto Alegre"],
+  Denmark: ["København", "Aarhus", "Odense"],
+  France: ["Paris", "Marseille", "Lyon", "Lille", "Bordeaux"],
+  Poland: ["Warszawa", "Kraków", "Gdańsk"],
+  Portugal: ["Lisboa", "Porto", "Braga"],
+  Czechia: ["Praha", "Brno", "Ostrava"],
+  England: ["London", "Manchester", "Liverpool", "Birmingham"],
+  Scotland: ["Glasgow", "Edinburgh", "Aberdeen"],
+};
+
+/** Every fixture city, as `birth_cities` lists them: by name. */
+const BIRTH_CITIES: City[] = ALL_NATIONS.flatMap((nation, n) =>
+  (CITIES[nation] ?? []).map((name, i) => ({
+    address: 0x6e00_0000 + n * 0x1000 + i * 0x58,
+    uid: 500_000 + n * 100 + i,
+    name,
+    nationUid: 1000 + n,
+  })),
+).sort((a, b) => a.name.localeCompare(b.name));
+
+/** The city a fixture player was born in: one of his nation's, steady for his UID, or one he was set to. */
+function cityOf(player: { uid: number; nation: string | null }): City | null {
+  const written = writtenCity(player.uid);
+  if (written !== undefined) {
+    return BIRTH_CITIES.find((city) => city.address === written) ?? null;
+  }
+  const n = player.nation === null ? -1 : ALL_NATIONS.indexOf(player.nation);
+  const own = BIRTH_CITIES.filter((city) => city.nationUid === 1000 + n);
+  return own.length > 0 ? own[player.uid % own.length] : null;
+}
 
 /**
  * A fixture person's nation and club with their UIDs, as the real rows have them: the men's club of that name (see
@@ -222,7 +279,34 @@ const { players, ratings, women } = (() => {
     };
   });
   const women = new Set(womenPlayers.map((p) => p.uid));
-  return { players: [...players, ...womenPlayers], ratings, women };
+  // Youngsters of the first men's club, 15 to 17, as the game would have made them at its youth intakes; drawn from a
+  // generator of their own, so the others come out as before.
+  const nextYouth = random(2011);
+  const pickYouth = <T,>(items: T[]) => items[Math.floor(nextYouth() * items.length)];
+  const academy = Array.from({ length: 14 }, (_, i): PlayerSummary => {
+    const uid = 2_002_068_000 + i * 3;
+    const ca = Math.round(35 + nextYouth() * 60);
+    const born: FmDate = {
+      year: 2009 + Math.floor(nextYouth() * 3),
+      month: 1 + Math.floor(nextYouth() * 12),
+      day: 1 + Math.floor(nextYouth() * 28),
+    };
+    const own = random(uid ^ 0x5a5a5a);
+    ratings[uid] = positionRatings(own, isKeeper(uid));
+    return {
+      uid,
+      name: `${pickYouth(FIRST)} ${pickYouth(LAST)}`,
+      fullName: null,
+      dateOfBirth: born,
+      age: ageOn(born, GAME_DATE),
+      ...withUids(nextYouth() < 0.8 ? NATIONS[0] : pickYouth(NATIONS), CLUBS[0]),
+      positions: playablePositions(ratings[uid]),
+      contractExpires: { year: 2029, month: 6, day: 30 },
+      currentAbility: ca,
+      potentialAbility: Math.min(200, ca + 25 + Math.round(nextYouth() * 85)),
+    };
+  });
+  return { players: [...players, ...womenPlayers, ...academy], ratings, women };
 })();
 
 const ATTRIBUTES = [
@@ -241,6 +325,12 @@ const GK_ONLY = new Set([
 const PERSONALITY = [
   "adaptability", "ambition", "loyalty", "pressure", "professionalism", "sportsmanship", "temperament", "controversy",
 ];
+
+/** The teammate a made-up reason to be unhappy is about: the first other player of his club, so groups form. */
+function teammateOf(player: PlayerSummary): { uid: number; name: string } | null {
+  const mate = players.find((p) => p.clubUid !== null && p.clubUid === player.clubUid && p.uid !== player.uid);
+  return mate ? { uid: mate.uid, name: mate.name } : null;
+}
 
 /** Made-up but self-consistent profile for a fixture player. */
 function details(player: PlayerSummary): PlayerDetails {
@@ -291,13 +381,36 @@ function details(player: PlayerSummary): PlayerDetails {
             ...(player.uid % 6 === 0 ? [{ index: 6, kind: 9, amount: 2_147_579, condition: 7 }] : []),
             ...(player.uid % 10 === 0 ? [{ index: 7, kind: 13, amount: 118_462, condition: 30 }] : []),
           ]),
-          // A few players have reasons to be unhappy: one over, and one or two that last.
+          // A few players have reasons to be unhappy: one over, and one or two that last, the first of them held about
+          // a teammate.
           concerns:
             next() < 0.3
               ? [
-                  { started: { year: 2026, month: 7, day: 2 }, ended: { year: 2026, month: 7, day: 9 }, motive: 1202, kind: 1 },
-                  { started: { year: 2026, month: 7, day: 12 }, ended: null, motive: 926, kind: 1 },
-                  ...(next() < 0.5 ? [{ started: { year: 2026, month: 7, day: 15 }, ended: null, motive: 596, kind: 2 }] : []),
+                  {
+                    started: { year: 2026, month: 7, day: 2 },
+                    ended: { year: 2026, month: 7, day: 9 },
+                    motive: 1202,
+                    kind: 1,
+                    wording: 0,
+                    flags: 0,
+                    about: null,
+                  },
+                  {
+                    started: { year: 2026, month: 7, day: 12 },
+                    ended: null,
+                    motive: 926,
+                    kind: 1,
+                    wording: 0,
+                    flags: 0,
+                    about: teammateOf(player),
+                  },
+                  // Left out of a competition squad, and wanting more playing time, which the game words by the entry.
+                  ...(next() < 0.5
+                    ? [
+                        { started: { year: 2026, month: 7, day: 15 }, ended: null, motive: 596, kind: 2, wording: 0, flags: 0, about: null },
+                        { started: { year: 2026, month: 7, day: 16 }, ended: null, motive: 650, kind: 1, wording: 1, flags: 0, about: null },
+                      ]
+                    : []),
                 ]
               : [],
           // A player moved to another club signed today, without a squad number, off the transfer list.
@@ -488,6 +601,8 @@ function logTie(player: PlayerSummary, before: Tie | null, after: Tie | null, ti
     old: before?.targetUid ?? 0,
     new: after?.targetUid ?? 0,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     tie: { from: end(before), to: end(after) },
   };
@@ -568,6 +683,33 @@ function addTie(uid: number, kind: TieKind, target: number, rule?: number): Logg
 /** The fixture players whose bans were lifted through the editor, by UID, while the lifting is not undone. */
 const liftedPlayers = new Set<number>();
 
+/**
+ * Cohesion with the club as Max cohesion set it, by UID. The rest have the made-up one `cohesionOf` gives, and one player
+ * in seven none, as a player who has only just joined has no entry for his club yet.
+ */
+const cohesionSet = new Map<number, number>();
+
+function cohesionOf(uid: number): number | null {
+  if (cohesionSet.has(uid)) {
+    return cohesionSet.get(uid)!;
+  }
+  return uid % 7 === 0 ? null : 1 + ((uid * 37) % 99);
+}
+
+/**
+ * How well a player knows the team's tactic as Max tactics left it, by UID. The rest have the made-up one `tacticsOf`
+ * gives; one player in nine does not train, as when injured, and Max tactics fills only his record: half his circles.
+ */
+const tacticsSet = new Map<number, number>();
+
+function tacticsOf(uid: number): number {
+  return tacticsSet.get(uid) ?? 30 + ((uid * 53) % 66);
+}
+
+function trainsOf(uid: number): boolean {
+  return uid % 9 !== 4;
+}
+
 /** The current bans of a fixture player: every eleventh one is banned, for one to three matches, until lifted. */
 function bansOf(uid: number): Ban[] {
   if (uid % 11 !== 5 || liftedPlayers.has(uid)) {
@@ -626,6 +768,8 @@ function logClause(player: PlayerSummary, before: Clause | null, after: Clause |
     old: before?.amount ?? 0,
     new: after?.amount ?? 0,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     clause: { from: before, to: after },
   };
@@ -685,11 +829,110 @@ function renameStadium(uid: number, name: string): LoggedChange {
     old: utf8Bytes(room.name),
     new: bytes,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     stadium: { from: room.name, to: name },
   };
   changes.push(logged);
   return { ...logged };
+}
+
+// Players' names --------------------------------------------------------------------------------------------------
+
+/** The names of the fixture players the editor renamed, by UID; the others' are read from their rows. */
+const playerNameSets = new Map<number, Omit<PersonNames, "room" | "longest">>();
+
+/**
+ * How many more new first, last and common names the fixture's tables take: 32 of each after a load in the game, but
+ * only two common names here, so that the dialog's "no room" state can be seen.
+ */
+const nameRoom: [number, number, number] = [32, 32, 2];
+
+const NAME_KINDS: NameKind[] = ["first", "last", "common", "full"];
+
+/** The names of a fixture player: as renamed, or the first word of his row's name, the rest, and his full name. */
+function namesOf(player: PlayerSummary): PersonNames {
+  const [first, ...rest] = player.name.split(" ");
+  const names = playerNameSets.get(player.uid) ?? { first, last: rest.join(" ") || first, common: null, full: player.fullName };
+  return { ...names, room: [...nameRoom], longest: 80 };
+}
+
+/** Gives the fixture player `names`, and his row the name the game shows: the common name, or first and last. */
+function setNames(player: PlayerSummary, names: PersonNames) {
+  playerNameSets.set(player.uid, { first: names.first, last: names.last, common: names.common, full: names.full });
+  player.name = names.common ?? `${names.first} ${names.last}`;
+  player.fullName = names.full;
+}
+
+/** `player_names`: the names of a fixture player, and the room the tables have. */
+function playerNamesOf(uid: number): PersonNames {
+  const player = players.find((p) => p.uid === uid);
+  if (!player) {
+    throw notFound("player", uid);
+  }
+  return namesOf(player);
+}
+
+/** `rename_player`: checked as the real command; a new first, last or common name takes room in its table. */
+function renamePlayer(uid: number, kind: NameKind, name: string | null): LoggedChange {
+  const names = playerNamesOf(uid);
+  const player = players.find((p) => p.uid === uid)!;
+  const optional = kind === "common" || kind === "full";
+  const bad =
+    name === null
+      ? !optional
+      : // eslint-disable-next-line no-control-regex
+        name === "" || name.trim() !== name || /[\u0000-\u001f\u007f]/.test(name) || utf8Bytes(name) > names.longest;
+  if (bad) {
+    throw failure(
+      "names.bad",
+      "a first or last name cannot be empty, and no name can start or end with a space, hold control characters or take more than 80 bytes",
+      { max: names.longest },
+    );
+  }
+  const from = names[kind];
+  if (from === name) {
+    throw failure("names.same", "that is the name already");
+  }
+  const table = NAME_KINDS.indexOf(kind);
+  if (name !== null && table < 3) {
+    if (nameRoom[table] === 0) {
+      throw failure(
+        "names.noRoom",
+        `the game has no room for another new ${kind} name until it makes room itself, as it does when new players and staff come in: save the game, load the save again, and try again`,
+        { table: kind },
+      );
+    }
+    nameRoom[table] -= 1;
+  }
+  setNames(player, { ...names, [kind]: name });
+  const logged: LoggedChange = {
+    id: changes.length + 1,
+    at: Date.now(),
+    name: player.name,
+    entity: "player",
+    uid,
+    field: `name.${kind}`,
+    old: from === null ? 0 : utf8Bytes(from),
+    new: name === null ? 0 : utf8Bytes(name),
+    undoneAt: null,
+    earlier: false,
+    undoable: true,
+    batch: null,
+    personName: { from, to: name },
+  };
+  changes.push(logged);
+  return { ...logged };
+}
+
+/** Undoes a change of a fixture player's name: he has the old one again (the new entry keeps its room, as in the game). */
+function undoPlayerName(entry: LoggedChange) {
+  const player = players.find((p) => p.uid === entry.uid);
+  if (player && entry.personName) {
+    const kind = entry.field.slice("name.".length) as NameKind;
+    setNames(player, { ...namesOf(player), [kind]: entry.personName.from });
+  }
 }
 
 /** `change_clause`: a new amount or condition for one of a fixture contract's clauses. */
@@ -765,6 +1008,8 @@ function keepPlaying(uid: number): LoggedChange {
     old: retires.year * 10000 + retires.month * 100 + retires.day,
     new: 0,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
   };
   changes.push(logged);
@@ -810,6 +1055,40 @@ const staff: StaffSummary[] = (() => {
 /** Whether the fixture player or member of staff is a woman, as the real rows know it from the game's gender flags. */
 const womenStaff = new Set(staff.filter((_, i) => isStaffWoman(i)).map((s) => s.uid));
 const isWoman = (uid: number) => women.has(uid) || womenStaff.has(uid);
+
+/**
+ * The board of each fixture men's club, whom a release leaves at the club as the real commands do: a chairperson, and
+ * at the first club an owner too. After the others, so that the generated staff come out as before.
+ */
+staff.push(
+  ...CLUBS.map((club, i): StaffSummary => {
+    const born: FmDate = { year: 1956 + i * 3, month: 1 + i, day: 9 + i };
+    return {
+      uid: 2_100_000 + i,
+      name: `${FIRST[(i + 4) % FIRST.length]} ${LAST[(i + 7) % LAST.length]}`,
+      fullName: null,
+      dateOfBirth: born,
+      age: ageOn(born, GAME_DATE),
+      ...withUids(NATIONS[i % NATIONS.length], club),
+      job: 4,
+      currentAbility: 60 + i * 7,
+      potentialAbility: 70 + i * 7,
+      isHuman: false,
+    };
+  }),
+  {
+    uid: 2_100_100,
+    name: "Bruno Novák",
+    fullName: null,
+    dateOfBirth: { year: 1961, month: 6, day: 2 },
+    age: ageOn({ year: 1961, month: 6, day: 2 }, GAME_DATE),
+    ...withUids("Czechia", CLUBS[0]),
+    job: 66,
+    currentAbility: 90,
+    potentialAbility: 95,
+    isHuman: false,
+  },
+);
 
 /** Made-up but self-consistent profile for a fixture member of staff. */
 function staffDetails(member: StaffSummary): StaffDetails {
@@ -861,7 +1140,7 @@ const STAFF_ATTRIBUTE_ORDER = [
 const INTERNATIONAL = { caps: "caps", goals: "goals", u21_caps: "u21Caps", u21_goals: "u21Goals" } as const;
 
 /** The editable fields, as the real `edit_fields` lists them. */
-function fieldTable(entity: Entity): EditField[] {
+function fieldTable(entity: EditEntity): EditField[] {
   const field = (
     key: string,
     kind: EditField["kind"],
@@ -888,6 +1167,14 @@ function fieldTable(entity: Entity): EditField[] {
   const reputation = ["home", "current", "world"].map((key) => field(`reputation.${key}`, "u16", 0, 10_000));
   const personality = PERSONALITY.map((key) => field(`personality.${key}`, "u8", 1, 20));
   const contract = [field("contract.wage", "i32", 0, 10_000_000), field("contract.expires", "date", 20000101, 21001231)];
+  if (entity === "nationalTeam") {
+    // As the real table: the senior team's, then each other kind of team's (kind 3 too, which the fixture has not).
+    const kinds = [3, 9, 33, 10, 18, 11, 12];
+    return ["reputation", ...kinds.map((kind) => `team.${kind}.reputation`)].map((key) => ({
+      ...field(key, "u16", 0, 10_000),
+      mass: false,
+    }));
+  }
   if (entity === "club") {
     return [
       field("reputation", "u16", 0, 10_000),
@@ -904,6 +1191,7 @@ function fieldTable(entity: Entity): EditField[] {
       field("height", "u16", 140, 220),
       { ...field("nation", "pointer", 0x1_0000, 0x7fff_ffff_ffff), mass: false },
       field("date_of_birth", "date", 19400101, 20201231),
+      { ...field("city_of_birth", "pointer", 0x1_0000, 0x7fff_ffff_ffff), mass: false },
       { ...field("asking_price", "i32", 0, 2_000_000_000), blank: -1 },
       ...reputation,
       field("international.caps", "u16", 0, 1000),
@@ -958,8 +1246,178 @@ const FINANCE = {
  */
 const written = new Map<string, FieldValues>();
 
-/** Every change written in this browser session, oldest first. */
-const changes: LoggedChange[] = [];
+/** The city of birth a fixture player was set to, if he was. */
+const writtenCity = (uid: number): number | undefined => written.get(`player:${uid}`)?.city_of_birth;
+
+/**
+ * Every change written in this browser session, oldest first, after the earlier ones the real app would list from its
+ * history file (see `earlier`): the preview shows each kind of row they make.
+ */
+const changes: LoggedChange[] = (() => {
+  const day = 86_400_000;
+  const club = (index: number) => ({ name: CLUBS[index], uid: 500 + index * 7 });
+  const [first, second, third, fourth, fifth, sixth, seventh] = players;
+  const earlier = (rest: Omit<LoggedChange, "id" | "earlier" | "batch" | "undoneAt">): Omit<LoggedChange, "id"> => ({
+    ...rest,
+    earlier: true,
+    batch: null,
+    undoneAt: null,
+  });
+  // A mass edit of the players' morale, made on its own number so that the mass edits of this session cannot clash.
+  const morale = (player: PlayerSummary, inGame: boolean) =>
+    earlier({
+      at: Date.now() - 4 * day,
+      name: player.name,
+      entity: "player",
+      uid: player.uid,
+      field: "morale",
+      old: 12,
+      new: 20,
+      undoable: true,
+      inGame,
+    });
+  const entries: Omit<LoggedChange, "id">[] = [
+    earlier({
+      at: Date.now() - 6 * day,
+      name: first.name,
+      entity: "player",
+      uid: first.uid,
+      field: "attribute.finishing",
+      old: 70,
+      new: 85,
+      undoable: true,
+      inGame: true,
+    }),
+    earlier({
+      at: Date.now() - 5 * day,
+      name: CLUBS[0],
+      entity: "club",
+      uid: club(0).uid,
+      field: "finance.transfer_budget",
+      old: 5_000_000,
+      new: 25_000_000,
+      undoable: true,
+      inGame: false,
+    }),
+    earlier({
+      at: Date.now() - 4.5 * day,
+      name: second.name,
+      entity: "player",
+      uid: second.uid,
+      field: "club",
+      old: club(1).uid,
+      new: club(2).uid,
+      moved: { from: club(1).name, to: club(2).name },
+      undoable: false,
+      inGame: true,
+    }),
+    earlier({
+      at: Date.now() - 4.2 * day,
+      name: third.name,
+      entity: "player",
+      uid: third.uid,
+      field: "nation",
+      old: 0,
+      new: 0,
+      objects: { from: "England", to: "Türkiye" },
+      undoable: false,
+      inGame: true,
+    }),
+    { ...morale(fourth, true), batch: 9001 },
+    { ...morale(fifth, false), batch: 9001 },
+    { ...morale(sixth, true), batch: 9001 },
+    {
+      // This one was taken back, from this app, a day after it was written.
+      ...earlier({
+        at: Date.now() - 3 * day,
+        name: seventh.name,
+        entity: "player",
+        uid: seventh.uid,
+        field: "attribute.passing",
+        old: 60,
+        new: 90,
+        undoable: true,
+      }),
+      undoneAt: Date.now() - 2 * day,
+    },
+    // What the search looks through beside a person's name: the names of a rename, of a stadium, the clubs of a staff
+    // move, and the players of a captaincy.
+    earlier({
+      at: Date.now() - 2.8 * day,
+      name: players[7].name,
+      entity: "player",
+      uid: players[7].uid,
+      field: "name.last",
+      old: 4,
+      new: 9,
+      personName: { from: "Kaya", to: "Yıldırım" },
+      undoable: false,
+    }),
+    earlier({
+      at: Date.now() - 2.6 * day,
+      name: CLUBS[3],
+      entity: "club",
+      uid: club(3).uid,
+      field: "stadium.name",
+      old: 13,
+      new: 14,
+      stadium: { from: "Lindenau Park", to: "Lindenau Arena" },
+      undoable: false,
+    }),
+    earlier({
+      at: Date.now() - 2.4 * day,
+      name: staff[1].name,
+      entity: "staff",
+      uid: staff[1].uid,
+      field: "club",
+      old: club(2).uid,
+      new: club(0).uid,
+      moved: { from: club(2).name, to: club(0).name },
+      undoable: false,
+      inGame: true,
+    }),
+    earlier({
+      at: Date.now() - 2.2 * day,
+      name: CLUBS[1],
+      entity: "club",
+      uid: club(1).uid,
+      field: "vice_captain",
+      old: players[3].uid,
+      new: players[8].uid,
+      captaincy: { team: 0, kind: 0, ageLimit: null, from: players[3].name, to: players[8].name, swapped: false },
+      undoable: false,
+    }),
+  ];
+  // `?longlog` puts a long history before those: twenty thousand changes, half of them in a hundred mass edits of a
+  // hundred changes each, none in reach of an Undo, to see the paging and the search work through a log that long.
+  if (new URLSearchParams(window.location.search).has("longlog")) {
+    const fieldsOf = [
+      { field: "attribute.finishing", old: 55, new: 80 },
+      { field: "attribute.passing", old: 60, new: 75 },
+      { field: "morale", old: 10, new: 20 },
+      { field: "contract.wage", old: 40_000, new: 90_000 },
+    ];
+    const long: Omit<LoggedChange, "id">[] = [];
+    // Oldest first, as the log is kept.
+    for (let i = 19_999; i >= 0; i--) {
+      const player = players[i % players.length];
+      long.push({
+        at: Date.now() - 10 * day - i * 60_000,
+        name: player.name,
+        entity: "player",
+        uid: player.uid,
+        ...fieldsOf[i % fieldsOf.length],
+        undoneAt: i % 7 === 0 ? Date.now() - 9 * day : null,
+        batch: i % 2 === 0 ? 9100 + Math.floor(i / 200) : null,
+        earlier: true,
+        undoable: false,
+        ...(i % 7 === 0 || i % 5 === 0 ? {} : { inGame: i % 3 !== 0 }),
+      });
+    }
+    entries.unshift(...long);
+  }
+  return entries.map((entry, index): LoggedChange => ({ ...entry, id: index + 1 }));
+})();
 
 /** A generated profile with the values written through the editor on top. */
 function withWritten<D extends PlayerDetails | StaffDetails>(entity: Entity, d: D): D {
@@ -1098,7 +1556,15 @@ function profileOf(entity: Entity, uid: number): PlayerDetails | StaffDetails | 
  * The stored value of every field that can be edited now, as `read_values` returns it: like the real command it
  * leaves out contract fields without a contract, a contract end that is not set, and a club's missing finances.
  */
-function currentValues(entity: Entity, uid: number): FieldValues {
+function currentValues(entity: EditEntity, uid: number): FieldValues {
+  if (entity === "nationalTeam") {
+    const team = nationals.find((n) => n.uid === uid);
+    if (!team || team.reputation === null) {
+      return {};
+    }
+    const youth = Object.fromEntries(NATIONAL_YOUTH.map(({ kind }) => [`team.${kind}.reputation`, youthReputation(team, kind)]));
+    return { reputation: team.reputation, ...youth };
+  }
   const d = profileOf(entity, uid);
   const person = d as PlayerDetails & StaffDetails;
   const club = d as ClubDetails;
@@ -1115,6 +1581,8 @@ function currentValues(entity: Entity, uid: number): FieldValues {
         return person.dateOfBirth && numberFromDate(person.dateOfBirth);
       case "nation":
         return person.nation === null ? undefined : nationAddress(person.nation);
+      case "city_of_birth":
+        return cityOf({ uid, nation: person.nation })?.address;
       case "asking_price":
         return (person as PlayerDetails).askingPrice ?? -1;
       case "condition":
@@ -1189,7 +1657,16 @@ function currentValues(entity: Entity, uid: number): FieldValues {
 }
 
 /** Stores `value` as the game would: what the list rows show in them, the rest on top of the profiles. */
-function writeValue(entity: Entity, uid: number, key: string, value: number): void {
+function writeValue(entity: EditEntity, uid: number, key: string, value: number): void {
+  if (entity === "nationalTeam") {
+    const team = nationals.find((n) => n.uid === uid);
+    if (team && key === "reputation") {
+      team.reputation = value;
+    } else if (team && /^team\.\d+\.reputation$/.test(key)) {
+      youthReputations.set(`${team.uid}.${key.split(".")[1]}`, value);
+    }
+    return;
+  }
   const [group, name = ""] = key.split(".");
   if (entity === "club") {
     const club = clubs.find((c) => c.uid === uid);
@@ -1236,8 +1713,11 @@ function writeValue(entity: Entity, uid: number, key: string, value: number): vo
 }
 
 /** `apply_edits`: every edit is checked and written on its own, like the real command, with the same messages. */
-function applyEdits(entity: Entity, uid: number, edits: FieldEdit[]): ApplyReport {
-  const name = profileOf(entity, uid).name;
+function applyEdits(entity: EditEntity, uid: number, edits: FieldEdit[]): ApplyReport {
+  const name =
+    entity === "nationalTeam"
+      ? (nationals.find((n) => n.uid === uid) ?? (() => { throw failure("app.notFound", `No national team ${uid}`, { entity, uid }); })()).name
+      : profileOf(entity, uid).name;
   const report: ApplyReport = { applied: [], failed: [] };
   for (const edit of edits) {
     const field = fieldTable(entity).find((f) => f.key === edit.field);
@@ -1288,6 +1768,8 @@ function applyEdits(entity: Entity, uid: number, edits: FieldEdit[]): ApplyRepor
       old,
       new: edit.value,
       undoneAt: null,
+      earlier: false,
+      undoable: true,
       batch: null,
     };
     changes.push(logged);
@@ -1315,6 +1797,33 @@ function recallLoan(uid: number): LoggedChange | null {
     return { ...entry };
   }
   return logged;
+}
+
+/**
+ * `extend_contract`: the contract runs `years` longer, the day it ends moved on by as many years, written and logged
+ * like an edit of `contract.expires`, with the real command's checks and messages.
+ */
+function extendContract(entity: Entity, uid: number, years: number): LoggedChange {
+  const key = "contract.expires";
+  if (!Number.isInteger(years) || years < 1 || years > MOST_YEARS) {
+    const message = `${years} is not a valid ${key}; it takes 1 to ${MOST_YEARS}`;
+    throw failure("edit.outOfRange", message, { field: key, value: years, min: 1, max: MOST_YEARS });
+  }
+  const old = currentValues(entity, uid)[key];
+  if (old === undefined) {
+    throw failure("edit.noRecord", `${key} cannot be changed here: its record is missing or does not check out`, {
+      field: key,
+    });
+  }
+  const ends = dateFromNumber(old);
+  if (ends === null) {
+    throw failure("edit.unset", `${key} is not set in the game, so it is left alone`, { field: key });
+  }
+  const report = applyEdits(entity, uid, [{ field: key, value: numberFromDate(plusYears(ends, years)) }]);
+  if (report.failed.length > 0) {
+    throw report.failed[0].error;
+  }
+  return report.applied[0];
 }
 
 /** `undo_change`: writes the old value back unless the value has changed since. */
@@ -1427,6 +1936,8 @@ function logStaff(member: StaffSummary, field: string, old: number, value: numbe
     old,
     new: value,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     ...(moved && { moved }),
   };
@@ -1458,6 +1969,122 @@ function changeStaffJob(uid: number, job: number): LoggedChange {
   return logStaff(member, "contract.job", old, job);
 }
 
+// Staff: releases ---------------------------------------------------------------------------------------------------
+
+/**
+ * `plan_staff_release`: the checks of the real command that the fixtures can have, with its messages (the board's job
+ * is not one the editor gives); names the club.
+ */
+function planStaffRelease(uid: number): ClubName {
+  const member = movableStaff(uid);
+  if (!STAFF_JOBS.includes(member.job ?? 0)) {
+    const job = member.job ?? 0;
+    throw failure("staff.job", `the editor does not yet move staff whose job is ${job}, or give that job`, { job });
+  }
+  const from = clubs.find((c) => c.uid === member.clubUid)!;
+  return { uid: from.uid, name: from.name };
+}
+
+/**
+ * `release_staff`: the fixture member of staff leaves the club with no contract, logged as a change of his `club` to 0,
+ * in the batch `batch` when the whole staff is released.
+ */
+function releaseStaff(uid: number, batch: number | null = null): LoggedChange {
+  const from = planStaffRelease(uid);
+  const member = staff.find((s) => s.uid === uid)!;
+  staffUndo.set(changes.length + 1, { club: member.club, clubUid: member.clubUid, job: member.job });
+  Object.assign(member, { club: null, clubUid: null, job: null });
+  const logged = logStaff(member, "club", from.uid, 0, { from: from.name });
+  changes[changes.length - 1].batch = batch;
+  return { ...logged, batch };
+}
+
+/** `club_staff`: the fixture club's staff, you first and then the best, each with why Release all staff leaves them. */
+function clubStaffRows(clubUid: number): ClubStaffRow[] {
+  if (!clubs.some((c) => c.uid === clubUid)) {
+    throw notFound("club", clubUid);
+  }
+  return staff
+    .filter((s) => s.clubUid === clubUid)
+    .sort((a, b) => Number(b.isHuman) - Number(a.isHuman) || b.currentAbility - a.currentAbility)
+    .map((member) => {
+      try {
+        planStaffRelease(member.uid);
+        return { ...member, stays: null };
+      } catch (e) {
+        // `planStaffRelease` fails the way the real command does, with a failure.
+        return { ...member, stays: e as Failure };
+      }
+    });
+}
+
+/** `release_club_staff`: every fixture member of staff of the club that can be released, released as one batch. */
+function releaseClubStaff(clubUid: number): MassReport {
+  const batch = nextMassId++;
+  const report: MassReport = { batch, applied: 0, failed: [] };
+  for (const row of clubStaffRows(clubUid).filter((row) => row.stays === null)) {
+    releaseStaff(row.uid, batch);
+    report.applied++;
+  }
+  return report;
+}
+
+/**
+ * `plan_club_staff_move`: the fixture club's staff as moving all of them to the club `toUid` would leave them, the
+ * manager first, each with why they stay: as for a release, a place at `toUid` taken, or taken by one of them before.
+ */
+function planClubStaffMove(clubUid: number, toUid: number): ClubStaffRow[] {
+  const from = clubs.find((c) => c.uid === clubUid);
+  const to = clubs.find((c) => c.uid === toUid);
+  if (!from || !to) {
+    throw notFound("club", from ? toUid : clubUid);
+  }
+  if (clubUid === toUid) {
+    throw failure("move.sameClub", "the player is at this club already");
+  }
+  if (from.women !== to.women) {
+    throw failure("move.menAndWomen", "one club is a men's club and the other a women's club");
+  }
+  const members = staff
+    .filter((s) => s.clubUid === clubUid)
+    .sort((a, b) => Number(b.job === MANAGER) - Number(a.job === MANAGER));
+  // Who takes the new club's place for a manager or a director of football, by job.
+  const taken = new Map<number, StaffSummary>();
+  return members.map((member) => {
+    try {
+      planStaffRelease(member.uid);
+      planStaffMove(member.uid, toUid);
+      const job = member.job ?? 0;
+      const first = taken.get(job);
+      if (first) {
+        const [code, what] =
+          job === MANAGER ? ["staff.managerTaken", "a manager"] : ["staff.directorTaken", "a director of football"];
+        const message = `the club has ${what} already (the member of staff with id ${first.uid})`;
+        throw failure(code, message, { uid: first.uid, name: first.name });
+      }
+      if (job === MANAGER || job === DIRECTOR_OF_FOOTBALL) {
+        taken.set(job, member);
+      }
+      return { ...member, stays: null };
+    } catch (e) {
+      // The checks fail the way the real commands do, with a failure.
+      return { ...member, stays: e as Failure };
+    }
+  });
+}
+
+/** `move_club_staff`: every fixture member of staff of the club that the plan moves, moved as one batch. */
+function moveClubStaff(clubUid: number, toUid: number): MassReport {
+  const batch = nextMassId++;
+  const report: MassReport = { batch, applied: 0, failed: [] };
+  for (const row of planClubStaffMove(clubUid, toUid).filter((row) => row.stays === null)) {
+    moveStaff(row.uid, toUid);
+    changes[changes.length - 1].batch = batch;
+    report.applied++;
+  }
+  return report;
+}
+
 function undoChange(id: number): LoggedChange {
   const entry = changes.find((c) => c.id === id);
   if (!entry) {
@@ -1465,6 +2092,31 @@ function undoChange(id: number): LoggedChange {
   }
   if (entry.undoneAt !== null) {
     throw failure("app.alreadyUndone", "This change has already been undone.");
+  }
+  if (!entry.undoable) {
+    throw failure(
+      "app.historyOnly",
+      "This change was made before the app last connected, and undoing it needed the game's memory as it was then: change it back by hand.",
+    );
+  }
+  if (entry.earlier) {
+    // An earlier change is written back as a new edit would be, but the mock has no memory of the game as it was: it
+    // puts the old value back without looking at what the game holds.
+    writeValue(entry.entity, entry.uid, entry.field, entry.old);
+    entry.undoneAt = Date.now();
+    return { ...entry };
+  }
+  const prizeStage = prizeUndo.get(entry.id);
+  if (prizeStage) {
+    // The real Undo writes the stage's settings back as they were, for every club in the league.
+    const place = Number(entry.field.split(".")[2]);
+    if (Number.isInteger(place)) {
+      prizeStage.byPosition[place - 1] = entry.old;
+    } else {
+      prizeStage[entry.field.slice("prize.".length) as "win" | "draw" | "loss"] = entry.old;
+    }
+    entry.undoneAt = Date.now();
+    return { ...entry };
   }
   const staffRow = entry.entity === "staff" ? staffUndo.get(entry.id) : undefined;
   if (staffRow) {
@@ -1487,6 +2139,16 @@ function undoChange(id: number): LoggedChange {
     entry.undoneAt = Date.now();
     return { ...entry };
   }
+  if (entry.field === "cohesion") {
+    cohesionSet.set(entry.uid, entry.old);
+    entry.undoneAt = Date.now();
+    return { ...entry };
+  }
+  if (entry.field === "tactics") {
+    tacticsSet.set(entry.uid, entry.old);
+    entry.undoneAt = Date.now();
+    return { ...entry };
+  }
   if (entry.field === "retirement") {
     keptPlayers.delete(entry.uid);
     entry.undoneAt = Date.now();
@@ -1499,6 +2161,11 @@ function undoChange(id: number): LoggedChange {
   }
   if (entry.stadium) {
     stadiumNames.set(entry.uid, entry.stadium.from);
+    entry.undoneAt = Date.now();
+    return { ...entry };
+  }
+  if (entry.personName) {
+    undoPlayerName(entry);
     entry.undoneAt = Date.now();
     return { ...entry };
   }
@@ -1604,6 +2271,24 @@ function roomMakers(clubUid: number): RoomMaker[] {
 }
 
 /**
+ * Refuses moving any of the players `uids` while a transfer arranged for him waits for its day, as the app does: the
+ * game makes it from the club he is at.
+ */
+function refuseWhileArranged(...uids: (number | undefined)[]) {
+  const waiting = changes.some(
+    (change) =>
+      change.entity === "player" &&
+      uids.includes(change.uid) &&
+      change.moved?.arranged !== undefined &&
+      change.undoneAt === null &&
+      numberFromDate(GAME_DATE) < change.moved.arranged,
+  );
+  if (waiting) {
+    throw failure("arrange.underWay", "the player already has a move agreed, or an offer not yet answered");
+  }
+}
+
+/**
  * `plan_club_move`: the checks of the real command that the fixtures can have, with its messages. With `release`,
  * that player of the club makes room: he must be one `room_makers` lists.
  */
@@ -1613,6 +2298,7 @@ function planMove(uid: number, clubUid: number, terms: MoveTerms, fee?: number, 
   if (!player) {
     throw notFound("player", uid);
   }
+  refuseWhileArranged(uid, release);
   if (!to) {
     throw notFound("club", clubUid);
   }
@@ -1751,6 +2437,8 @@ function makeLoanPermanent(uid: number, terms: MoveTerms, fee?: number): LoggedC
     old: preview.from.uid,
     new: preview.to.uid,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     moved: { from: preview.from.name, to: preview.to.name, ...(preview.fee && { fee: preview.fee.fee }) },
   };
@@ -1795,12 +2483,80 @@ function movePlayer(uid: number, clubUid: number, terms: MoveTerms, fee?: number
     old: preview.from?.uid ?? 0,
     new: preview.to.uid,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     moved: {
       ...(preview.from && { from: preview.from.name }),
       to: preview.to.name,
       ...(leaver && { released: leaver.name }),
       ...(preview.fee && { fee: preview.fee.fee }),
+    },
+  };
+  changes.push(logged);
+  return { ...logged };
+}
+
+/**
+ * `plan_arranged_transfer`: the checks of a move that the fixtures can have (the terms, the clubs' kinds), and what the
+ * game would make on its next day: the contract is the terms given, or the player's own.
+ */
+function planArranged(uid: number, clubUid: number, terms: MoveTerms, fee?: number): ArrangedPreview {
+  const player = players.find((p) => p.uid === uid);
+  if (!player) {
+    throw notFound("player", uid);
+  }
+  if (player.clubUid === null) {
+    throw failure("move.freeAgent", "the player is a free agent, with no club to leave or swap");
+  }
+  const moved = planMove(uid, clubUid, terms, fee);
+  // His own contract, copied: the terms given change it.
+  const own = currentValues("player", uid);
+  const seasonEnds = GAME_DATE.month <= 6 ? GAME_DATE.year : GAME_DATE.year + 1;
+  return {
+    from: moved.from!,
+    to: moved.to,
+    fee: fee ?? 0,
+    moveDay: numberFromDate(addDays(GAME_DATE, 1)),
+    contract: {
+      wage: terms.wage ?? own["contract.wage"] ?? 0,
+      expires: terms.expires ?? own["contract.expires"] ?? (seasonEnds + 1) * 10_000 + 630,
+      squadStatus: own["contract.squad_status"] ?? 4,
+    },
+  };
+}
+
+/**
+ * `arrange_transfer`: logs the transfer as a change of the player's `club`, as a move is logged, but leaves him where
+ * he is: the game moves him on its next day.
+ */
+function arrangePlayer(uid: number, clubUid: number, terms: MoveTerms, fee?: number): LoggedChange {
+  const preview = planArranged(uid, clubUid, terms, fee);
+  const player = players.find((p) => p.uid === uid)!;
+  const id = changes.length + 1;
+  moveUndo.set(id, {
+    row: { club: player.club, clubUid: player.clubUid, contractExpires: player.contractExpires },
+    written: written.get(`player:${uid}`),
+    paid: [],
+  });
+  const logged: LoggedChange = {
+    id,
+    at: Date.now(),
+    name: player.name,
+    entity: "player",
+    uid,
+    field: "club",
+    old: preview.from.uid,
+    new: preview.to.uid,
+    undoneAt: null,
+    earlier: false,
+    undoable: true,
+    batch: null,
+    moved: {
+      from: preview.from.name,
+      to: preview.to.name,
+      ...(preview.fee > 0 && { fee: preview.fee }),
+      arranged: preview.moveDay,
     },
   };
   changes.push(logged);
@@ -1816,6 +2572,7 @@ function planRelease(uid: number): ClubName {
   if (player.clubUid === null) {
     throw failure("move.freeAgent", "the player is a free agent, with no club to leave or swap");
   }
+  refuseWhileArranged(uid);
   const from = clubs.find((c) => c.uid === player.clubUid)!;
   return { uid: from.uid, name: from.name };
 }
@@ -1840,6 +2597,8 @@ function releasePlayer(uid: number): LoggedChange {
     old: from.uid,
     new: 0,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     moved: { from: from.name },
   };
@@ -1865,6 +2624,7 @@ function planSwap(uid: number, otherUid: number): ClubToClub {
   if (player.clubUid === other.clubUid) {
     throw failure("move.sameClub", "the player is at this club already");
   }
+  refuseWhileArranged(uid, otherUid);
   const from = clubs.find((c) => c.uid === player.clubUid)!;
   const to = clubs.find((c) => c.uid === other.clubUid)!;
   return { from: { uid: from.uid, name: from.name }, to: { uid: to.uid, name: to.name } };
@@ -1893,6 +2653,8 @@ function swapPlayers(uid: number, otherUid: number): LoggedChange {
     old: preview.from.uid,
     new: preview.to.uid,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     moved: { from: preview.from.name, to: preview.to.name, with: other.name },
   };
@@ -1974,6 +2736,8 @@ function healPlayer(uid: number, batch: number | null = null): LoggedChange {
     old: injuries,
     new: 0,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch,
   };
   changes.push(logged);
@@ -2006,6 +2770,8 @@ function liftBans(uid: number, batch: number | null = null): LoggedChange {
     old: bans,
     new: 0,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch,
   };
   changes.push(logged);
@@ -2053,11 +2819,22 @@ function clubSquads(clubUid: number): ClubTeam[] {
   if (!clubs.some((c) => c.uid === clubUid)) {
     throw notFound("club", clubUid);
   }
+  // Whom the club's players hold a lasting reason to be unhappy about, each of them once.
+  const concerned = new Map<number, number>();
+  for (const uid of new Set(fixtureTeams(clubUid).flatMap((team) => team.uids))) {
+    const concerns = details(players.find((p) => p.uid === uid)!).contract?.concerns ?? [];
+    const about = new Set(concerns.filter((c) => c.ended === null && c.about !== null).map((c) => c.about!.uid));
+    for (const mate of about) {
+      concerned.set(mate, (concerned.get(mate) ?? 0) + 1);
+    }
+  }
+  const humanClub = staff.some((member) => member.isHuman && member.clubUid === clubUid);
   return fixtureTeams(clubUid).map((team, index) => ({
     index,
     kind: team.kind,
     ageLimit: team.ageLimit,
     ...captainsOf(clubUid, index, team.uids),
+    humanClub,
     players: team.uids.map((uid): SquadPlayer => {
       const row = players.find((p) => p.uid === uid)!;
       const d = details(row);
@@ -2069,6 +2846,11 @@ function clubSquads(clubUid: number): ClubTeam[] {
         matchSharpness: d.matchSharpness,
         jadedness: d.jadedness,
         morale: d.morale,
+        cohesion: cohesionOf(uid),
+        // The B team and the under-19s play a tactic of their own that the human manager picks too.
+        tactics: tacticsOf(uid),
+        trains: trainsOf(uid),
+        concernedTeammates: concerned.get(uid) ?? 0,
         injuries: d.injuries.length,
         bans: d.bans.length,
         attributesFrozen: frozenAttributes.has(uid),
@@ -2143,6 +2925,8 @@ function setCaptain(clubUid: number, index: number, role: CaptainRole, uid: numb
     old: old ?? 0,
     new: uid,
     undoneAt: null,
+    earlier: false,
+    undoable: true,
     batch: null,
     captaincy: {
       team: index,
@@ -2169,10 +2953,75 @@ function undoCaptain(entry: LoggedChange): void {
   captainsSet.set(undo.key, undo.before);
 }
 
+/** What Team at its best and Destroy do, in order. */
+const TEAM_STEPS: Partial<Record<TeamAction, readonly TeamAction[]>> = {
+  atItsBest: ["heal", "inspire", "refresh", "maxCohesion", "maxTactics"],
+  destroy: ["demoralize", "exhaust", "minCohesion", "minTactics"],
+};
+
 /** `team_action`: the action on every player of the fixture team, logged as one batch like a mass edit. */
-function teamAction(clubUid: number, index: number, action: TeamAction): MassReport {
+function teamAction(clubUid: number, index: number, action: TeamAction): TeamReport {
+  const team = fixtureTeam(clubUid, index);
+  const players = team.players;
+  const steps = TEAM_STEPS[action];
+  // As the real command finds it: only a team whose tactic a human picks has one the editor reads.
+  const noTactics = () => failure("team.noTactics", "the editor cannot read how well the team knows its tactic");
+  if (!steps) {
+    if (action === "minTactics" && !team.humanClub) {
+      return { batch: nextMassId++, applied: 0, failed: [], skipped: [] };
+    }
+    return { ...actOnPlayers(players, action), skipped: [] };
+  }
+  // Team at its best and Destroy: each step under one batch, the steps that cannot run left out and named.
+  const batch = nextMassId++;
+  const report: TeamReport = { batch, applied: 0, failed: [], skipped: [] };
+  for (const step of steps) {
+    if (step === "heal" && !players.some((player) => player.injuries > 0)) {
+      report.skipped.push({ action: step, reason: failure("team.nobodyInjured", "nobody in the team is injured") });
+      continue;
+    }
+    if (step === "minTactics" && !team.humanClub) {
+      report.skipped.push({ action: step, reason: noTactics() });
+      continue;
+    }
+    const done = actOnPlayers(players, step, batch);
+    report.applied += done.applied;
+    report.failed.push(...done.failed);
+  }
+  return report;
+}
+
+/** `national_team_action`: Heal all, Inspire all or Refresh all for the players the senior team lists. */
+function nationalTeamAction(uid: number, action: TeamAction): MassReport {
+  if (action !== "heal" && action !== "inspire" && action !== "refresh") {
+    throw failure("national.action", "A national team has Heal all, Inspire all and Refresh all only.");
+  }
+  return actOnPlayers(nationalProfile(uid, 0).squad.players, action);
+}
+
+/** `batch_traits_team`: adds or removes preferred moves for players in a fixture team. */
+function batchTraitsTeam(
+  clubUid: number,
+  index: number,
+  addTraits: number[],
+  removeTraits: number[],
+): MassReport {
   const team = fixtureTeam(clubUid, index);
   const batch = nextMassId++;
+  const report: MassReport = { batch, applied: 0, failed: [] };
+  const values: [string, number][] = [
+    ...addTraits.map((bit): [string, number] => [`trait.${bit}`, 1]),
+    ...removeTraits.map((bit): [string, number] => [`trait.${bit}`, 0]),
+  ];
+  for (const player of team.players) {
+    setValues(player, values, report);
+  }
+  return report;
+}
+
+/** The action on every one of `players`, logged as one batch like a mass edit. */
+function actOnPlayers(players: readonly SquadPlayer[], action: TeamAction, batch = nextMassId++): MassReport {
+  const team = { players };
   const report: MassReport = { batch, applied: 0, failed: [] };
   if (action === "heal") {
     for (const player of team.players.filter((p) => p.injuries > 0)) {
@@ -2184,6 +3033,112 @@ function teamAction(clubUid: number, index: number, action: TeamAction): MassRep
   if (action === "liftBans") {
     for (const player of team.players.filter((p) => p.bans > 0)) {
       liftBans(player.uid, batch);
+      report.applied++;
+    }
+    return report;
+  }
+  if (action === "maxCohesion" || action === "minCohesion") {
+    // Those with an entry for the club, and not there already: Destroy's 1 makes nobody's better.
+    const value = action === "maxCohesion" ? 100 : 1;
+    for (const player of team.players) {
+      const old = cohesionOf(player.uid);
+      if (old === null || (value === 100 ? old >= value : old <= value)) {
+        continue;
+      }
+      cohesionSet.set(player.uid, value);
+      changes.push({
+        id: changes.length + 1,
+        at: Date.now(),
+        name: player.name,
+        entity: "player",
+        uid: player.uid,
+        field: "cohesion",
+        old,
+        new: value,
+        undoneAt: null,
+        earlier: false,
+        undoable: true,
+        batch,
+      });
+      report.applied++;
+    }
+    return report;
+  }
+  if (action === "minTactics") {
+    // Every player who plays here: 10 for each option of his record and nothing for his shapes or his training reads 4.
+    for (const player of team.players.filter((p) => p.playsHere)) {
+      const old = tacticsOf(player.uid);
+      if (old <= 4) {
+        continue;
+      }
+      tacticsSet.set(player.uid, 4);
+      changes.push({
+        id: changes.length + 1,
+        at: Date.now(),
+        name: player.name,
+        entity: "player",
+        uid: player.uid,
+        field: "tactics",
+        old,
+        new: 4,
+        undoneAt: null,
+        earlier: false,
+        undoable: true,
+        batch,
+      });
+      report.applied++;
+    }
+    return report;
+  }
+  if (action === "demoralize" || action === "exhaust") {
+    // Each value at Destroy's, where it is better than that now: a lower one (or a higher jadedness) stays.
+    const worst: [string, number, "atMost" | "atLeast"][] =
+      action === "demoralize"
+        ? [
+            ["morale", 1, "atMost"],
+            ["contract.happiness", -100, "atMost"],
+            ["contract.playing_time_happiness", -100, "atMost"],
+          ]
+        : [
+            ["condition", 0, "atMost"],
+            ["match_sharpness", 3_500, "atMost"],
+            ["jadedness", 1_000, "atLeast"],
+          ];
+    for (const player of team.players) {
+      const now = currentValues("player", player.uid);
+      const values = worst
+        .filter(([field, value, way]) => {
+          const old = now[field];
+          return old !== undefined && (way === "atMost" ? old > value : old < value);
+        })
+        .map(([field, value]): [string, number] => [field, value]);
+      setValues(player, values, report);
+    }
+    return report;
+  }
+  if (action === "maxTactics") {
+    // Every player who plays here and does not know it at its best; one who does not train gets his record only.
+    for (const player of team.players.filter((p) => p.playsHere)) {
+      const old = tacticsOf(player.uid);
+      const best = trainsOf(player.uid) ? 100 : Math.max(old, 50);
+      if (old === best) {
+        continue;
+      }
+      tacticsSet.set(player.uid, best);
+      changes.push({
+        id: changes.length + 1,
+        at: Date.now(),
+        name: player.name,
+        entity: "player",
+        uid: player.uid,
+        field: "tactics",
+        old,
+        new: best,
+        undoneAt: null,
+        earlier: false,
+        undoable: true,
+        batch,
+      });
       report.applied++;
     }
     return report;
@@ -2235,6 +3190,8 @@ function setValues(
       old: now[field],
       new: value,
       undoneAt: null,
+      earlier: false,
+      undoable: true,
       batch: report.batch,
     };
     changes.push(logged);
@@ -2264,15 +3221,21 @@ function selectTargets(entity: Entity, query: string, filters: MassFilters): { u
     const filter = filters.staffFilter ?? {};
     return staff.filter((s) => matchesQuery(query, s.uid, `${s.name} ${s.fullName ?? ""}`) && matchesStaffFilter(s, filter));
   }
-  const women = filters.clubFilter?.women;
-  return clubs.filter((c) => matchesQuery(query, c.uid, `${c.name} ${c.shortName ?? ""}`) && (women === undefined || c.women === women));
+  const filter = filters.clubFilter ?? {};
+  return clubs.filter((c) => matchesQuery(query, c.uid, `${c.name} ${c.shortName ?? ""}`) && clubMatches(c, filter));
 }
 
 /** The mass edit last previewed, until it is applied or replaced. */
 let pendingMass: { id: number; entity: Entity; planned: PlannedChange[] } | null = null;
 let nextMassId = 1;
 
-/** What an operation turns `old` into, as the real one does: added and scaled values stay within the field's range. */
+/** The most years an Add years moves a date, either way, and the most a contract is extended by: `MOST_YEARS`. */
+const MOST_YEARS = 50;
+
+/**
+ * What an operation turns `old` into, as the real one does: added and scaled values stay within the field's range; a
+ * date moved by years may leave it, which the plan checks, and a value that is no date stays as it is.
+ */
 function operate(field: EditField, operation: MassOperationKind, old: number): number {
   const clamp = (value: number) => Math.min(field.max, Math.max(field.min, value));
   switch (operation.op) {
@@ -2282,6 +3245,10 @@ function operate(field: EditField, operation: MassOperationKind, old: number): n
       return clamp(old + operation.amount);
     case "scale":
       return clamp(Math.round((old * operation.percent) / 100));
+    case "addYears": {
+      const date = dateFromNumber(old);
+      return date === null ? old : numberFromDate(plusYears(date, operation.years));
+    }
   }
 }
 
@@ -2305,8 +3272,18 @@ function planMass(entity: Entity, query: string, filters: MassFilters, operation
       const message = `${operation.value} is not a valid ${key}; it takes ${field.min} to ${field.max}`;
       throw failure("edit.outOfRange", message, { field: key, value: operation.value, min: field.min, max: field.max });
     }
-    if (operation.op !== "set" && field.kind === "date") {
-      throw failure("edit.unsupported", `${key}: a date can only be set`, { field: key, reason: "a date can only be set" });
+    if ((operation.op === "add" || operation.op === "scale") && field.kind === "date") {
+      const reason = "a date can only be set or moved by years";
+      throw failure("edit.unsupported", `${key}: ${reason}`, { field: key, reason });
+    }
+    if (operation.op === "addYears" && field.kind !== "date") {
+      const reason = "only a date can be moved by years";
+      throw failure("edit.unsupported", `${key}: ${reason}`, { field: key, reason });
+    }
+    if (operation.op === "addYears" && Math.abs(operation.years) > MOST_YEARS) {
+      const message = `${operation.years} is not a valid ${key}; it takes ${-MOST_YEARS} to ${MOST_YEARS}`;
+      const params = { field: key, value: operation.years, min: -MOST_YEARS, max: MOST_YEARS };
+      throw failure("edit.outOfRange", message, params);
     }
     return { field, operation };
   });
@@ -2324,6 +3301,13 @@ function planMass(entity: Entity, query: string, filters: MassFilters, operation
         continue;
       }
       const value = operate(field, operation, old);
+      // A date moved by years can leave the days the field takes, such as a contract's end past 2100.
+      if (value !== old && (value < field.min || value > field.max)) {
+        const reason = `${value} is not a valid ${field.key}; it takes ${field.min} to ${field.max}`;
+        const params = { field: field.key, value: String(value), min: String(field.min), max: String(field.max) };
+        skipped.push({ uid, name, field: field.key, reason, code: "edit.outOfRange", params });
+        continue;
+      }
       if (value !== old) {
         changed = true;
         planned.push({ uid, name, field: field.key, old, new: value });
@@ -2362,7 +3346,16 @@ function applyMass(id: number): MassReport {
       continue;
     }
     writeValue(entity, change.uid, change.field, change.new);
-    changes.push({ ...change, id: changes.length + 1, at: Date.now(), entity, undoneAt: null, batch });
+    changes.push({
+      ...change,
+      id: changes.length + 1,
+      at: Date.now(),
+      entity,
+      undoneAt: null,
+      earlier: false,
+      undoable: true,
+      batch,
+    });
     report.applied++;
   }
   return report;
@@ -2386,10 +3379,295 @@ function undoMassBatch(batch: number): BatchUndo {
   return report;
 }
 
-const clubs: ClubSummary[] = CLUBS.flatMap((name, i) => [
-  { uid: 500 + i * 7, name, shortName: name.split(" ")[0], women: false, reputation: 8200 - i * 900, founded: 1880 + i * 11 },
-  { uid: 2_000_100_000 + i, name, shortName: name.split(" ")[0], women: true, reputation: 6100 - i * 700, founded: 1985 + i * 4 },
-]);
+/** The nation each fixture club is from, in the order of `CLUBS`: two of them play in England. */
+const CLUB_NATIONS = ["England", "Spain", "Portugal", "Germany", "Türkiye", "England"];
+
+/** The league a fixture club's first team plays in: the men's clubs of England in two divisions, every other in one. */
+function fixtureLeague(i: number, women: boolean): Pick<ClubSummary, "league" | "leagueUid" | "leagueNation"> {
+  const nation = CLUB_NATIONS[i];
+  if (women) {
+    return { league: `${nation} Women's League`, leagueUid: 9000 + ALL_NATIONS.indexOf(nation), leagueNation: nation };
+  }
+  if (nation === "England") {
+    return i === 0
+      ? { league: "Premier Division", leagueUid: 11, leagueNation: nation }
+      : { league: "First Division", leagueUid: 12, leagueNation: nation };
+  }
+  return { league: `${nation} Top Division`, leagueUid: 100 + ALL_NATIONS.indexOf(nation), leagueNation: nation };
+}
+
+const clubs: ClubSummary[] = CLUBS.flatMap((name, i) => {
+  const nation = { nation: CLUB_NATIONS[i], nationUid: 1000 + ALL_NATIONS.indexOf(CLUB_NATIONS[i]) };
+  return [
+    { uid: 500 + i * 7, name, shortName: name.split(" ")[0], women: false, reputation: 8200 - i * 900, founded: 1880 + i * 11, ...nation, ...fixtureLeague(i, false) },
+    { uid: 2_000_100_000 + i, name, shortName: name.split(" ")[0], women: true, reputation: 6100 - i * 700, founded: 1985 + i * 4, ...nation, ...fixtureLeague(i, true) },
+  ];
+});
+
+/**
+ * The national teams of the fixture nations, men's and women's. Add `?nationals=off` (or `?nationals=unreadable`) to the
+ * address of the dev page to see the tab as it is on a build of the game that has no place for them.
+ */
+const nationals: NationalTeamSummary[] = ALL_NATIONS.flatMap((name, i) => {
+  const nationUid = 1000 + i;
+  const code = name.slice(0, 3).toUpperCase();
+  return [
+    { uid: nationUid, name, code, nationUid, women: false, reputation: 9200 - i * 650, players: 23 },
+    { uid: 2_000_200_000 + i, name, code, nationUid, women: true, reputation: 7400 - i * 500, players: 23 },
+  ];
+});
+
+/**
+ * The youth teams of every fixture national team, in the game's order: kind, age limit (none for some, as in the game)
+ * and share of the senior team's reputation. Their reputations, once read or written, are kept by team UID and kind.
+ */
+const NATIONAL_YOUTH: readonly { kind: number; ageLimit: number | null; share: number }[] = [
+  { kind: 9, ageLimit: 23, share: 0.8 },
+  { kind: 33, ageLimit: null, share: 0.75 },
+  { kind: 10, ageLimit: 21, share: 0.7 },
+  { kind: 18, ageLimit: 20, share: 0.6 },
+  { kind: 11, ageLimit: 19, share: 0.5 },
+  { kind: 12, ageLimit: null, share: 0.4 },
+];
+const youthReputations = new Map<string, number>();
+
+/** The reputation of the youth team of kind `kind` of the national team `team`. */
+function youthReputation(team: NationalTeamSummary, kind: number): number {
+  const key = `${team.uid}.${kind}`;
+  const share = NATIONAL_YOUTH.find((youth) => youth.kind === kind)?.share ?? 0.5;
+  return youthReputations.get(key) ?? Math.round((team.reputation ?? 0) * share);
+}
+
+/** What the tab says of the fixture: it has national teams, unless the address of the page says it has not. */
+function mockNationalStatus(): NationalStatus {
+  const asked = new URLSearchParams(window.location.search).get("nationals");
+  if (asked === "off" || asked === "unreadable") {
+    return { available: false, reason: asked === "off" ? "build" : "unreadable", teams: 0 };
+  }
+  return { available: true, teams: nationals.length };
+}
+
+/**
+ * A national team with its teams, and the players of the one of kind `kind` (the senior team by default): the fixture's
+ * players of its nation, those under the age limit for a youth team, as the game lists a squad.
+ */
+function nationalProfile(uid: number, kind: number | null): NationalProfile {
+  const team = nationals.find((n) => n.uid === uid);
+  if (!team) {
+    throw failure("app.notFound", `No national team with id ${uid}`, { entity: "nationalTeam", uid });
+  }
+  const youth = NATIONAL_YOUTH.find((candidate) => candidate.kind === kind);
+  const ageLimit = youth?.ageLimit ?? null;
+  const ofNation = players.filter((p) => p.nationUid === team.nationUid && (isWoman(p.uid) ?? false) === team.women);
+  // A youth team lists the young players of the nation; one without an age limit lists none in the fixture.
+  const squadOf = (side: { ageLimit: number | null } | undefined) =>
+    side === undefined ? ofNation : side.ageLimit === null ? [] : ofNation.filter((p) => (p.age ?? 99) <= side.ageLimit!);
+  const listed = squadOf(youth);
+  const squad: SquadPlayer[] = listed.map((row) => {
+    const d = details(row);
+    return {
+      ...row,
+      playsHere: true,
+      loan: null,
+      condition: d.condition,
+      matchSharpness: d.matchSharpness,
+      jadedness: d.jadedness,
+      morale: d.morale,
+      cohesion: null,
+      tactics: null,
+      trains: false,
+      concernedTeammates: 0,
+      injuries: d.injuries.length,
+      bans: d.bans.length,
+      attributesFrozen: false,
+      fitnessFrozen: false,
+      positionsFrozen: false,
+    };
+  });
+  const teams: NationalSide[] = [
+    { index: 0, kind: 0, ageLimit: null, reputation: team.reputation ?? 0, players: ofNation.length },
+    ...NATIONAL_YOUTH.map((side, i) => ({
+      index: i + 1,
+      kind: side.kind,
+      ageLimit: side.ageLimit,
+      reputation: youthReputation(team, side.kind),
+      players: squadOf(side).length,
+    })),
+  ];
+  const shown = teams.find((side) => side.kind === (youth?.kind ?? 0))!;
+  return {
+    team: { ...team, players: ofNation.length },
+    teams,
+    squad: {
+      index: shown.index,
+      kind: shown.kind,
+      ageLimit,
+      captain: null,
+      viceCaptain: null,
+      humanClub: false,
+      players: squad,
+    },
+  };
+}
+
+/** Whether `club` keeps to `filter`, as the real `ClubFilter::matches` has it; `leagues` leaves the league out. */
+function clubMatches(club: ClubSummary, filter: ClubFilter, leagues = false): boolean {
+  const nation = filter.nation?.trim();
+  return (
+    (filter.women === undefined || club.women === filter.women) &&
+    (!nation || (club.nation !== null && fold(club.nation).includes(fold(nation)))) &&
+    (leagues || filter.leagueUid === undefined || club.leagueUid === filter.leagueUid) &&
+    (filter.minReputation === undefined || (club.reputation !== null && club.reputation >= filter.minReputation)) &&
+    (filter.maxReputation === undefined || (club.reputation !== null && club.reputation <= filter.maxReputation))
+  );
+}
+
+/**
+ * What the fixture leagues pay, by UID, as the editor changed them: the amounts read from FM27 for #123, a list by
+ * position as long as the league has clubs (the Premier League's, cut short or carried on), and for one league a stage
+ * that pays per match only, in several groups alike.
+ */
+const leaguePrizeSets = new Map<number, CompetitionPrizes>();
+
+/** The stage of a league prize change, by the change's id, which its Undo writes the old amount back into. */
+const prizeUndo = new Map<number, CompetitionPrizes["stages"][number]>();
+
+const PREMIER_LIST = [
+  53_100_000, 50_400_000, 47_700_000, 45_000_000, 42_400_000, 39_800_000, 37_100_000, 34_500_000, 31_900_000, 29_100_000,
+  26_500_000, 23_800_000, 21_200_000, 18_600_000, 15_900_000, 13_300_000, 10_700_000, 7_900_000, 5_300_000, 2_600_000,
+];
+
+function mockLeague(club: ClubSummary): CompetitionPrizes | null {
+  const uid = club.leagueUid;
+  if (uid === null) {
+    return null;
+  }
+  const kept = leaguePrizeSets.get(uid);
+  if (kept) {
+    return kept;
+  }
+  const places = clubs.filter((c) => c.leagueUid === uid).length;
+  const stage = (byPosition: number[], win = 0, draw = 0, loss = 0, count = 1, future = false) => ({
+    future,
+    count,
+    byPosition,
+    win,
+    draw,
+    loss,
+  });
+  const league: CompetitionPrizes = {
+    uid,
+    name: club.league ?? "",
+    shortName: null,
+    nationUid: null,
+    nation: club.leagueNation,
+    stages:
+      uid === 12
+        ? // The second division: per match only, in two groups alike, and a play-off not started yet.
+          [stage([], 114_699, 57_964, 1_229, 2), stage([2_147_580, 2_147_580, 2_147_580], 0, 0, 0, 1, true)]
+        : [stage(Array.from({ length: Math.max(places, 2) }, (_, at) => PREMIER_LIST[Math.min(at, 19)] - at * 1000))],
+  };
+  leaguePrizeSets.set(uid, league);
+  return league;
+}
+
+/** `club_sponsorships`: made-up deals, as the game's Sponsorship screen names them; the first club's list is empty. */
+function mockSponsorships(uid: number): ClubSponsorships {
+  if (clubs[0]?.uid === uid) {
+    return { unavailable: null, deals: [] };
+  }
+  const deal = (
+    kind: number,
+    name: string | null,
+    start: [number, number, number],
+    end: [number, number, number],
+    perSeason: number,
+    years: number,
+    percent = 0,
+  ): Sponsorship => ({
+    kind,
+    name,
+    start: { year: start[0], month: start[1], day: start[2] },
+    end: { year: end[0], month: end[1], day: end[2] },
+    years,
+    total: perSeason * years,
+    perSeason,
+    percent,
+    rises: kind === 22,
+    reputation: 6000,
+    ended: end[0] <= 2026,
+  });
+  return {
+    unavailable: null,
+    deals: [
+      deal(22, "Kit Manufacturer", [2021, 7, 1], [2027, 6, 30], 143_171, 6, 15),
+      deal(17, null, [2025, 7, 2], [2028, 6, 30], 0, 3),
+      deal(1, "Main Kit", [2026, 6, 1], [2027, 6, 30], 257_709, 1),
+      deal(11, "Back of Shirt", [2026, 7, 1], [2027, 6, 30], 42_951, 1, 35),
+      deal(12, "Shorts", [2025, 7, 1], [2026, 6, 30], 73_017, 1),
+    ],
+  };
+}
+
+/** `league_prizes`: what the league of the club `uid` pays. */
+function mockLeaguePrizes(uid: number): LeaguePrizes {
+  const club = clubs.find((c) => c.uid === uid);
+  return { unavailable: null, league: club ? mockLeague(club) : null };
+}
+
+/** `set_league_prizes`: sets `amounts` in the stage `index` of the club's league, logging each amount changed. */
+function setLeaguePrizes(uid: number, index: number, amounts: PrizeInput[]): LeaguePrizesSet {
+  const club = clubs.find((c) => c.uid === uid)!;
+  const league = mockLeague(club)!;
+  const stage = league.stages[index];
+  const logged: LoggedChange[] = [];
+  const batch = amounts.length > 1 ? 900 + changes.length : null;
+  for (const amount of amounts) {
+    const field = amount.kind === "place" ? `prize.place.${amount.place}` : `prize.${amount.kind}`;
+    const old = amount.kind === "place" ? stage.byPosition[amount.place - 1] : stage[amount.kind];
+    if (amount.kind === "place") {
+      stage.byPosition[amount.place - 1] = amount.pounds;
+    } else {
+      stage[amount.kind] = amount.pounds;
+    }
+    const change: LoggedChange = {
+      id: changes.length + 1,
+      at: Date.now(),
+      name: club.name,
+      entity: "club",
+      uid,
+      field,
+      old,
+      new: amount.pounds,
+      undoneAt: null,
+      earlier: false,
+      undoable: true,
+      batch,
+      prize: { league: league.name, leagueUid: league.uid, settings: stage.count },
+    };
+    changes.push(change);
+    prizeUndo.set(change.id, stage);
+    logged.push({ ...change });
+  }
+  return { changes: logged, league: structuredClone(league) };
+}
+
+/** `club_leagues`: the leagues the clubs `filter` selects play in, by nation, a nation's best known first. */
+function mockLeagues(filter: ClubFilter): League[] {
+  const byUid = new Map<number, League>();
+  for (const club of clubs.filter((c) => clubMatches(c, filter, true))) {
+    if (club.leagueUid === null || club.league === null) {
+      continue;
+    }
+    const league = byUid.get(club.leagueUid) ?? { uid: club.leagueUid, name: club.league, nation: club.leagueNation, clubs: 0, reputation: 0 };
+    league.clubs++;
+    league.reputation = Math.max(league.reputation, club.reputation ?? 0);
+    byUid.set(club.leagueUid, league);
+  }
+  return [...byUid.values()].sort(
+    (a, b) => (a.nation ?? "\uffff").localeCompare(b.nation ?? "\uffff") || b.reputation - a.reputation || a.name.localeCompare(b.name),
+  );
+}
 
 /** Made-up but self-consistent profile for a fixture club; women's clubs have no finances. */
 function clubDetails(club: ClubSummary): ClubDetails {
@@ -2586,6 +3864,11 @@ const unknownBuild = new URLSearchParams(window.location.search).has("unknownbui
 const failedChecks = new URLSearchParams(window.location.search).has("failedchecks");
 /** `?refrozen` previews connecting to a save in which players and a club were frozen the last time. */
 const refrozen = new URLSearchParams(window.location.search).has("refrozen");
+/**
+ * `?savechanged` previews the game having loaded a save since the data was read: `save_changed` says so until the data
+ * is read again.
+ */
+let saveChanged = new URLSearchParams(window.location.search).has("savechanged");
 const CHECKS: CheckKey[] = [
   "gameDate",
   "players",
@@ -2597,6 +3880,7 @@ const CHECKS: CheckKey[] = [
   "teams",
   "staff",
   "clubs",
+  "cohesion",
 ];
 const FAILING: CheckKey[] = ["gameDate", "attributes", "contracts"];
 
@@ -2611,6 +3895,40 @@ function mockHealth(): Health {
       return { check, passed, fit: passed ? 2000 : 640, sampled: 2000 };
     }),
   };
+}
+
+/** The report Copy diagnostics copies, worded as the Rust side words it (`diagnostics_report`), for the fixtures. */
+function mockReport(connection: ConnectionInfo): string {
+  const share = (value: number) => `${Math.round(value * 100)}`.padStart(3);
+  const array = (label: string, found: ArrayRef | null) =>
+    found
+      ? `  ${label.padEnd(8)} game_plugin.dll+0x${found.pairRva.toString(16)}  ${String(found.count).padStart(7)} ` +
+        `elements  ${share(found.confidence)}% of samples decoded, ${share(found.named)}% by a name`
+      : `  ${label.padEnd(8)} not found`;
+  const allowed = connection.knownBuild
+    ? ""
+    : `; editing this build ${connection.editable ? "was allowed" : "is not allowed yet"} (Edit anyway)`;
+  const { arrays, health } = connection;
+  return [
+    "FMLibreEditor (browser preview, sample data)",
+    `Game: FM27 Game Pass ${game.packageVersion}`,
+    "game_plugin.dll build: size of image 0x175da000, link timestamp 0x6ae563a1",
+    `Build profile: ${connection.profile ?? "none for this build"}`,
+    `Writing: the system lets the app write to the game${allowed}`,
+    `In-game date: ${connection.gameDate ? "2026-09-09 (game_plugin.dll+0x56257c8, from the build profile)" : "none"}`,
+    "Retirement manager: game_plugin.dll+0x5675060 (from the build profile)",
+    arrays.fromProfile ? "Entity arrays (from the build profile, checked):" : "Entity arrays:",
+    array("players", arrays.players),
+    array("staff", arrays.staff),
+    array("clubs", arrays.clubs),
+    "Checks:",
+    ...health.results.map(
+      (result) =>
+        `  ${result.passed ? "pass" : "FAIL"}  ${result.check.padEnd(12)} ${String(result.fit).padStart(5)} of ` +
+        `${String(result.sampled).padStart(5)} fit`,
+    ),
+    "",
+  ].join("\n");
 }
 
 /**
@@ -2687,6 +4005,7 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
         knownBuild: !unknownBuild,
         // The fixtures know who is a woman, as a layout that places the gender flags does.
         genderKnown: true,
+        arrangesTransfers: true,
         health: mockHealth(),
       };
       mockConnection = info;
@@ -2727,10 +4046,18 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       mockConnection = { ...mockConnection, editable: mockConnection.writable };
       return mockConnection as T;
     }
+    case "diagnostics":
+      if (!mockConnection) {
+        throw failure("app.notConnected", "Not connected to the game");
+      }
+      return mockReport(mockConnection) as T;
     case "current_connection":
       // Like the real command after a window reload; here a reload starts the fixtures afresh, so it is null then.
       return (mockConnection && { ...mockConnection, loadMs: 0 }) as T;
+    case "save_changed":
+      return (mockConnection !== null && saveChanged) as T;
     case "reload": {
+      saveChanged = false;
       const reloaded: ReloadInfo = {
         players: players.length,
         staff: staff.length,
@@ -2767,11 +4094,33 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       const words = fold(query).split(/\s+/).filter(Boolean);
       const hits = clubs
         .filter((c) => String(c.uid) === query.trim() || words.every((w) => fold(`${c.name} ${c.shortName ?? ""}`).includes(w)))
-        .filter((c) => women === undefined || c.women === women)
+        .filter((c) => clubMatches(c, { ...filter, women }))
         .sort((a, b) => (b.reputation ?? -1) - (a.reputation ?? -1) || a.name.localeCompare(b.name));
       const page: ClubPage = { total: hits.length, rows: hits.slice(0, limit) };
       return page as T;
     }
+    case "national_status":
+      return mockNationalStatus() as T;
+    case "search_national_teams": {
+      const query = String(args?.query ?? "");
+      const limit = Number(args?.limit ?? 200);
+      const words = fold(query).split(/\s+/).filter(Boolean);
+      const hits = nationals
+        .filter((n) => String(n.uid) === query.trim() || words.every((w) => fold(`${n.name} ${n.code ?? ""}`).includes(w)))
+        .filter((n) => args?.women === undefined || args?.women === null || n.women === args.women)
+        .sort((a, b) => (b.reputation ?? -1) - (a.reputation ?? -1) || a.name.localeCompare(b.name));
+      return { total: hits.length, rows: hits.slice(0, limit) } as T;
+    }
+    case "national_squad":
+      return nationalProfile(Number(args?.uid), args?.kind === undefined || args?.kind === null ? null : Number(args.kind)) as T;
+    case "club_leagues":
+      return mockLeagues((args?.filter ?? {}) as ClubFilter) as T;
+    case "club_sponsorships":
+      return mockSponsorships(Number(args?.club)) as T;
+    case "league_prizes":
+      return mockLeaguePrizes(Number(args?.club)) as T;
+    case "set_league_prizes":
+      return setLeaguePrizes(Number(args?.club), Number(args?.stage), (args?.amounts ?? []) as PrizeInput[]) as T;
     case "club_details": {
       const uid = Number(args?.uid);
       const club = clubs.find((c) => c.uid === uid);
@@ -2814,7 +4163,7 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return details(player) as T;
     }
     case "edit_fields":
-      return fieldTable(args?.entity as Entity) as T;
+      return fieldTable(args?.entity as EditEntity) as T;
     case "freeze_money": {
       const club = Number(args?.club);
       if (args?.frozen) {
@@ -2873,19 +4222,35 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
     case "freeze_team":
       return freezeTeam(Number(args?.club), Number(args?.team), args?.kind as FreezeKind, Boolean(args?.frozen)) as T;
     case "export_players":
+    case "export_staff":
     case "export_clubs": {
       // Nothing is written in a browser: the report names the file a real export would have.
       const query = String(args?.query ?? "");
+      const filter = args?.filter ?? {};
       const selected =
         command === "export_clubs"
-          ? selectTargets("club", query, { clubFilter: (args?.filter ?? {}) as ClubFilter })
-          : selectTargets("player", query, { playerFilter: (args?.filter ?? {}) as PlayerFilter });
-      const what = command === "export_clubs" ? "clubs" : "players";
+          ? selectTargets("club", query, { clubFilter: filter as ClubFilter })
+          : command === "export_staff"
+            ? selectTargets("staff", query, { staffFilter: filter as StaffFilter })
+            : selectTargets("player", query, { playerFilter: filter as PlayerFilter });
+      const what = command === "export_clubs" ? "clubs" : command === "export_staff" ? "staff" : "players";
       const folder = "C:\\Users\\you\\Documents\\FMLibreEditor\\Exports";
       const two = (n: number) => String(n).padStart(2, "0");
       const stem = gameDate ? `${what}-${gameDate.year}-${two(gameDate.month)}-${two(gameDate.day)}` : what;
       const file = `${stem}.${args?.format === "json" ? "json" : "csv"}`;
       const report: ExportReport = { path: `${folder}\\${file}`, file, folder, count: selected.length, skipped: 0 };
+      return report as T;
+    }
+    case "export_changes": {
+      // Nothing is written in a browser: the report names the file a real export would have, and the rows the window
+      // sent are kept in `window.lastChangesExport` for a look.
+      const rows = (args?.rows ?? []) as unknown[];
+      (window as unknown as { lastChangesExport?: unknown }).lastChangesExport = { rows, format: args?.format };
+      const folder = "C:\\Users\\you\\Documents\\FMLibreEditor\\Exports";
+      const two = (n: number) => String(n).padStart(2, "0");
+      const stem = gameDate ? `changes-${gameDate.year}-${two(gameDate.month)}-${two(gameDate.day)}` : "changes";
+      const file = `${stem}.csv`;
+      const report: ExportReport = { path: `${folder}\\${file}`, file, folder, count: rows.length, skipped: 0 };
       return report as T;
     }
     case "open_export":
@@ -2916,15 +4281,24 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return nations.sort((a, b) => a.name.localeCompare(b.name)) as T;
     }
     case "read_values":
-      return currentValues(args?.entity as Entity, Number(args?.uid)) as T;
+      return currentValues(args?.entity as EditEntity, Number(args?.uid)) as T;
     case "apply_edits":
-      return applyEdits(args?.entity as Entity, Number(args?.uid), (args?.edits ?? []) as FieldEdit[]) as T;
+      return applyEdits(args?.entity as EditEntity, Number(args?.uid), (args?.edits ?? []) as FieldEdit[]) as T;
     case "recall_loan":
       return recallLoan(Number(args?.uid)) as T;
+    case "extend_contract":
+      return extendContract(args?.entity as Entity, Number(args?.uid), Number(args?.years)) as T;
     case "change_log":
       return changes.map((c) => ({ ...c })).reverse() as T;
     case "undo_change":
       return undoChange(Number(args?.id)) as T;
+    case "clear_history":
+      changes.length = 0;
+      // The undo notes of the changes are keyed by their ids, which start from 1 again.
+      for (const notes of [staffUndo, tieUndo, clauseUndo, captainUndo]) {
+        notes.clear();
+      }
+      return undefined as T;
     case "plan_mass_edit":
       return planMass(
         args?.entity as Entity,
@@ -2939,6 +4313,14 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
     case "plan_club_move": {
       const terms = (args?.terms ?? {}) as MoveTerms;
       return planMove(Number(args?.uid), Number(args?.club), terms, args?.fee as number, args?.release as number) as T;
+    }
+    case "plan_arranged_transfer": {
+      const terms = (args?.terms ?? {}) as MoveTerms;
+      return planArranged(Number(args?.uid), Number(args?.club), terms, args?.fee as number) as T;
+    }
+    case "arrange_transfer": {
+      const terms = (args?.terms ?? {}) as MoveTerms;
+      return arrangePlayer(Number(args?.uid), Number(args?.club), terms, args?.fee as number) as T;
     }
     case "move_player": {
       const terms = (args?.terms ?? {}) as MoveTerms;
@@ -2968,6 +4350,18 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       ) as T;
     case "change_staff_job":
       return changeStaffJob(Number(args?.uid), Number(args?.job)) as T;
+    case "plan_staff_release":
+      return planStaffRelease(Number(args?.uid)) as T;
+    case "release_staff":
+      return releaseStaff(Number(args?.uid)) as T;
+    case "club_staff":
+      return clubStaffRows(Number(args?.club)) as T;
+    case "release_club_staff":
+      return releaseClubStaff(Number(args?.club)) as T;
+    case "plan_club_staff_move":
+      return planClubStaffMove(Number(args?.club), Number(args?.to)) as T;
+    case "move_club_staff":
+      return moveClubStaff(Number(args?.club), Number(args?.to)) as T;
     case "plan_club_swap":
       return planSwap(Number(args?.uid), Number(args?.other)) as T;
     case "plan_release":
@@ -2982,6 +4376,14 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return stadiumNameRoom(Number(args?.club)) as T;
     case "rename_stadium":
       return renameStadium(Number(args?.club), String(args?.name ?? "")) as T;
+    case "player_names":
+      return playerNamesOf(Number(args?.uid)) as T;
+    case "rename_player":
+      return renamePlayer(
+        Number(args?.uid),
+        args?.kind as NameKind,
+        args?.name === null || args?.name === undefined ? null : String(args.name),
+      ) as T;
     case "change_clause":
       return changeClause(
         Number(args?.uid),
@@ -3013,12 +4415,44 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
       return scoutingOverview({ players, clubs, ratings, women }) as T;
     case "scouting_suggest":
       return scoutingSuggest({ players, clubs, ratings, women }, (args?.request ?? {}) as ScoutRequest) as T;
+    case "scouting_opportunities":
+      return scoutingOpportunities({ players, clubs, ratings, women }, (args?.request ?? {}) as OpportunityRequest) as T;
+    case "scouting_similar":
+      return scoutingSimilar({ players, clubs, ratings, women }, (args?.request ?? {}) as SimilarRequest) as T;
+    case "youth_intakes":
+      return youthIntakes({ players, clubs, ratings, women }, (args?.club as number | null) ?? null, cityOf) as T;
+    case "birth_cities":
+      return BIRTH_CITIES as T;
+    case "save_scout_report": {
+      // Nothing is written in a browser: the report names the file a real save would have.
+      const player = players.find((p) => p.uid === Number(args?.uid));
+      const name = (player?.name ?? "player")
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean)
+        .join("-");
+      const folder = "C:\\Users\\you\\Documents\\FMLibreEditor\\Exports";
+      const two = (n: number) => String(n).padStart(2, "0");
+      const date = gameDate ? `-${gameDate.year}-${two(gameDate.month)}-${two(gameDate.day)}` : "";
+      const file = `scout-report-${name}${date}.${args?.format === "pdf" ? "pdf" : "png"}`;
+      const report: ExportReport = { path: `${folder}\\${file}`, file, folder, count: 1, skipped: 0 };
+      return report as T;
+    }
     case "club_squads":
       return clubSquads(Number(args?.uid)) as T;
     case "set_captain":
       return setCaptain(Number(args?.club), Number(args?.team), args?.role as CaptainRole, Number(args?.uid)) as T;
     case "team_action":
       return teamAction(Number(args?.club), Number(args?.team), args?.action as TeamAction) as T;
+    case "batch_traits_team":
+      return batchTraitsTeam(
+        Number(args?.club),
+        Number(args?.team),
+        (args?.addTraits as number[]) ?? [],
+        (args?.removeTraits as number[]) ?? [],
+      ) as T;
+    case "national_team_action":
+      return nationalTeamAction(Number(args?.uid), args?.action as TeamAction) as T;
     case "swap_players":
       return swapPlayers(Number(args?.uid), Number(args?.other)) as T;
     default:

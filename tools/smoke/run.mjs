@@ -9,22 +9,42 @@ import { parseArgs } from "node:util";
 import { App } from "./lib/app.mjs";
 import { Probe } from "./lib/probe.mjs";
 import { Report } from "./lib/report.mjs";
+import * as arrange from "./tests/arrange.mjs";
+import * as best from "./tests/best.mjs";
+import * as destroy from "./tests/destroy.mjs";
+import * as changes from "./tests/changes.mjs";
+import * as clubs from "./tests/clubs.mjs";
 import * as connect from "./tests/connect.mjs";
+import * as contract from "./tests/contract.mjs";
 import * as dialog from "./tests/dialog.mjs";
 import * as edit from "./tests/edit.mjs";
 import * as freeze from "./tests/freeze.mjs";
+import * as history from "./tests/history.mjs";
+import * as home from "./tests/home.mjs";
 import * as loan from "./tests/loan.mjs";
 import * as mass from "./tests/mass.mjs";
+import * as names from "./tests/names.mjs";
+import * as nationals from "./tests/nationals.mjs";
 import * as medical from "./tests/medical.mjs";
 import * as move from "./tests/move.mjs";
+import * as moveall from "./tests/moveall.mjs";
+import * as palette from "./tests/palette.mjs";
+import * as prizes from "./tests/prizes.mjs";
+import * as release from "./tests/release.mjs";
+import * as scouting from "./tests/scouting.mjs";
 import * as sign from "./tests/sign.mjs";
 import * as stadium from "./tests/stadium.mjs";
 import * as staff from "./tests/staff.mjs";
+import * as tactics from "./tests/tactics.mjs";
 import * as ties from "./tests/ties.mjs";
 import * as unknown from "./tests/unknown.mjs";
+import * as whatsnew from "./tests/whatsnew.mjs";
 
 /** In the order they run: the ones that only read first. */
-const TESTS = [connect, dialog, edit, mass, move, sign, medical, loan, stadium, ties, staff, freeze, unknown];
+const TESTS = [
+  connect, home, dialog, palette, scouting, clubs, nationals, prizes, whatsnew, edit, history, mass, changes, contract, move, arrange, sign, medical, loan, stadium, names, ties,
+  staff, release, moveall, tactics, best, destroy, freeze, unknown,
+];
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { values: options } = parseArgs({

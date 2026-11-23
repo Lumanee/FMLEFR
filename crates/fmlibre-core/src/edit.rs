@@ -15,6 +15,7 @@ use crate::coded::Coded;
 use crate::date::FmDate;
 use crate::details::{PERSONALITY, POSITIONS};
 use crate::health::Lock;
+use crate::mass::MOST_YEARS;
 use crate::players::PlayerSummary;
 use crate::profile::{Layout, StadiumLayout};
 use crate::session::Session;
@@ -27,6 +28,8 @@ pub enum Entity {
     Player,
     Staff,
     Club,
+    /// A nation's national team, by the UID of its container (see `national.rs`): the senior team is the one edited.
+    NationalTeam,
 }
 
 impl fmt::Display for Entity {
@@ -35,6 +38,7 @@ impl fmt::Display for Entity {
             Entity::Player => "player",
             Entity::Staff => "staff",
             Entity::Club => "club",
+            Entity::NationalTeam => "national team",
         })
     }
 }
@@ -156,8 +160,10 @@ enum Place {
     ClubInfo,
     /// The club's finance record, written only when it is of the full class.
     ClubFinance,
-    /// The club's senior team, which points back at the club.
+    /// The club's senior team, which points back at the club; for a national team, its container's senior team.
     SeniorTeam,
+    /// The one team of a national team's container of this kind, which points back at the container.
+    NationalTeamOfKind(u8),
     /// The stadium the club's senior team plays at, written only when it is of the stadium class.
     Stadium,
     /// The record of a player's reasons to be unhappy, which his contract points at.
@@ -317,7 +323,25 @@ pub fn fields(layout: &Layout, entity: Entity) -> Vec<Field> {
         Entity::Player => player_fields(layout),
         Entity::Staff => staff_fields(layout),
         Entity::Club => club_fields(layout),
+        Entity::NationalTeam => national_team_fields(layout),
     }
+}
+
+/// What can be changed of a national team, where the layout places national teams: the reputation of its senior team,
+/// and that of each of its other teams by kind (`team.10.reputation` for the under-21s).
+fn national_team_fields(layout: &Layout) -> Vec<Field> {
+    if layout.national.is_none() {
+        return Vec::new();
+    }
+    let reputation = layout.team.reputation;
+    let senior =
+        Field::new(Entity::NationalTeam, "reputation", reputation, Kind::U16, 0..=10_000).in_record(Place::SeniorTeam);
+    std::iter::once(senior)
+        .chain(crate::national::OTHER_KINDS.iter().map(|&kind| {
+            Field::new(Entity::NationalTeam, format!("team.{kind}.reputation"), reputation, Kind::U16, 0..=10_000)
+                .in_record(Place::NationalTeamOfKind(kind))
+        }))
+        .collect()
 }
 
 /// A wage in pounds per week, and a contract end between 2000 and 2100.
@@ -327,7 +351,7 @@ fn contract_fields(layout: &Layout, entity: Entity) -> [Field; 2] {
         Field::new(entity, "contract.wage", c.wage, Kind::I32, 0..=10_000_000)
             .plausible(0..=i64::from(i32::MAX))
             .in_record(Place::Contract),
-        Field::new(entity, "contract.expires", c.expires, Kind::Date, 20000101..=21001231)
+        Field::new(entity, CONTRACT_EXPIRES, c.expires, Kind::Date, 20000101..=21001231)
             .plausible(0..=22001231)
             .in_record(Place::Contract),
     ]
@@ -376,6 +400,9 @@ fn player_mood_fields(layout: &Layout) -> [Field; 4] {
 /// The squad number of a player without one.
 pub(crate) const NO_SQUAD_NUMBER: i64 = 255;
 
+/// The field of the day a player's or a member of staff's contract ends.
+pub const CONTRACT_EXPIRES: &str = "contract.expires";
+
 /// The field of the day a player's loan ends.
 pub const LOAN_EXPIRES: &str = "loan.expires";
 
@@ -418,6 +445,13 @@ fn player_fields(layout: &Layout) -> Vec<Field> {
         field("jadedness", p.jadedness, Kind::I16, -500..=1_000).plausible(-500..=i64::from(i16::MAX)),
         field("morale", p.morale, Kind::U8, 1..=20),
     ];
+    // The city he was born in, set to one people of the save were born in (see `Session::birth_cities`). Many players
+    // of the game's database have none, and keep none: a city only takes the place of another.
+    out.extend(
+        p.city_of_birth.map(|offset| {
+            field("city_of_birth", offset, Kind::Pointer, POINTERS).plausible(0..=*POINTERS.end()).single()
+        }),
+    );
     out.extend(crate::ATTRIBUTE_GROUPS.iter().flat_map(|(_, keys)| keys.iter()).filter_map(|key| {
         let offset = *p.attributes.get(*key)?;
         Some(field(&format!("attribute.{key}"), offset, Kind::U8, 1..=100).plausible(0..=100).attribute())
@@ -901,9 +935,30 @@ impl Session {
         self.write(target, field, value, Some(expected), false)
     }
 
+    /// Makes the contract of `target`, a player or a member of staff, run `years` longer (1 to [`MOST_YEARS`]): the day
+    /// it ends moves on by as many years, as a mass edit's Add years moves it, 29 February to 28 February in a year
+    /// without one. Written only while the game still holds the day it was read as. A contract without an end, such as
+    /// the basic contract most doctors and the board have, is refused as not set, and nothing is written.
+    pub fn extend_contract(&self, target: &Target, years: i64) -> Result<Change, EditError> {
+        let field = self.field(target.entity, CONTRACT_EXPIRES)?;
+        if !(1..=MOST_YEARS).contains(&years) {
+            return Err(EditError::OutOfRange { field: field.key, value: years, min: 1, max: MOST_YEARS });
+        }
+        let old = self.read_field(target, &field)?;
+        let Some(ends) = FmDate::from_number(old) else {
+            return Err(EditError::Unset { field: field.key });
+        };
+        // With at most MOST_YEARS more, the year stays one a date holds; a day past the field's range, the write
+        // refuses.
+        let new = ends.plus_years(years).map_or(old, FmDate::to_number);
+        self.write_field_if(target, &field, old, new)
+    }
+
     /// Writes `value`. A value being restored (`restoring`) was the game's own, so it only
     /// has to be plausible, not in the range the editor writes: a potential ability the
-    /// database left negative goes back as it was.
+    /// database left negative goes back as it was. A squad number goes back only while no
+    /// other player of the team wears it, as one being written does not: a team-mate may have
+    /// been given it since.
     fn write(
         &self,
         target: &Target,
@@ -912,7 +967,8 @@ impl Session {
         expected: Option<i64>,
         restoring: bool,
     ) -> Result<Change, EditError> {
-        // Putting back what was there is always allowed; anything else only where the checks allow it.
+        // Putting back what was there needs neither the lock nor the range (but see the squad number below); anything
+        // else only where the checks allow it.
         if !restoring && let Some(lock) = self.field_lock(field) {
             return Err(EditError::Locked { field: field.key.clone(), lock });
         }
@@ -948,7 +1004,8 @@ impl Session {
         if !field.is_plausible(old) {
             return Err(EditError::Implausible { field: field.key.clone(), value: old });
         }
-        if field.kind == Kind::Date && old == 0 {
+        // A date the game has not set, or a pointer to nothing (a player without a city of birth), is left alone.
+        if matches!(field.kind, Kind::Date | Kind::Pointer) && old == 0 {
             return Err(EditError::Unset { field: field.key.clone() });
         }
         let change = Change { entity: target.entity, uid: target.uid, field: field.key.clone(), old, new: value };
@@ -971,9 +1028,9 @@ impl Session {
             }
         }
         // Two players of a team on the pitch with one number would confuse the game; the players it has lent out
-        // keep theirs, so they do not count.
+        // keep theirs, so they do not count. A number being put back counts too: the undo of a change from 7 to 10
+        // would put 7 back beside a team-mate who has been given it since.
         if field.key == "contract.squad_number"
-            && !restoring
             && field.blank != Some(value)
             && let Some(holder) = self.squad_number_holder(target, value)?
         {
@@ -1000,8 +1057,20 @@ impl Session {
     /// The UID of another player of the team the player `target` plays for who wears the
     /// squad number `number`, among the players who play for that team now.
     fn squad_number_holder(&self, target: &Target, number: i64) -> Result<Option<u32>, EditError> {
+        let team = self.process.read_u64(target.address + self.layout.player.team)?;
+        Ok(self.squad_number_holder_in(team, target.address, number)?)
+    }
+
+    /// The UID of a player who plays for `team`, other than the one at `except`, and wears the squad number `number`:
+    /// of the players its list holds, those whose own team it is. The ones it has lent out keep their numbers and do
+    /// not count.
+    pub(crate) fn squad_number_holder_in(
+        &self,
+        team: u64,
+        except: u64,
+        number: i64,
+    ) -> fmlibre_mem::Result<Option<u32>> {
         let (p, c) = (&self.layout.player, &self.layout.contract);
-        let team = self.process.read_u64(target.address + p.team)?;
         if !is_user_pointer(team) {
             return Ok(None);
         }
@@ -1013,7 +1082,7 @@ impl Session {
         }
         for element in self.process.read_bytes(begin, (end - begin) as usize)?.as_chunks::<8>().0 {
             let player = u64::from_le_bytes(*element);
-            if player == target.address || self.process.read_u64(player + p.team)? != team {
+            if player == except || self.process.read_u64(player + p.team)? != team {
                 continue;
             }
             let shift = crate::players::person_shift(&self.process, p, player);
@@ -1054,6 +1123,10 @@ impl Session {
             Entity::Player => self.layout.player.at(self.layout.player.uid, target.shift),
             Entity::Staff => self.layout.staff.at(self.layout.staff.uid, target.shift),
             Entity::Club => self.layout.club.uid,
+            Entity::NationalTeam => match &self.layout.national {
+                Some(national) => national.container_uid,
+                None => return Err(EditError::Moved { entity: target.entity, uid: target.uid }),
+            },
         };
         if self.process.read_u32(target.address + uid_offset)? != target.uid {
             return Err(EditError::Moved { entity: target.entity, uid: target.uid });
@@ -1191,6 +1264,54 @@ impl Session {
                     is_user_pointer(team) && self.process.read_u64(team + self.layout.team.club)? == target.address;
                 belongs.then_some(team)
             }
+            (Place::SeniorTeam, Entity::NationalTeam) => {
+                let Some(national) = &self.layout.national else {
+                    return Ok(None);
+                };
+                let (begin, end) = (
+                    self.process.read_u64(target.address + national.container_teams)?,
+                    self.process.read_u64(target.address + national.container_teams + 8)?,
+                );
+                if !is_user_pointer(begin) || end <= begin {
+                    return Ok(None);
+                }
+                // The first team of the container, a team of kind 0, which points back at the container.
+                let team = self.process.read_u64(begin)?;
+                let belongs = is_user_pointer(team)
+                    && self.process.read_u64(team + self.layout.team.club)? == target.address
+                    && self.process.read_bytes(team + self.layout.team.kind, 1)? == [0];
+                belongs.then_some(team)
+            }
+            (Place::NationalTeamOfKind(kind), Entity::NationalTeam) => {
+                let Some(national) = &self.layout.national else {
+                    return Ok(None);
+                };
+                let (begin, end) = (
+                    self.process.read_u64(target.address + national.container_teams)?,
+                    self.process.read_u64(target.address + national.container_teams + 8)?,
+                );
+                let count = end.saturating_sub(begin) / 8;
+                if !is_user_pointer(begin) || count == 0 || count > crate::national::MOST_TEAMS {
+                    return Ok(None);
+                }
+                let pointers = self.process.read_bytes(begin, (count * 8) as usize)?;
+                // The one team of that kind which points back at the container: none when two share it.
+                let t = &self.layout.team;
+                let mut found = None;
+                for chunk in pointers.as_chunks::<8>().0 {
+                    let team = u64::from_le_bytes(*chunk);
+                    if !is_user_pointer(team)
+                        || self.process.read_u64(team + t.club)? != target.address
+                        || self.process.read_bytes(team + t.kind, 1)? != [kind]
+                    {
+                        continue;
+                    }
+                    if found.replace(team).is_some() {
+                        return Ok(None);
+                    }
+                }
+                found
+            }
             (Place::Concerns, Entity::Player) => {
                 let Some(contract) = self.record(target, Place::Contract)? else {
                     return Ok(None);
@@ -1322,6 +1443,59 @@ mod tests {
         assert!(!sharpness.is_plausible(10_001));
     }
 
+    /// The undo of a squad number change, through a team laid out in memory of the test's own as the game lays it out:
+    /// its players' list, and each player's team and contract, which points back at him. Only where a process can open
+    /// itself (Windows); the check that no other player of the team wears the number is the same one a new edit has.
+    #[cfg(windows)]
+    #[test]
+    fn a_squad_number_goes_back_only_while_no_team_mate_wears_it() {
+        use crate::session::Blocks;
+
+        // Eight blocks: the team, three players, their three contracts and the team's list of players.
+        let memory = Blocks::new(8);
+        let layout = crate::layout_for(27).expect("FM27 layout");
+        let process =
+            fmlibre_mem::Process::open_read_write(std::process::id()).expect("the test opens its own process");
+        let session = Session::over(process, layout);
+
+        // A wears 10, B 7 and C 5. C is on loan: he is in this team's list, but plays for another team.
+        let (team, list) = (memory.at(0), memory.at(7));
+        let (players, uids, numbers) = ([memory.at(1), memory.at(2), memory.at(3)], [11u32, 22, 33], [10u8, 7, 5]);
+        session.lay_out_team(team, list, &players);
+        for (i, &player) in players.iter().enumerate() {
+            let plays_for = if i == 2 { list } else { team };
+            session.lay_out_player(player, memory.at(4 + i as u64), uids[i], plays_for, numbers[i]);
+        }
+
+        let number = session.field(Entity::Player, "contract.squad_number").expect("a player's squad number");
+        let target = |i: usize| Target { entity: Entity::Player, uid: uids[i], address: players[i], shift: 0 };
+        let wears = |i: usize| session.read_field(&target(i), &number).expect("his squad number");
+        let undo = |i: usize, old: i64, new: i64| {
+            let change = Change { entity: Entity::Player, uid: uids[i], field: number.key.clone(), old, new };
+            session.revert(&target(i), &change)
+        };
+        assert_eq!((wears(0), wears(1), wears(2)), (10, 7, 5));
+
+        // A went from 7 to 10 and B from 3 to 7: putting 7 back on A would give two players of the team one number.
+        let refused = undo(0, 7, 10).expect_err("B wears 7 now");
+        assert!(matches!(refused, EditError::Taken { value: 7, holder: 22, .. }), "{refused}");
+        assert_eq!(refused.code(), "edit.taken");
+        assert_eq!(wears(0), 10, "nothing was written");
+        // B goes back first, to a number nobody wears, and then A can.
+        undo(1, 3, 7).expect("nobody wears 3");
+        assert_eq!(wears(1), 3);
+        undo(0, 7, 10).expect("nobody wears 7 now");
+        assert_eq!(wears(0), 7);
+        // A player on loan to another team keeps his number, which does not count for this team.
+        undo(0, 5, 7).expect("C plays for another team");
+        assert_eq!(wears(0), 5);
+        // No number goes back whoever has none already.
+        undo(1, 255, 3).expect("none is never taken");
+        undo(0, 255, 5).expect("none is never taken");
+        assert_eq!((wears(0), wears(1), wears(2)), (255, 255, 5));
+        std::hint::black_box(&memory);
+    }
+
     #[test]
     fn field_tables_cover_the_layout() {
         let layout = crate::layout_for(27).expect("FM27 layout");
@@ -1329,14 +1503,27 @@ mod tests {
         let players = fields(&layout, Entity::Player);
         // Every position but the sweeper; the contract's wage and end; and the squad number, squad status and the
         // transfer and loan listing, which only players have.
-        // The 13 basic fields and the 4 live ones (condition, match sharpness, jadedness, morale); and the day a loan
-        // ends where the layout places loans, with its option to buy where it places their terms (Windows so far).
+        // The 13 basic fields and the 4 live ones (condition, match sharpness, jadedness, morale); the city of birth
+        // where the layout places it; and the day a loan ends where the layout places loans, with its option to buy
+        // where it places their terms (Windows so far).
+        let city = usize::from(layout.player.city_of_birth.is_some());
         let loan = usize::from(layout.loan.is_some())
             + usize::from(layout.loan.as_ref().is_some_and(|loan| loan.terms.is_some()));
         assert_eq!(
             players.len(),
-            13 + 4 + layout.player.attributes.len() + POSITIONS.len() - 1 + PERSONALITY.len() + 2 + 4 + 4 + 64 + loan
+            13 + 4 + city + layout.player.attributes.len() + POSITIONS.len() - 1
+                + PERSONALITY.len()
+                + 2
+                + 4
+                + 4
+                + 64
+                + loan
         );
+        if layout.player.city_of_birth.is_some() {
+            // A city only takes the place of another: a player without one (0) reads as plausible, and is left alone.
+            let city = key(&players, "city_of_birth");
+            assert!(city.kind == Kind::Pointer && !city.mass && city.is_plausible(0) && !city.takes(0));
+        }
         if layout.loan.is_some() {
             let loan = key(&players, LOAN_EXPIRES);
             assert!(loan.place == Place::Loan && loan.kind == Kind::Date && !loan.mass && !loan.shifted);
@@ -1441,7 +1628,7 @@ mod tests {
     #[test]
     fn keys_are_unique() {
         let layout = crate::layout_for(27).expect("FM27 layout");
-        for entity in [Entity::Player, Entity::Staff, Entity::Club] {
+        for entity in [Entity::Player, Entity::Staff, Entity::Club, Entity::NationalTeam] {
             let mut keys: Vec<String> = fields(&layout, entity).into_iter().map(|f| f.key).collect();
             let all = keys.len();
             keys.sort();
