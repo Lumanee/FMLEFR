@@ -7821,6 +7821,69 @@ kbd {
   font-size: 13px;
 }
 
+/* The team sheet: the pitch beside the bench, one under the other on a narrow window. */
+.lineup-sheet {
+  display: grid;
+  grid-template-columns: minmax(300px, 520px) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .lineup-sheet {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lineup-bench-size {
+  width: 4.5em;
+}
+
+.lineup-bench-box h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.lineup-bench {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lineup-seat {
+  display: grid;
+  grid-template-columns: 7.5em minmax(0, 1fr);
+  grid-template-areas: "n select" ". info";
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.lineup-seat.manual {
+  border-color: var(--accent, #3b82f6);
+}
+
+.lineup-seat-n {
+  grid-area: n;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.lineup-seat select {
+  grid-area: select;
+  min-width: 0;
+}
+
+.lineup-seat-info {
+  grid-area: info;
+  font-size: 12px;
+}
+
 /* The pitches of the Squad calculator: an upright pitch with a card at each place of the formation. */
 .lineup-pitches {
   display: grid;
