@@ -1426,6 +1426,11 @@ export const ja: Strings = {
     copied: "コピーしました",
     failed: (reason: string) => `診断情報をコピーできませんでした：${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "名前をコピー",
+    copySelection: "コピー",
+  },
 
   checks: {
     gameDate: "ゲーム内の日付",

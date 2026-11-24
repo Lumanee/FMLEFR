@@ -1442,6 +1442,11 @@ export const tr: Strings = {
     copied: "Kopyalandı",
     failed: (reason) => `Tanılama bilgisi kopyalanamadı: ${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Adı kopyala",
+    copySelection: "Kopyala",
+  },
 
   checks: {
     gameDate: "oyun içi tarih",

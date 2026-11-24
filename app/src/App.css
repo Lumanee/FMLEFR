@@ -7976,3 +7976,16 @@ kbd {
 .lineup .tag {
   margin-left: 6px;
 }
+
+/* The menu of a right click on a name: a click anywhere else closes it, through a scrim that holds no colour. */
+.name-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.name-menu {
+  z-index: 1001;
+  min-width: 9rem;
+  max-width: 20rem;
+}
