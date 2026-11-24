@@ -7777,3 +7777,139 @@ kbd {
 .national-grid td.col-league {
   width: 18%;
 }
+
+/* The Squad calculator tab: the formation switch and the box under the intro, then a table for each group. */
+.lineup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lineup > p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.lineup-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.lineup-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.lineup-section h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.lineup-unavailable,
+.lineup-rules ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.lineup-rules summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* The pitches of the Squad calculator: an upright pitch with a card at each place of the formation. */
+.lineup-pitches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.lineup-pitch {
+  position: relative;
+  aspect-ratio: 68 / 80;
+  max-width: 520px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: repeating-linear-gradient(#2f6b3c 0 12.5%, #346f41 12.5% 25%);
+}
+
+.lineup-pitch-lines {
+  position: absolute;
+  inset: 3%;
+  border: 2px solid rgb(255 255 255 / 0.55);
+}
+
+.lineup-pitch-lines::before,
+.lineup-pitch-lines::after {
+  content: "";
+  position: absolute;
+  left: 28%;
+  width: 44%;
+  height: 16%;
+  border: 2px solid rgb(255 255 255 / 0.55);
+}
+
+.lineup-pitch-lines::before {
+  top: -2px;
+  border-top: 0;
+}
+
+.lineup-pitch-lines::after {
+  bottom: -2px;
+  border-bottom: 0;
+}
+
+.lineup-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  width: 21%;
+  min-width: 64px;
+  transform: translate(-50%, -50%);
+  border-radius: 3px;
+  background: #101418;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+
+.lineup-card-pos {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: var(--line, #555);
+}
+
+.lineup-card-name {
+  padding: 1px 3px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineup-card-ca {
+  min-height: 1.25em;
+  padding-bottom: 1px;
+  font-variant-numeric: tabular-nums;
+  color: #d8dde3;
+}
+
+.lineup-card.gk { --line: #4b5563; }
+.lineup-card.def { --line: #1f8a7a; }
+.lineup-card.mid { --line: #8a8a1f; }
+.lineup-card.att { --line: #8a3a8f; }
+
+/* Out of position: outlined, as a place nobody fits. */
+.lineup-card.off {
+  outline: 2px solid var(--danger);
+}
+
+.lineup .tag {
+  margin-left: 6px;
+}

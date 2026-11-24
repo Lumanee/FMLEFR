@@ -1113,7 +1113,7 @@ export const de: Strings = {
     reputationTitle: "Ansehen",
 
     tabsLabel: "Vereinsbereiche",
-    tabs: { overview: "Übersicht", squad: "Kader", staff: "Mitarbeiter", stadium: "Stadion" },
+    tabs: { overview: "Übersicht", squad: "Kader", staff: "Mitarbeiter", stadium: "Stadion", lineup: "Kaderrechner" },
     squadLocked: "Beenden Sie die Bearbeitung, um den Kader zu öffnen",
     staffLocked: "Beenden Sie die Bearbeitung, um die Mitarbeiter zu öffnen",
 

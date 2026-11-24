@@ -1029,7 +1029,7 @@ export const tr: Strings = {
 
     // The tabs under the header
     tabsLabel: "Kulüp bölümleri",
-    tabs: { overview: "Genel", squad: "Kadro", staff: "Personel", stadium: "Stadyum" },
+    tabs: { overview: "Genel", squad: "Kadro", staff: "Personel", stadium: "Stadyum", lineup: "Kadro hesaplayıcı" },
     squadLocked: "Kadroyu açmak için düzenlemeyi bitirin",
     staffLocked: "Personeli açmak için düzenlemeyi bitirin",
 

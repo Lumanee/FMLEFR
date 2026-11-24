@@ -1024,7 +1024,7 @@ export const ja: Strings = {
     reputationTitle: "評価",
 
     tabsLabel: "クラブの項目",
-    tabs: { overview: "概要", squad: "スカッド", staff: "スタッフ", stadium: "スタジアム" },
+    tabs: { overview: "概要", squad: "スカッド", staff: "スタッフ", stadium: "スタジアム", lineup: "編成計算" },
     squadLocked: "スカッドを開くには編集を終了してください",
     staffLocked: "スタッフを開くには編集を終了してください",
 

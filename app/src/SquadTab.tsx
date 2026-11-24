@@ -55,7 +55,7 @@ import { EditorContext } from "./useProfileEditing";
  * The club's teams with their players, read again whenever `version` changes: the game data was read or written. Like
  * `useProfileDetails`, but through the squad command, with a failure worded in the language of the window.
  */
-function useSquads(club: number, version: number): Loaded<ClubTeam[]> | null {
+export function useSquads(club: number, version: number): Loaded<ClubTeam[]> | null {
   const [loaded, setLoaded] = useState<Loaded<ClubTeam[]> | null>(null);
 
   useEffect(() => {

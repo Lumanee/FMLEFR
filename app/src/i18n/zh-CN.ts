@@ -1121,7 +1121,7 @@ export const zhCN: Strings = {
     // The tabs under the header: what the club has, and its squad (see `squad`).
     /** The name of the tabs for assistive technology. */
     tabsLabel: "俱乐部栏目",
-    tabs: { overview: "概览", squad: "阵容", staff: "职员", stadium: "球场" },
+    tabs: { overview: "概览", squad: "阵容", staff: "职员", stadium: "球场", lineup: "阵容计算器" },
     /** Hover text of the Squad tab while the club is edited: its values are on the Overview. */
     squadLocked: "完成编辑后才能打开阵容",
     staffLocked: "完成编辑后才能打开职员",
