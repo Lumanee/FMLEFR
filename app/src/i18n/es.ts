@@ -1476,6 +1476,11 @@ export const es: Strings = {
     copied: "Copiado",
     failed: (reason) => `No se ha podido copiar el diagnóstico: ${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Copiar nombre",
+    copySelection: "Copiar",
+  },
 
   checks: {
     gameDate: "la fecha del juego",

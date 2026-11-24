@@ -1469,6 +1469,11 @@ export const ru: Strings = {
     copied: "Скопировано",
     failed: (reason) => `Не удалось скопировать диагностику: ${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Копировать имя",
+    copySelection: "Копировать",
+  },
 
   checks: {
     gameDate: "игровая дата",

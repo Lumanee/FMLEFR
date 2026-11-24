@@ -1459,6 +1459,11 @@ export const ko: Strings = {
     copied: "복사됨",
     failed: (reason) => `진단 정보를 복사하지 못했습니다: ${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "이름 복사",
+    copySelection: "복사",
+  },
 
   checks: {
     gameDate: "게임 내 날짜",

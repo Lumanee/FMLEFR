@@ -162,6 +162,8 @@ export const CHECK_NAMES = strings.checks;
 /** Copy diagnostics: the report for a bug report, at the foot of the window and in the notice under the masthead. */
 export const diagnosticsText = strings.diagnostics;
 
+export const nameMenuText = strings.nameMenu;
+
 /** Editing a person or a club: the Edit button, the inputs, and the footer under the profile. */
 export const editText = strings.edit;
 

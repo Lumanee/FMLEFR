@@ -1572,6 +1572,11 @@ export const zhCN: Strings = {
     copied: "已复制",
     failed: (reason: string) => `无法复制诊断信息：${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "复制名称",
+    copySelection: "复制",
+  },
 
   /** What each check is about (`CheckKey`), as the notice lists the ones that did not pass and the errors name them. */
   checks: {
