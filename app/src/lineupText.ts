@@ -8,6 +8,10 @@ import { PLACEMENT_RULES as rules } from "./lineup";
 interface LineupStrings {
   intro: string;
   formation: string;
+  auto: string;
+  autoTitle: string;
+  autoChosen: (formation: string) => string;
+  fitTitle: (fit: Fit) => string;
   includeUnavailable: string;
   starters: string;
   replacements: string;
@@ -31,8 +35,12 @@ interface LineupStrings {
 
 const en: LineupStrings = {
   intro:
-    "Read only: nothing is written to the game. Pick a formation; the calculator reads the whole club and proposes the starters, a replacement for each place, and where everyone else belongs.",
+    "Read only: nothing is written to the game. Pick a formation, or leave it on Auto; the calculator reads the whole club and proposes the starters, a replacement for each place, and where everyone else belongs.",
   formation: "Formation",
+  auto: "Auto",
+  autoTitle: "The formation that gives this squad the best eleven",
+  autoChosen: (formation) => `Auto (${formation})`,
+  fitTitle: (fit) => (fit === "main" ? "in his best position" : fit === "alt" ? "another position" : "out of position"),
   includeUnavailable: "Include the injured and the banned",
   starters: "Starting eleven",
   replacements: "Replacements, place by place",
@@ -60,6 +68,8 @@ const en: LineupStrings = {
   empty: "This club has no players to pick from.",
   rulesTitle: "How it chooses",
   rules: [
+    "Auto picks, among the formations offered, the one whose eleven has the best total score for this squad. The formation the game uses is not read yet: pick it by hand to match it.",
+    "On the pitch, * marks a player in another position than his best, and a red outline a player out of position.",
     "Score for a place = current ability minus a cost: 0 in his best position, a few points for another position he is listed for or a neighbouring one, 30 when none fits (shown as out of position).",
     "The starters are the assignment with the best total score, not a place-by-place pick, so a versatile player is not wasted.",
     "The replacements are the same assignment over the players left: one for each place.",
@@ -71,8 +81,12 @@ const en: LineupStrings = {
 
 const fr: LineupStrings = {
   intro:
-    "Lecture seule : rien n'est écrit dans le jeu. Choisissez une formation ; le calculateur lit tout le club et propose les titulaires, un remplaçant pour chaque poste, et où envoyer les autres.",
+    "Lecture seule : rien n'est écrit dans le jeu. Choisissez une formation, ou laissez Auto ; le calculateur lit tout le club et propose les titulaires, un remplaçant pour chaque poste, et où envoyer les autres.",
   formation: "Formation",
+  auto: "Auto",
+  autoTitle: "La formation qui donne le meilleur onze avec cet effectif",
+  autoChosen: (formation) => `Auto (${formation})`,
+  fitTitle: (fit) => (fit === "main" ? "à son meilleur poste" : fit === "alt" ? "autre poste" : "hors poste"),
   includeUnavailable: "Inclure les blessés et les suspendus",
   starters: "Les 11 titulaires",
   replacements: "Les 11 remplaçants, poste par poste",
@@ -100,6 +114,8 @@ const fr: LineupStrings = {
   empty: "Ce club n'a aucun joueur à choisir.",
   rulesTitle: "La logique",
   rules: [
+    "Auto choisit, parmi les formations proposées, celle dont le onze a le meilleur score total pour cet effectif. La formation utilisée en jeu n'est pas encore lue : choisissez-la à la main pour qu'elle corresponde.",
+    "Sur le terrain, * signale un joueur à un autre poste que son meilleur, et un contour rouge un joueur hors poste.",
     "Score pour un poste = niveau actuel (CA) moins un coût : 0 à son meilleur poste, quelques points pour un autre poste de sa liste ou un poste voisin, 30 si aucun ne convient (affiché « hors poste »).",
     "Les titulaires sont l'affectation au meilleur score total, pas un choix poste par poste : un joueur polyvalent n'est pas gaspillé.",
     "Les remplaçants sont la même affectation sur les joueurs restants : un pour chaque poste.",

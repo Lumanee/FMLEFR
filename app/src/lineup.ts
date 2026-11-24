@@ -24,32 +24,62 @@ export interface Slot {
   main: readonly string[];
   /** Positions that fit it at a cost, in current-ability points. */
   alt: readonly (readonly [position: string, cost: number])[];
+  /** Where it stands on a pitch drawn upright: across from the left, and down from the opponent's goal, both in %. */
+  x: number;
+  y: number;
 }
 
-const gk: Slot = { id: "gk", position: "gk", main: ["gk"], alt: [] };
+/** The slot `slot` standing at (`x`, `y`) of the pitch. */
+const at = (slot: Slot, x: number, y: number): Slot => ({ ...slot, x, y });
 
-const dl: Slot = { id: "dl", position: "dl", main: ["dl"], alt: [["wbl", 3], ["dr", 7], ["dc", 8]] };
-const dr: Slot = { id: "dr", position: "dr", main: ["dr"], alt: [["wbr", 3], ["dl", 7], ["dc", 8]] };
-const dc = (n: number): Slot => ({ id: `dc${n}`, position: "dc", main: ["dc"], alt: [["dm", 6], ["dl", 8], ["dr", 8]] });
-const wbl: Slot = { id: "wbl", position: "wbl", main: ["wbl"], alt: [["dl", 3], ["ml", 4], ["aml", 8]] };
-const wbr: Slot = { id: "wbr", position: "wbr", main: ["wbr"], alt: [["dr", 3], ["mr", 4], ["amr", 8]] };
-const dm = (n: number): Slot => ({ id: `dm${n}`, position: "dm", main: ["dm"], alt: [["mc", 4], ["dc", 6]] });
-const mc = (n: number): Slot => ({ id: `mc${n}`, position: "mc", main: ["mc"], alt: [["dm", 3], ["amc", 4]] });
-const ml: Slot = { id: "ml", position: "ml", main: ["ml"], alt: [["aml", 3], ["wbl", 5], ["mc", 8]] };
-const mr: Slot = { id: "mr", position: "mr", main: ["mr"], alt: [["amr", 3], ["wbr", 5], ["mc", 8]] };
-const aml: Slot = { id: "aml", position: "aml", main: ["aml"], alt: [["ml", 3], ["st", 8]] };
-const amr: Slot = { id: "amr", position: "amr", main: ["amr"], alt: [["mr", 3], ["st", 8]] };
-const amc: Slot = { id: "amc", position: "amc", main: ["amc"], alt: [["mc", 4], ["aml", 6], ["amr", 6], ["st", 6]] };
-const st = (n: number): Slot => ({ id: `st${n}`, position: "st", main: ["st"], alt: [["amc", 5], ["aml", 8], ["amr", 8]] });
+const gk: Slot = { id: "gk", position: "gk", main: ["gk"], alt: [], x: 50, y: 92 };
+
+const dl: Slot = { id: "dl", position: "dl", main: ["dl"], alt: [["wbl", 3], ["dr", 7], ["dc", 8]], x: 0, y: 0 };
+const dr: Slot = { id: "dr", position: "dr", main: ["dr"], alt: [["wbr", 3], ["dl", 7], ["dc", 8]], x: 0, y: 0 };
+const dc = (n: number): Slot => ({ id: `dc${n}`, position: "dc", main: ["dc"], alt: [["dm", 6], ["dl", 8], ["dr", 8]], x: 0, y: 0 });
+const wbl: Slot = { id: "wbl", position: "wbl", main: ["wbl"], alt: [["dl", 3], ["ml", 4], ["aml", 8]], x: 0, y: 0 };
+const wbr: Slot = { id: "wbr", position: "wbr", main: ["wbr"], alt: [["dr", 3], ["mr", 4], ["amr", 8]], x: 0, y: 0 };
+const dm = (n: number): Slot => ({ id: `dm${n}`, position: "dm", main: ["dm"], alt: [["mc", 4], ["dc", 6]], x: 0, y: 0 });
+const mc = (n: number): Slot => ({ id: `mc${n}`, position: "mc", main: ["mc"], alt: [["dm", 3], ["amc", 4]], x: 0, y: 0 });
+const ml: Slot = { id: "ml", position: "ml", main: ["ml"], alt: [["aml", 3], ["wbl", 5], ["mc", 8]], x: 0, y: 0 };
+const mr: Slot = { id: "mr", position: "mr", main: ["mr"], alt: [["amr", 3], ["wbr", 5], ["mc", 8]], x: 0, y: 0 };
+const aml: Slot = { id: "aml", position: "aml", main: ["aml"], alt: [["ml", 3], ["st", 8]], x: 0, y: 0 };
+const amr: Slot = { id: "amr", position: "amr", main: ["amr"], alt: [["mr", 3], ["st", 8]], x: 0, y: 0 };
+const amc: Slot = { id: "amc", position: "amc", main: ["amc"], alt: [["mc", 4], ["aml", 6], ["amr", 6], ["st", 6]], x: 0, y: 0 };
+const st = (n: number): Slot => ({ id: `st${n}`, position: "st", main: ["st"], alt: [["amc", 5], ["aml", 8], ["amr", 8]], x: 0, y: 0 });
 
 /** The formations offered, as their names and the places in them, goalkeeper first. */
 export const FORMATIONS = {
-  "4-2-3-1": [gk, dl, dc(1), dc(2), dr, dm(1), dm(2), aml, amc, amr, st(1)],
-  "4-3-3": [gk, dl, dc(1), dc(2), dr, dm(1), mc(1), mc(2), aml, amr, st(1)],
-  "4-4-2": [gk, dl, dc(1), dc(2), dr, ml, mc(1), mc(2), mr, st(1), st(2)],
-  "4-1-4-1": [gk, dl, dc(1), dc(2), dr, dm(1), ml, mc(1), mc(2), mr, st(1)],
-  "3-5-2": [gk, dc(1), dc(2), dc(3), wbl, mc(1), dm(1), mc(2), wbr, st(1), st(2)],
-  "3-4-3": [gk, dc(1), dc(2), dc(3), wbl, mc(1), mc(2), wbr, aml, st(1), amr],
+  "4-2-3-1": [
+    gk, at(dl, 14, 72), at(dc(1), 38, 74), at(dc(2), 62, 74), at(dr, 86, 72),
+    at(dm(1), 36, 54), at(dm(2), 64, 54),
+    at(aml, 15, 30), at(amc, 50, 32), at(amr, 85, 30), at(st(1), 50, 10),
+  ],
+  "4-3-3": [
+    gk, at(dl, 14, 72), at(dc(1), 38, 74), at(dc(2), 62, 74), at(dr, 86, 72),
+    at(dm(1), 50, 57), at(mc(1), 30, 42), at(mc(2), 70, 42),
+    at(aml, 16, 20), at(st(1), 50, 10), at(amr, 84, 20),
+  ],
+  "4-4-2": [
+    gk, at(dl, 14, 72), at(dc(1), 38, 74), at(dc(2), 62, 74), at(dr, 86, 72),
+    at(ml, 14, 44), at(mc(1), 38, 46), at(mc(2), 62, 46), at(mr, 86, 44),
+    at(st(1), 38, 14), at(st(2), 62, 14),
+  ],
+  "4-1-4-1": [
+    gk, at(dl, 14, 72), at(dc(1), 38, 74), at(dc(2), 62, 74), at(dr, 86, 72),
+    at(dm(1), 50, 58), at(ml, 14, 38), at(mc(1), 38, 40), at(mc(2), 62, 40), at(mr, 86, 38),
+    at(st(1), 50, 10),
+  ],
+  "3-5-2": [
+    gk, at(dc(1), 28, 74), at(dc(2), 50, 76), at(dc(3), 72, 74),
+    at(wbl, 14, 50), at(mc(1), 34, 44), at(dm(1), 50, 58), at(mc(2), 66, 44), at(wbr, 86, 50),
+    at(st(1), 38, 14), at(st(2), 62, 14),
+  ],
+  "3-4-3": [
+    gk, at(dc(1), 28, 74), at(dc(2), 50, 76), at(dc(3), 72, 74),
+    at(wbl, 14, 50), at(mc(1), 38, 48), at(mc(2), 62, 48), at(wbr, 86, 50),
+    at(aml, 16, 20), at(st(1), 50, 10), at(amr, 84, 20),
+  ],
 } as const satisfies Record<string, readonly Slot[]>;
 
 export type FormationName = keyof typeof FORMATIONS;
@@ -300,4 +330,23 @@ export function buildLineup(players: readonly SquadPlayer[], { formation, includ
     startersAverage: average(starters.flatMap((pick) => (pick.player ? [pick.player.currentAbility] : []))),
     replacementsAverage: average(replacementLevels),
   };
+}
+
+/**
+ * The formation that gives the best squad: the one whose starters have the highest mean current ability, where the
+ * squad's own positions fit best. Ties keep the order of `FORMATION_NAMES`, so 4-2-3-1 first.
+ */
+export function bestFormation(players: readonly SquadPlayer[], includeUnavailable: boolean): FormationName {
+  let best = DEFAULT_FORMATION;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const formation of FORMATION_NAMES) {
+    const { starters } = buildLineup(players, { formation, includeUnavailable });
+    // The score counts the cost of a place that does not fit, not just the ability, which is what picks a shape.
+    const score = starters.reduce((sum, pick) => sum + pick.score, 0);
+    if (score > bestScore + 1e-9) {
+      best = formation;
+      bestScore = score;
+    }
+  }
+  return best;
 }

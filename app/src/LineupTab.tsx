@@ -2,13 +2,13 @@
 // the players to send to the reserve team or the under-19s. It only reads the squads the Squad tab reads (see
 // `lineup.ts` for how it chooses) and never writes to the game.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { Ability } from "./Ability";
 import { formatNumber } from "./format";
 import {
+  bestFormation,
   buildLineup,
   clubPlayers,
-  DEFAULT_FORMATION,
   FORMATION_NAMES,
   type Destination,
   type FormationName,
@@ -31,19 +31,87 @@ interface LineupTabProps {
 const average = (value: number | null) =>
   value === null ? "–" : formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
+const CHOICE_KEY = "fmlibre.lineupFormation";
+
+/** The formation chosen last time, or auto. */
+function readChoice(): FormationName | "auto" {
+  try {
+    const saved = localStorage.getItem(CHOICE_KEY);
+    return FORMATION_NAMES.includes(saved as FormationName) ? (saved as FormationName) : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+/** The line of the pitch a position is on, for the colour of its card. */
+function lineOf(position: string): "gk" | "def" | "mid" | "att" {
+  if (position === "gk") {
+    return "gk";
+  }
+  if (["dl", "dc", "dr", "sw", "wbl", "wbr"].includes(position)) {
+    return "def";
+  }
+  return ["dm", "ml", "mc", "mr"].includes(position) ? "mid" : "att";
+}
+
+/** A short form of a name for a card: the surname alone, cut at the card's width by the style. */
+const shortName = (name: string) => name;
+
+/** One eleven on an upright pitch, each player at his place of the formation, with his position, name and ability. */
+function Pitch({ title, picks, average: mean }: { title: string; picks: readonly Pick[]; average: number | null }) {
+  return (
+    <section className="lineup-pitch-box">
+      <h3>
+        {title} <span className="muted">· {text.average(average(mean))}</span>
+      </h3>
+      <div className="lineup-pitch" role="group" aria-label={title}>
+        <div className="lineup-pitch-lines" aria-hidden="true" />
+        {picks.map((pick) => (
+          <div
+            key={pick.slot.id}
+            className={`lineup-card ${lineOf(pick.slot.position)}${pick.fit === "out" ? " off" : ""}`}
+            style={{ left: `${pick.slot.x}%`, top: `${pick.slot.y}%` } as CSSProperties}
+            title={pick.player ? `${pick.player.name} · ${text.fitTitle(pick.fit)}` : text.noPlayer}
+          >
+            <span className="lineup-card-pos">{positionLabel(pick.slot.position)}</span>
+            <span className="lineup-card-name">{pick.player ? shortName(pick.player.name) : "—"}</span>
+            <span className="lineup-card-ca">
+              {pick.player ? pick.player.currentAbility : ""}
+              {pick.fit !== "main" && pick.player ? " *" : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 const DESTINATIONS: readonly Destination[] = ["u19", "reserve", "rotation"];
 
 export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
   const loaded = useSquads(clubUid, version);
-  const [formation, setFormation] = useState<FormationName>(DEFAULT_FORMATION);
+  // The formation asked for, or "auto": the one that gives this squad the best eleven. Kept for the next club.
+  const [choice, setChoice] = useState<FormationName | "auto">(readChoice);
   const [includeUnavailable, setIncludeUnavailable] = useState(false);
 
   const teams = loaded?.details;
   const players = useMemo(() => (teams ? clubPlayers(teams) : []), [teams]);
+  const formation = useMemo(
+    () => (choice === "auto" ? bestFormation(players, includeUnavailable) : choice),
+    [choice, players, includeUnavailable],
+  );
   const lineup = useMemo(
     () => buildLineup(players, { formation, includeUnavailable }),
     [players, formation, includeUnavailable],
   );
+  const pick = (next: FormationName | "auto") => {
+    setChoice(next);
+    try {
+      localStorage.setItem(CHOICE_KEY, next);
+    } catch {
+      // The choice is only a convenience: without storage it is the next club's default again.
+    }
+  };
   // The team each player plays for now, by label.
   const playsFor = useMemo(() => {
     const map = new Map<number, string>();
@@ -70,8 +138,11 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
           <p className="muted">{text.intro}</p>
           <div className="lineup-controls">
             <div className="squad-teams" role="group" aria-label={text.formation}>
+              <button type="button" aria-pressed={choice === "auto"} title={text.autoTitle} onClick={() => pick("auto")}>
+                {choice === "auto" ? text.autoChosen(formation) : text.auto}
+              </button>
               {FORMATION_NAMES.map((name) => (
-                <button key={name} type="button" aria-pressed={name === formation} onClick={() => setFormation(name)}>
+                <button key={name} type="button" aria-pressed={name === choice} onClick={() => pick(name)}>
                   {name}
                 </button>
               ))}
@@ -86,6 +157,10 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
             </label>
           </div>
 
+          <div className="lineup-pitches">
+            <Pitch title={text.starters} picks={lineup.starters} average={lineup.startersAverage} />
+            <Pitch title={text.replacements} picks={lineup.replacements} average={lineup.replacementsAverage} />
+          </div>
           <PicksTable title={text.starters} picks={lineup.starters} average={lineup.startersAverage} playsFor={playsFor} />
           <PicksTable
             title={text.replacements}
