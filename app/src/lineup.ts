@@ -8,9 +8,11 @@
 //     positions the game lists for him fits (he can still be put there, and is flagged as out of position).
 //  2. The starters are the best assignment of players to the eleven places, the one with the highest total score (the
 //     Hungarian method), not a place-by-place pick: a versatile player is not wasted where another could play.
-//  3. The replacements are the same assignment over those who are left, so there is one for each place.
-//  4. Those who are left again go to the first-team group, the reserve team or the under-19s by age, potential and level
-//     (see `PLACEMENT_RULES`).
+//  3. The replacements are the same assignment over those who are left, so there is one for each place. The eleven
+//     starters and the eleven replacements are the 22 main players of the club.
+//  4. The match-day bench is the best `benchSize` of the replacements (a goalkeeper first), as many as the competition
+//     allows; any player of the club, whatever his team, can be put there by hand instead.
+//  5. Those who are left go to the reserve team or the under-19s by age, potential and level (see `PLACEMENT_RULES`).
 
 import type { SquadPlayer } from "./types";
 
@@ -98,8 +100,6 @@ export const GOALKEEPER_MISMATCH_COST = 80;
 export const PLACEMENT_RULES = {
   /** At most this old, he goes to the under-19s. */
   u19MaxAge: 19,
-  /** Up to this many points under the median replacement, and not younger than the under-19s, he stays with the first team. */
-  rotationMargin: 5,
   /** Up to this age and with a potential this far over the median replacement, the reserve team is a stage, not a dead end. */
   prospectMaxAge: 22,
   prospectPotentialMargin: 10,
@@ -142,9 +142,9 @@ export interface Pick {
 }
 
 /** Why a player who is not in the squad goes where he goes. */
-export type PlacementReason = "youth" | "rotation" | "prospect" | "surplus" | "reserve";
+export type PlacementReason = "youth" | "prospect" | "surplus" | "reserve";
 
-export type Destination = "rotation" | "reserve" | "u19";
+export type Destination = "reserve" | "u19";
 
 export interface Placement {
   player: SquadPlayer;
@@ -152,10 +152,25 @@ export interface Placement {
   reason: PlacementReason;
 }
 
+/** One place on the match-day bench. */
+export interface BenchSeat {
+  /** Null when nobody is left to fill it. */
+  player: SquadPlayer | null;
+  /** The place of the formation he covers, when he is one of the eleven replacements. */
+  covers: string | null;
+  /** Whether it was chosen by hand rather than by the calculator. */
+  manual: boolean;
+}
+
 export interface Lineup {
   formation: FormationName;
   starters: Pick[];
+  /** The eleven replacements, one for each place: with the starters, the 22 main players. */
   replacements: Pick[];
+  /** The match-day bench: `benchSize` seats. */
+  bench: BenchSeat[];
+  /** The replacements who are not on the bench. */
+  offBench: Pick[];
   placements: Placement[];
   /** Those who cannot be picked: on loan elsewhere, and (unless asked for) injured or banned. */
   unavailable: { player: SquadPlayer; reason: "loanedOut" | "injured" | "banned" }[];
@@ -168,7 +183,18 @@ export interface LineupOptions {
   formation: FormationName;
   /** Whether the injured and the banned may be picked. */
   includeUnavailable: boolean;
+  /** How many replacements the competition allows on the bench. */
+  benchSize: number;
+  /** The uid chosen by hand for each seat of the bench, in order; null or missing leaves it to the calculator. */
+  benchChoices?: readonly (number | null)[];
 }
+
+/** What `chooseBench` reads of the options. */
+type BenchOptions = { benchSize: number; benchChoices?: readonly (number | null)[] };
+
+export const MIN_BENCH_SIZE = 1;
+export const MAX_BENCH_SIZE = 12;
+export const DEFAULT_BENCH_SIZE = 5;
 
 /**
  * The players of the club, each once, in the order of the teams (the senior team's first): a player the game lists in
@@ -274,9 +300,6 @@ function place(player: SquadPlayer, benchLevel: number): Placement {
   if (age <= rules.u19MaxAge) {
     return { player, destination: "u19", reason: "youth" };
   }
-  if (player.currentAbility >= benchLevel - rules.rotationMargin) {
-    return { player, destination: "rotation", reason: "rotation" };
-  }
   if (age <= rules.prospectMaxAge && potential >= benchLevel + rules.prospectPotentialMargin) {
     return { player, destination: "reserve", reason: "prospect" };
   }
@@ -286,8 +309,61 @@ function place(player: SquadPlayer, benchLevel: number): Placement {
   return { player, destination: "reserve", reason: "reserve" };
 }
 
-/** The starters, the replacements and the placements of the players of a club. */
-export function buildLineup(players: readonly SquadPlayer[], { formation, includeUnavailable }: LineupOptions): Lineup {
+/**
+ * The bench: the seats chosen by hand first, then a goalkeeper, then the best of the replacements by score, then (when
+ * the bench is longer than the eleven replacements) the best of those left by current ability.
+ */
+function chooseBench(
+  replacements: readonly Pick[],
+  everyone: readonly SquadPlayer[],
+  { benchSize, benchChoices = [] }: BenchOptions,
+): BenchSeat[] {
+  const size = Math.min(MAX_BENCH_SIZE, Math.max(MIN_BENCH_SIZE, Math.floor(benchSize)));
+  const byUid = new Map(everyone.map((player) => [player.uid, player]));
+  const coverOf = new Map(replacements.flatMap((pick) => (pick.player ? [[pick.player.uid, pick.slot.position] as const] : [])));
+  const seats: BenchSeat[] = Array.from({ length: size }, () => ({ player: null, covers: null, manual: false }));
+  const taken = new Set<number>();
+  for (let i = 0; i < size; i++) {
+    const uid = benchChoices[i];
+    const player = uid === null || uid === undefined ? undefined : byUid.get(uid);
+    if (player !== undefined && !taken.has(player.uid)) {
+      seats[i] = { player, covers: coverOf.get(player.uid) ?? null, manual: true };
+      taken.add(player.uid);
+    }
+  }
+  // The calculator's own order: a goalkeeper, then the replacements by score, then the rest by ability.
+  const ranked = replacements
+    .filter((pick): pick is Pick & { player: SquadPlayer } => pick.player !== null)
+    .sort((a, b) => Number(b.slot.position === "gk") - Number(a.slot.position === "gk") || b.score - a.score);
+  const inReplacements = new Set(ranked.map((pick) => pick.player.uid));
+  const rest = everyone
+    .filter((player) => !inReplacements.has(player.uid))
+    .sort((a, b) => b.currentAbility - a.currentAbility);
+  const order: { player: SquadPlayer; covers: string | null }[] = [
+    ...ranked.map((pick) => ({ player: pick.player, covers: pick.slot.position })),
+    ...rest.map((player) => ({ player, covers: null })),
+  ];
+  let next = 0;
+  for (let i = 0; i < size; i++) {
+    if (seats[i].player !== null) {
+      continue;
+    }
+    while (next < order.length && taken.has(order[next].player.uid)) {
+      next++;
+    }
+    if (next < order.length) {
+      seats[i] = { player: order[next].player, covers: order[next].covers, manual: false };
+      taken.add(order[next].player.uid);
+    }
+  }
+  return seats;
+}
+
+/** The starters, the replacements, the bench and the placements of the players of a club. */
+export function buildLineup(
+  players: readonly SquadPlayer[],
+  { formation, includeUnavailable, benchSize, benchChoices }: LineupOptions,
+): Lineup {
   const unavailable: Lineup["unavailable"] = [];
   const pool: SquadPlayer[] = [];
   for (const player of players) {
@@ -307,14 +383,16 @@ export function buildLineup(players: readonly SquadPlayer[], { formation, includ
   const started = new Set(starters.flatMap((pick) => (pick.player ? [pick.player.uid] : [])));
   const afterStarters = pool.filter((player) => !started.has(player.uid));
   const replacements = assign(slots, afterStarters);
-  const subbed = new Set(replacements.flatMap((pick) => (pick.player ? [pick.player.uid] : [])));
+  const bench = chooseBench(replacements, afterStarters, { benchSize, benchChoices });
+  const benched = new Set(bench.flatMap((seat) => (seat.player ? [seat.player.uid] : [])));
+  const main = new Set(replacements.flatMap((pick) => (pick.player ? [pick.player.uid] : [])));
 
   const replacementLevels = replacements.flatMap((pick) => (pick.player ? [pick.player.currentAbility] : []));
   // The level of the bench is its median, not its weakest: one place nobody fits would pull the bar down.
   const sortedLevels = [...replacementLevels].sort((a, b) => a - b);
   const benchLevel = sortedLevels.length > 0 ? sortedLevels[Math.floor(sortedLevels.length / 2)] : 0;
   const placements = afterStarters
-    .filter((player) => !subbed.has(player.uid))
+    .filter((player) => !main.has(player.uid) && !benched.has(player.uid))
     .map((player) => place(player, benchLevel))
     .sort(
       (a, b) =>
@@ -325,6 +403,8 @@ export function buildLineup(players: readonly SquadPlayer[], { formation, includ
     formation,
     starters,
     replacements,
+    bench,
+    offBench: replacements.filter((pick) => pick.player !== null && !benched.has(pick.player.uid)),
     placements,
     unavailable,
     startersAverage: average(starters.flatMap((pick) => (pick.player ? [pick.player.currentAbility] : []))),
@@ -340,7 +420,7 @@ export function bestFormation(players: readonly SquadPlayer[], includeUnavailabl
   let best = DEFAULT_FORMATION;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const formation of FORMATION_NAMES) {
-    const { starters } = buildLineup(players, { formation, includeUnavailable });
+    const { starters } = buildLineup(players, { formation, includeUnavailable, benchSize: DEFAULT_BENCH_SIZE });
     // The score counts the cost of a place that does not fit, not just the ability, which is what picks a shape.
     const score = starters.reduce((sum, pick) => sum + pick.score, 0);
     if (score > bestScore + 1e-9) {

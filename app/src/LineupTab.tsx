@@ -1,5 +1,6 @@
-// The Squad calculator tab of a club's profile: for a formation, the eleven starters, a replacement for each place, and
-// the players to send to the reserve team or the under-19s. It only reads the squads the Squad tab reads (see
+// The Squad calculator tab of a club's profile, laid out like a team sheet: for a formation, the eleven starters on a
+// pitch, the match-day bench (as many seats as the competition allows, each one changeable by hand to any player of the
+// club), and the players to send to the reserve team or the under-19s. It only reads the squads the Squad tab reads (see
 // `lineup.ts` for how it chooses) and never writes to the game.
 
 import { useMemo, useState, type CSSProperties } from "react";
@@ -9,7 +10,11 @@ import {
   bestFormation,
   buildLineup,
   clubPlayers,
+  DEFAULT_BENCH_SIZE,
   FORMATION_NAMES,
+  MAX_BENCH_SIZE,
+  MIN_BENCH_SIZE,
+  type BenchSeat,
   type Destination,
   type FormationName,
   type Pick,
@@ -32,6 +37,18 @@ const average = (value: number | null) =>
   value === null ? "–" : formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 const CHOICE_KEY = "fmlibre.lineupFormation";
+
+const BENCH_KEY = "fmlibre.lineupBenchSize";
+
+/** The bench size chosen last time. */
+function readBenchSize(): number {
+  try {
+    const saved = Number(localStorage.getItem(BENCH_KEY));
+    return Number.isInteger(saved) && saved >= MIN_BENCH_SIZE && saved <= MAX_BENCH_SIZE ? saved : DEFAULT_BENCH_SIZE;
+  } catch {
+    return DEFAULT_BENCH_SIZE;
+  }
+}
 
 /** The formation chosen last time, or auto. */
 function readChoice(): FormationName | "auto" {
@@ -86,13 +103,16 @@ function Pitch({ title, picks, average: mean }: { title: string; picks: readonly
   );
 }
 
-const DESTINATIONS: readonly Destination[] = ["u19", "reserve", "rotation"];
+const DESTINATIONS: readonly Destination[] = ["reserve", "u19"];
 
 export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
   const loaded = useSquads(clubUid, version);
   // The formation asked for, or "auto": the one that gives this squad the best eleven. Kept for the next club.
   const [choice, setChoice] = useState<FormationName | "auto">(readChoice);
   const [includeUnavailable, setIncludeUnavailable] = useState(false);
+  // The seats of the bench: how many, and the player chosen by hand for each (null: left to the calculator).
+  const [benchSize, setBenchSize] = useState(readBenchSize);
+  const [benchChoices, setBenchChoices] = useState<(number | null)[]>([]);
 
   const teams = loaded?.details;
   const players = useMemo(() => (teams ? clubPlayers(teams) : []), [teams]);
@@ -101,9 +121,27 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
     [choice, players, includeUnavailable],
   );
   const lineup = useMemo(
-    () => buildLineup(players, { formation, includeUnavailable }),
-    [players, formation, includeUnavailable],
+    () => buildLineup(players, { formation, includeUnavailable, benchSize, benchChoices }),
+    [players, formation, includeUnavailable, benchSize, benchChoices],
   );
+  const changeBenchSize = (next: number) => {
+    const size = Math.min(MAX_BENCH_SIZE, Math.max(MIN_BENCH_SIZE, next));
+    setBenchSize(size);
+    try {
+      localStorage.setItem(BENCH_KEY, String(size));
+    } catch {
+      // A convenience only.
+    }
+  };
+  const chooseSeat = (seat: number, uid: number | null) =>
+    setBenchChoices((choices) => {
+      const next = [...choices];
+      while (next.length <= seat) {
+        next.push(null);
+      }
+      next[seat] = uid;
+      return next;
+    });
   const pick = (next: FormationName | "auto") => {
     setChoice(next);
     try {
@@ -155,19 +193,43 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
               />
               {text.includeUnavailable}
             </label>
+            <label className="lineup-check" title={text.benchSizeTitle}>
+              {text.benchSize}
+              <input
+                type="number"
+                className="lineup-bench-size"
+                min={MIN_BENCH_SIZE}
+                max={MAX_BENCH_SIZE}
+                value={benchSize}
+                onChange={(event) => {
+                  const value = Math.floor(Number(event.target.value));
+                  if (Number.isFinite(value)) {
+                    changeBenchSize(value);
+                  }
+                }}
+              />
+            </label>
           </div>
 
-          <div className="lineup-pitches">
+          <section className="lineup-sheet" aria-label={text.sheetTitle}>
             <Pitch title={text.starters} picks={lineup.starters} average={lineup.startersAverage} />
-            <Pitch title={text.replacements} picks={lineup.replacements} average={lineup.replacementsAverage} />
-          </div>
-          <PicksTable title={text.starters} picks={lineup.starters} average={lineup.startersAverage} playsFor={playsFor} />
-          <PicksTable
-            title={text.replacements}
-            picks={lineup.replacements}
-            average={lineup.replacementsAverage}
-            playsFor={playsFor}
-          />
+            <BenchPanel
+              seats={lineup.bench}
+              onChoose={chooseSeat}
+              players={players}
+              starters={lineup.starters}
+              playsFor={playsFor}
+            />
+          </section>
+          {lineup.offBench.length > 0 && (
+            <PicksTable
+              title={`${text.offBench} · ${text.average(average(lineup.replacementsAverage))}`}
+              picks={lineup.offBench}
+              average={null}
+              playsFor={playsFor}
+              hideAverage
+            />
+          )}
           {DESTINATIONS.map((destination) => {
             const group = lineup.placements.filter((placement) => placement.destination === destination);
             return group.length === 0 ? null : (
@@ -204,6 +266,84 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
         </>
       )}
     </div>
+  );
+}
+
+/** The bench of the team sheet: a seat per substitute, each a list of the whole club to pick from. */
+function BenchPanel({
+  seats,
+  onChoose,
+  players,
+  starters,
+  playsFor,
+}: {
+  seats: readonly BenchSeat[];
+  onChoose: (seat: number, uid: number | null) => void;
+  players: readonly SquadPlayer[];
+  starters: readonly Pick[];
+  playsFor: ReadonlyMap<number, string>;
+}) {
+  // Whoever starts is not offered; the others are grouped by the team they play for now.
+  const groups = useMemo(() => {
+    const started = new Set(starters.flatMap((pick) => (pick.player ? [pick.player.uid] : [])));
+    const byTeam = new Map<string, SquadPlayer[]>();
+    for (const player of players) {
+      if (!started.has(player.uid)) {
+        const team = playsFor.get(player.uid) ?? profileText.none;
+        byTeam.set(team, [...(byTeam.get(team) ?? []), player]);
+      }
+    }
+    return [...byTeam.entries()].map(
+      ([team, list]) => [team, [...list].sort((a, b) => b.currentAbility - a.currentAbility)] as const,
+    );
+  }, [players, playsFor, starters]);
+  const taken = new Set(seats.flatMap((seat) => (seat.player ? [seat.player.uid] : [])));
+  return (
+    <section className="lineup-bench-box">
+      <h3>{text.benchTitle(seats.length)}</h3>
+      <ol className="lineup-bench">
+        {seats.map((seat, index) => (
+          <li key={index} className={`lineup-seat${seat.manual ? " manual" : ""}`}>
+            <span className="lineup-seat-n">{text.seat(index + 1)}</span>
+            <select
+              aria-label={text.seat(index + 1)}
+              value={seat.manual && seat.player ? String(seat.player.uid) : ""}
+              onChange={(event) => onChoose(index, event.target.value === "" ? null : Number(event.target.value))}
+            >
+              <option value="">
+                {seat.player && !seat.manual
+                  ? `${text.auto} · ${seat.player.name}`
+                  : text.autoSeat}
+              </option>
+              {groups.map(([team, list]) => (
+                <optgroup key={team} label={team}>
+                  {list.map((player) => (
+                    <option
+                      key={player.uid}
+                      value={player.uid}
+                      disabled={taken.has(player.uid) && player.uid !== seat.player?.uid}
+                    >
+                      {player.name} · {player.positions[0] ? positionLabel(player.positions[0]) : "–"} · {player.currentAbility}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <span className="lineup-seat-info muted">
+              {seat.player ? (
+                <>
+                  {seat.player.positions[0] ? positionLabel(seat.player.positions[0]) : ""} · {seat.player.currentAbility}
+                  {seat.covers ? ` · ${text.covers(positionLabel(seat.covers))}` : ""}
+                  {seat.manual ? ` · ${text.manual}` : ""}
+                </>
+              ) : (
+                text.noPlayer
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -245,16 +385,19 @@ function PicksTable({
   picks,
   average: mean,
   playsFor,
+  hideAverage = false,
 }: {
   title: string;
   picks: readonly Pick[];
   average: number | null;
   playsFor: ReadonlyMap<number, string>;
+  hideAverage?: boolean;
 }) {
   return (
     <section className="lineup-section">
       <h3>
-        {title} <span className="muted">· {text.average(average(mean))}</span>
+        {title}
+        {!hideAverage && <span className="muted"> · {text.average(average(mean))}</span>}
       </h3>
       <div className="squad-table-wrap">
         <table className="grid squad-grid" aria-label={title}>

@@ -24,18 +24,29 @@ interface LineupStrings {
   now: string;
   fit: Record<Fit, string>;
   /** The destination groups of the players who are not in the squad. */
-  groups: { rotation: string; reserve: string; u19: string };
+  groups: { reserve: string; u19: string };
   reasons: Record<PlacementReason, string>;
   unavailableReasons: { loanedOut: string; injured: string; banned: string };
   empty: string;
   rulesTitle: string;
   rules: string[];
   loading: string;
+  sheetTitle: string;
+  benchTitle: (size: number) => string;
+  benchSize: string;
+  benchSizeTitle: string;
+  seat: (n: number) => string;
+  autoSeat: string;
+  covers: (place: string) => string;
+  manual: string;
+  mainTitle: string;
+  offBench: string;
+  bestOf: string;
 }
 
 const en: LineupStrings = {
   intro:
-    "Read only: nothing is written to the game. Pick a formation, or leave it on Auto; the calculator reads the whole club and proposes the starters, a replacement for each place, and where everyone else belongs.",
+    "Read only: nothing is written to the game. Laid out like a team sheet: the eleven starters, the bench with as many seats as the competition allows, then who goes to the reserve team and the under-19s. The club's 22 main players are the eleven starters and eleven replacements; any player of the club, from any team, can be put on the bench by hand.",
   formation: "Formation",
   auto: "Auto",
   autoTitle: "The formation that gives this squad the best eleven",
@@ -53,13 +64,11 @@ const en: LineupStrings = {
   now: "Plays for",
   fit: { main: "", alt: "other position", out: "out of position" },
   groups: {
-    rotation: "Stay with the first team",
     reserve: "Send to the reserve team",
     u19: "Send to the under-19s",
   },
   reasons: {
     youth: `${rules.u19MaxAge} or younger`,
-    rotation: `within ${rules.rotationMargin} points of the median replacement`,
     prospect: `young with room to grow: potential well over the bench`,
     surplus: `well under the bench and ${rules.surplusMinAge}+: sell or release`,
     reserve: "under the bench",
@@ -73,15 +82,27 @@ const en: LineupStrings = {
     "Score for a place = current ability minus a cost: 0 in his best position, a few points for another position he is listed for or a neighbouring one, 30 when none fits (shown as out of position).",
     "The starters are the assignment with the best total score, not a place-by-place pick, so a versatile player is not wasted.",
     "The replacements are the same assignment over the players left: one for each place.",
-    `Of the rest, ${rules.u19MaxAge} or younger go to the under-19s; those within ${rules.rotationMargin} points of the median replacement stay with the first team; the others go to the reserve team, marked as a prospect (${rules.prospectMaxAge} or younger with potential ${rules.prospectPotentialMargin}+ over the bench) or as a surplus (${rules.surplusMinAge}+ and ${rules.surplusMargin}+ under the bench).`,
+    "The 22 main players are the eleven starters and the eleven replacements (one per place). The bench takes the best of the replacements, a goalkeeper first, up to the number of seats set above; a seat can be given to any player of the club instead.",
+    `Of the rest, ${rules.u19MaxAge} or younger go to the under-19s; the others go to the reserve team, marked as a prospect (${rules.prospectMaxAge} or younger with potential ${rules.prospectPotentialMargin}+ over the replacements) or as a surplus (${rules.surplusMinAge}+ and ${rules.surplusMargin}+ under them).`,
     "The injured, the banned and players on loan elsewhere are left out unless the box above is ticked.",
   ],
   loading: "Reading the squad…",
+  sheetTitle: "Team sheet",
+  benchTitle: (size) => `Bench (${size})`,
+  benchSize: "Substitutes allowed",
+  benchSizeTitle: "How many players the competition lets you put on the bench",
+  seat: (n) => `Sub ${n}`,
+  autoSeat: "Auto (best available)",
+  covers: (place) => `covers ${place}`,
+  manual: "chosen by hand",
+  mainTitle: "The 22 main players",
+  offBench: "Main players left off the bench",
+  bestOf: "Suggested",
 };
 
 const fr: LineupStrings = {
   intro:
-    "Lecture seule : rien n'est écrit dans le jeu. Choisissez une formation, ou laissez Auto ; le calculateur lit tout le club et propose les titulaires, un remplaçant pour chaque poste, et où envoyer les autres.",
+    "Lecture seule : rien n'est écrit dans le jeu. Présenté comme une feuille de match : les 11 titulaires, le banc avec autant de places que la compétition en autorise, puis qui envoyer en réserve et en U19. Les 22 joueurs principaux du club sont les 11 titulaires et 11 remplaçants ; n'importe quel joueur du club, de n'importe quelle équipe, peut être mis sur le banc à la main.",
   formation: "Formation",
   auto: "Auto",
   autoTitle: "La formation qui donne le meilleur onze avec cet effectif",
@@ -99,13 +120,11 @@ const fr: LineupStrings = {
   now: "Joue en",
   fit: { main: "", alt: "autre poste", out: "hors poste" },
   groups: {
-    rotation: "Restent avec l'équipe première",
     reserve: "À envoyer en réserve",
     u19: "À envoyer en U19",
   },
   reasons: {
     youth: `${rules.u19MaxAge} ans ou moins`,
-    rotation: `à ${rules.rotationMargin} points ou moins du remplaçant médian`,
     prospect: "jeune avec une marge : potentiel nettement au-dessus du banc",
     surplus: `nettement sous le banc et ${rules.surplusMinAge} ans ou plus : à vendre ou libérer`,
     reserve: "sous le niveau du banc",
@@ -119,10 +138,22 @@ const fr: LineupStrings = {
     "Score pour un poste = niveau actuel (CA) moins un coût : 0 à son meilleur poste, quelques points pour un autre poste de sa liste ou un poste voisin, 30 si aucun ne convient (affiché « hors poste »).",
     "Les titulaires sont l'affectation au meilleur score total, pas un choix poste par poste : un joueur polyvalent n'est pas gaspillé.",
     "Les remplaçants sont la même affectation sur les joueurs restants : un pour chaque poste.",
-    `Parmi les autres, ${rules.u19MaxAge} ans ou moins vont en U19 ; ceux à ${rules.rotationMargin} points ou moins du remplaçant médian restent avec l'équipe première ; les autres vont en réserve, notés « prospect » (${rules.prospectMaxAge} ans ou moins et potentiel (PA) au moins ${rules.prospectPotentialMargin} points au-dessus du banc) ou « surplus » (${rules.surplusMinAge} ans ou plus et au moins ${rules.surplusMargin} points sous le banc).`,
+    "Les 22 joueurs principaux sont les 11 titulaires et les 11 remplaçants (un par poste). Le banc prend les meilleurs remplaçants, un gardien d'abord, jusqu'au nombre de places réglé ci-dessus ; une place peut être donnée à n'importe quel joueur du club à la place.",
+    `Parmi les autres, ${rules.u19MaxAge} ans ou moins vont en U19 ; les autres vont en réserve, notés « prospect » (${rules.prospectMaxAge} ans ou moins et potentiel (PA) au moins ${rules.prospectPotentialMargin} points au-dessus des remplaçants) ou « surplus » (${rules.surplusMinAge} ans ou plus et au moins ${rules.surplusMargin} points sous eux).`,
     "Les blessés, les suspendus et les joueurs prêtés ailleurs sont écartés, sauf si la case ci-dessus est cochée.",
   ],
   loading: "Lecture de l'effectif…",
+  sheetTitle: "Feuille de match",
+  benchTitle: (size) => `Banc (${size})`,
+  benchSize: "Remplaçants autorisés",
+  benchSizeTitle: "Le nombre de joueurs que la compétition permet de mettre sur le banc",
+  seat: (n) => `Remplaçant ${n}`,
+  autoSeat: "Auto (meilleur disponible)",
+  covers: (place) => `couvre ${place}`,
+  manual: "choisi à la main",
+  mainTitle: "Les 22 joueurs principaux",
+  offBench: "Joueurs principaux hors du banc",
+  bestOf: "Suggestions",
 };
 
 export const lineupText: LineupStrings = locale === "fr" ? fr : en;
