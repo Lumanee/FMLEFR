@@ -1590,6 +1590,11 @@ export const en = {
     copied: "Copied",
     failed: (reason: string) => `Could not copy the diagnostics: ${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Copy name",
+    copySelection: "Copy",
+  },
 
   /** What each check is about (`CheckKey`), as the notice lists the ones that did not pass and the errors name them. */
   checks: {

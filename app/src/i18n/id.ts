@@ -1410,6 +1410,11 @@ export const id: Strings = {
     copied: "Disalin",
     failed: (reason) => `Diagnostik tidak bisa disalin: ${reason}`,
   },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Salin nama",
+    copySelection: "Salin",
+  },
 
   checks: {
     gameDate: "tanggal dalam game",

@@ -8,6 +8,7 @@ import { NationalBrowser } from "./NationalBrowser";
 import { CommandPalette, Keys, SearchIcon, type Command, type Found, type FoundKind } from "./CommandPalette";
 import { CompatibilityNotice } from "./CompatibilityNotice";
 import { CopyDiagnostics } from "./CopyDiagnostics";
+import { NameContextMenu } from "./NameContextMenu";
 import { forgetFieldTables } from "./fieldTables";
 import { describeError, describeGame, formatDate } from "./format";
 import { FrozenNotice } from "./FrozenNotice";
@@ -466,6 +467,7 @@ function App() {
 
   return (
     <div className="app">
+      <NameContextMenu />
       <header className="masthead">
         <BrandMark />
         <nav className="tabs">
