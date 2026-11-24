@@ -1090,7 +1090,7 @@ export const it: Strings = {
     reputationTitle: "Reputazione",
 
     tabsLabel: "Sezioni della società",
-    tabs: { overview: "Panoramica", squad: "Rosa", staff: "Staff", stadium: "Stadio" },
+    tabs: { overview: "Panoramica", squad: "Rosa", staff: "Staff", stadium: "Stadio", lineup: "Calcolatore rosa" },
     squadLocked: "Termina la modifica per aprire la rosa",
     staffLocked: "Termina la modifica per aprire lo staff",
 

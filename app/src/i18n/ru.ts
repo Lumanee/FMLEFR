@@ -1064,7 +1064,7 @@ export const ru: Strings = {
     reputationTitle: "Репутация",
 
     tabsLabel: "Разделы клуба",
-    tabs: { overview: "Обзор", squad: "Состав", staff: "Персонал", stadium: "Стадион" },
+    tabs: { overview: "Обзор", squad: "Состав", staff: "Персонал", stadium: "Стадион", lineup: "Расчёт состава" },
     squadLocked: "Завершите редактирование, чтобы открыть состав",
     staffLocked: "Завершите редактирование, чтобы открыть персонал",
 
