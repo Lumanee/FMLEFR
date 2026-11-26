@@ -1815,6 +1815,7 @@ mod tests {
                 "FM27 0.9.2409.0 (Game Pass)",
                 "FM27 0.9.2435.0 (Game Pass)",
                 "FM27 0.9.2524.0 (Game Pass)",
+                "FM27 0.9.2562.0 (Game Pass)",
                 "FM27 Steam build 26340721 (27.0.0)",
                 "FM27 Steam build 26385295 (27.0.1)",
                 "FM27 Steam build 26577676",
@@ -1939,7 +1940,7 @@ mod tests {
         };
         assert_eq!(
             moved(true),
-            ["FM27 0.9.2524.0 (Game Pass)", "FM27 Steam build 26620374", "FM27 (Epic Games Store)"]
+            ["FM27 0.9.2524.0 (Game Pass)", "FM27 0.9.2562.0 (Game Pass)", "FM27 Steam build 26620374", "FM27 (Epic Games Store)"]
         );
         assert_eq!(
             moved(false),
