@@ -13,9 +13,9 @@ current_date = 0x539BD10
 retirement_manager = 0x53EBBC0
 game_ui = 0x53F9A60
 
-# 0.9.2524.0's 0x53EDC70 and 0x53EA210 less 0x1FE0, not checked.
+# 0.9.2524.0's 0x53EDC70 less 0x1FE0, not checked. The training manager's (0x53E8230 by the same shift) held no
+# histories of training on the first try (the tactics check failed on it), so it is not placed until it is found.
 tactics_manager = 0x53EBC90
-training_manager = 0x53E8230
 
 [plugin]
 size_of_image = 0x17624000
