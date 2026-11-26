@@ -1016,6 +1016,15 @@ export interface LoggedChange {
     to: string;
   };
   /**
+   * Set for a kit item's colours or style changed (`set_kit`), logged as a change of the club's field `kit`: the item
+   * ("Home shirt") and its colours and style before and after, in words.
+   */
+  kit?: {
+    item: string;
+    from: string;
+    to: string;
+  };
+  /**
    * Set for a player given another name (`rename_player`), logged as a change of his field `name.first`, `name.last`,
    * `name.common` or `name.full` from one length in bytes to the other (0 for none): the names, null for a common or
    * full name he did not have, or no longer has.
@@ -1720,4 +1729,21 @@ export interface YouthIntakes {
    */
   marked: boolean;
   intakes: Intake[];
+}
+
+/** One kit item a club holds (`club_kits`): colours as red, green and blue, in the order foreground, background, outline, number, number outline. */
+export interface KitItem {
+  address: number;
+  /** 0 home, 1 away, 2 third. */
+  slot: number;
+  /** 1 a shirt; others are not named yet. */
+  itemType: number;
+  style: number;
+  colours: [number, number, number][];
+}
+
+/** A club's kit items, or that this version of the game does not place them (`club_kits`). */
+export interface ClubKits {
+  unavailable: boolean;
+  items: KitItem[];
 }

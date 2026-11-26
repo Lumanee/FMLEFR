@@ -135,6 +135,8 @@ export const clubListText = strings.clubList;
 export const leaguePrizesText = strings.leaguePrizes;
 /** A club's sponsorship deals, in its finances: each deal by its kind, what it pays and its term. */
 export const sponsorshipsText = strings.sponsorships;
+/** A club's kits: each item's colours and style, which can be changed. */
+export const kitsText = strings.kits;
 /** The Clubs tab's national teams: the list, the profile of a national team and why there may be none. */
 export const nationalText = strings.national;
 

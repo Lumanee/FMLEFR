@@ -718,6 +718,7 @@ export const fr: Strings = {
     "finance.total_wage_budget": "Budget salarial total",
     "stadium.capacity": "Capacité du stade",
     "stadium.name": "Nom du stade",
+    kit: "Maillot",
     "name.first": "Prénom",
     "name.last": "Nom de famille",
     "name.common": "Nom utilisé communément",
@@ -1410,6 +1411,25 @@ export const fr: Strings = {
     placeField: (place) => `Prime du championnat pour la ${format(place)}e place`,
     changedIn: (league, groups) =>
       groups > 1 ? `Pour chaque club de ${league}, dans ${format(groups)} groupes` : `Pour chaque club de ${league}`,
+  },
+
+  kits: {
+    title: "Maillots",
+    reading: "Lecture des maillots du club…",
+    none: "Le club n'a aucun élément de tenue.",
+    itemName: (slot, type) =>
+      `${type === 1 ? "Maillot" : `Élément ${type}`} ${slot === 0 ? "domicile" : slot === 1 ? "extérieur" : slot === 2 ? "third" : ""}`.trim(),
+    foreground: "Premier plan",
+    background: "Fond",
+    outline: "Contour",
+    number: "Numéro",
+    numberOutline: "Contour du numéro",
+    style: "Style",
+    apply: "Appliquer",
+    applying: "Application…",
+    reset: "Rétablir",
+    note: "Le jeu ne redessine les maillots que lorsqu'un jour passe : avancez d'un jour pour voir le changement. Le maillot domicile donne aussi ses couleurs aux écrans. Le jeu garde 5 bits par couleur : les couleurs sont arrondies au pas qu'il conserve.",
+    unavailable: "L'éditeur ne sait pas où cette version du jeu garde les maillots ; il n'en montre donc aucun.",
   },
 
   sponsorships: {

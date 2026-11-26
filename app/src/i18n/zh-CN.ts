@@ -651,6 +651,7 @@ export const zhCN: Strings = {
     "finance.total_wage_budget": "总工资预算",
     "stadium.capacity": "球场容量",
     "stadium.name": "球场名称",
+    kit: "Kit",
     "name.first": "名",
     "name.last": "姓",
     "name.common": "常用名",
@@ -1400,6 +1401,31 @@ export const zhCN: Strings = {
     placeField: (place) => `联赛第 ${format(place)} 名奖金`,
     changedIn: (league, groups) =>
       groups > 1 ? `${league} 的每家俱乐部，共 ${format(groups)} 个小组` : `${league} 的每家俱乐部`,
+  },
+
+  /**
+   * A club's kits: each item the game keeps (home, away and third shirts; a club that has them also has shorts, socks
+   * and goalkeeper items) with its five colours and its style, which can be changed while the game can be written to.
+   */
+  kits: {
+    title: "Kits",
+    reading: "Reading the club's kits…",
+    none: "The club has no kit items.",
+    /** The name of an item: its slot (0 home, 1 away, 2 third) and its type (1 a shirt). */
+    itemName: (slot: number, type: number) =>
+      `${slot === 0 ? "Home" : slot === 1 ? "Away" : slot === 2 ? "Third" : "Kit"} ${type === 1 ? "shirt" : `item ${type}`}`,
+    foreground: "Foreground",
+    background: "Background",
+    outline: "Outline",
+    number: "Number",
+    numberOutline: "Number outline",
+    style: "Style",
+    apply: "Apply",
+    applying: "Applying…",
+    reset: "Reset",
+    /** Under the kits. */
+    note: "The game redraws kits only when a day passes: advance a day to see a change. The home kit also sets the colours of the screens. The game keeps 5 bits of each colour, so colours are rounded to the nearest step it keeps.",
+    unavailable: "The editor does not know where this version of the game keeps the kits, so it shows none.",
   },
 
   sponsorships: {

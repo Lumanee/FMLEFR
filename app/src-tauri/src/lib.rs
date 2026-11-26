@@ -14,15 +14,15 @@ use fmlibre_core::{
     ClauseSet, ClubDetails, ClubFilter, ClubIndex, ClubMove, ClubSummary, Coded, CohesionSet, CompetitionPrizes,
     DIRECTOR_OF_FOOTBALL, EditError, Entity, EntityArrays, ExportFormat, ExportHeader, Exported, FeePlan, Field,
     FmDate, GAME_EXE, GAME_PLUGIN, GameInfo, GraphicsCounts, GraphicsIndex, HOMEGROWN_RULES, Healed, Health, Kind,
-    LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MANAGER, MoveError, MovePlan, MoveTerms, NameChange,
-    NameKind, Nation, NationalIndex, NationalSide, NationalTeamSummary, NationalUnavailable, NewContract,
-    NewStaffContract, Operation, Paid, People, PersonNames, Picture, Planned, PlayerDetails, PlayerFilter, PlayerIndex,
-    PlayerOrder, PlayerSummary, PrizeAmount, PrizeChange, PrizeError, PrizeMoney, PrizeReadError, PrizeUnavailable,
-    ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS, SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest,
-    Scouted, SearchIndex, Session, SessionError, Skipped, Sponsorship, SponsorshipReadError, SponsorshipUnavailable,
-    SquadMember, SquadReport, StadiumName, StadiumRename, StaffChange, StaffDetails, StaffFilter, StaffIndex,
-    StaffOrder, StaffPlan, StaffSummary, TacticsSet, Target, Tie, TieTarget, competition_prizes, diagnostics_report,
-    find_game, nations, sort_players, sort_staff,
+    KitChange, KitItem, KitsError, LOAN_EXPIRES, LOAN_OPTION_FEE, Lifted, Listed, Loan, Lock, MANAGER, MoveError,
+    MovePlan, MoveTerms, NameChange, NameKind, Nation, NationalIndex, NationalSide, NationalTeamSummary,
+    NationalUnavailable, NewContract, NewStaffContract, Operation, Paid, People, PersonNames, Picture, Planned,
+    PlayerDetails, PlayerFilter, PlayerIndex, PlayerOrder, PlayerSummary, PrizeAmount, PrizeChange, PrizeError,
+    PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS,
+    SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped,
+    Sponsorship, SponsorshipReadError, SponsorshipUnavailable, SquadMember, SquadReport, StadiumName, StadiumRename,
+    StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, StaffSummary, TacticsSet, Target, Tie,
+    TieTarget, competition_prizes, diagnostics_report, find_game, nations, sort_players, sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -426,6 +426,8 @@ struct StoredChange {
     objects: Option<ObjectNames>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     prize: Option<PrizeNote>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kit: Option<KitNote>,
 }
 
 impl StoredChange {
@@ -454,6 +456,7 @@ impl StoredChange {
             person_name: logged.person_name.clone(),
             objects: logged.objects.clone(),
             prize: logged.prize.clone(),
+            kit: logged.kit.clone(),
         }
     }
 
@@ -479,6 +482,7 @@ impl StoredChange {
             person_name: self.person_name,
             objects: self.objects,
             prize: self.prize,
+            kit: self.kit,
             stored: Some(StoredKey { session: self.session, id: self.id }),
             undo: self.option.map(Undo::Recall),
         }
@@ -1217,6 +1221,7 @@ impl Connection {
             person_name: None,
             objects: None,
             prize: None,
+            kit: None,
             stored: None,
             undo: None,
         }
@@ -1413,6 +1418,23 @@ impl Connection {
         let stadium = StadiumNames { from: done.from.clone(), to: done.to.clone() };
         let entry = self.entry(change, name, None);
         self.push_log(LoggedChange { stadium: Some(stadium), undo: Some(Undo::Stadium(done)), ..entry })
+    }
+
+    /// Logs a kit item changed, as a change of the club's field `kit` from the item's index to itself (the values are
+    /// the words of the note); its undo writes the old colours and style back.
+    fn log_kit(&mut self, done: KitChange) -> LoggedChange {
+        let change = Change {
+            entity: Entity::Club,
+            uid: done.club,
+            field: "kit".to_owned(),
+            old: done.index as i64,
+            new: done.index as i64,
+        };
+        let name = self.clubs.get(done.club).map_or_else(|| done.club.to_string(), |club| club.name.clone());
+        let note =
+            KitNote { item: kit_item_name(&done.after), from: kit_words(&done.before), to: kit_words(&done.after) };
+        let entry = self.entry(change, name, None);
+        self.push_log(LoggedChange { kit: Some(note), undo: Some(Undo::Kit(done)), ..entry })
     }
 
     /// Logs a change of a player's name just written, as a change of his field `name.first`, `name.last`,
@@ -1909,6 +1931,7 @@ impl Connection {
                 self.note_change(&entry.change, entry.change.old);
             }
             Some(Undo::Stadium(renamed)) => self.undo_stadium(&renamed)?,
+            Some(Undo::Kit(done)) => self.session.undo_kit_change(&done).map_err(kits_failure)?,
             Some(Undo::Name(done)) => {
                 self.session.undo_name_change(&done)?;
                 self.renamed_player(done.person);
@@ -2233,6 +2256,10 @@ struct LoggedChange {
     /// `prize.win`, `prize.draw` or `prize.loss` in pounds: the league, and how many settings of it were changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     prize: Option<PrizeNote>,
+    /// For a kit item's colours or style changed, logged as a change of the club's field `kit`: the item before and
+    /// after, in words.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kit: Option<KitNote>,
     /// For an earlier change: what the history file calls it.
     #[serde(skip)]
     stored: Option<StoredKey>,
@@ -2259,6 +2286,22 @@ struct PrizeNote {
     league: String,
     league_uid: u32,
     settings: usize,
+}
+
+/// A kit item before and after a change, in words: its slot and type, then the colours and style.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct KitNote {
+    /// The item, as the club's kits list it: "Home shirt".
+    item: String,
+    from: String,
+    to: String,
+}
+
+/// A kit item's colours and style in words: the five colours as hex, then the style.
+fn kit_words(item: &KitItem) -> String {
+    let colours: Vec<String> = item.colours.iter().map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])).collect();
+    format!("{} · {}", colours.join(" "), item.style)
 }
 
 /// A stadium's name before and after a rename.
@@ -2294,6 +2337,8 @@ enum Undo {
     Recall(Change),
     /// A stadium renamed: the bytes it wrote, which the undo writes back.
     Stadium(StadiumRename),
+    /// A kit item's colours or style changed: the bytes it wrote, which the undo writes back.
+    Kit(KitChange),
     /// A player given another name: the person's pointer it wrote, which the undo writes back.
     Name(NameChange),
     Move(LoggedMove),
@@ -3195,6 +3240,75 @@ struct ClubSponsorships {
     /// does not read as the game's.
     unavailable: Option<SponsorshipUnavailable>,
     deals: Vec<Sponsorship>,
+}
+
+/// The words for a kit item's slot and type, in English: the app translates the common ones itself.
+fn kit_item_name(item: &KitItem) -> String {
+    let slot = match item.slot {
+        0 => "Home",
+        1 => "Away",
+        2 => "Third",
+        _ => "Kit",
+    };
+    let kind = match item.item_type {
+        1 => "shirt".to_owned(),
+        other => format!("item {other}"),
+    };
+    format!("{slot} {kind}")
+}
+
+fn kits_failure(err: KitsError) -> Failure {
+    Failure::new("app.kits", err.to_string())
+}
+
+/// A club's kit items, or why the app shows none on this version of the game.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClubKits {
+    /// True where the layout of this build does not place the kits.
+    unavailable: bool,
+    items: Vec<KitItem>,
+}
+
+/// The kit items the club `club` holds, read from the game each time: a few pointers and no scan. Only reads.
+#[tauri::command]
+fn club_kits(state: State<'_, AppState>, club: u32) -> Result<ClubKits, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+    match connection.session.club_kits(summary) {
+        Ok(items) => Ok(ClubKits { unavailable: false, items }),
+        Err(KitsError::Unavailable) => Ok(ClubKits { unavailable: true, items: Vec::new() }),
+        Err(err) => Err(kits_failure(err)),
+    }
+}
+
+/// Sets the five colours (as `RRGGBB` hex, foreground, background, outline, number, number outline) and the style of
+/// item number `index` of the club `club`'s kits. Written at once and logged; the game shows it after the next day.
+#[tauri::command]
+fn set_kit(
+    state: State<'_, AppState>,
+    club: u32,
+    index: usize,
+    colours: Vec<String>,
+    style: u32,
+) -> Result<LoggedChange, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let found = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+    let mut parsed = Vec::new();
+    for (position, colour) in colours.iter().enumerate() {
+        let hex = colour.trim_start_matches('#');
+        let value = (hex.len() == 6).then(|| u32::from_str_radix(hex, 16).ok()).flatten();
+        let value = value.ok_or_else(|| Failure::new("app.kits", format!("{colour} is not a colour")))?;
+        parsed.push((position, [(value >> 16) as u8, (value >> 8) as u8, value as u8]));
+    }
+    let plan = connection.session.plan_kit_change(found, index, &parsed, Some(style)).map_err(kits_failure)?;
+    if plan.is_empty() {
+        return Err(Failure::new("app.kits", "The kit already has these colours and style"));
+    }
+    connection.session.apply_kit_change(&plan).map_err(kits_failure)?;
+    Ok(connection.log_kit(plan))
 }
 
 /// What a club's league pays, or why the app shows none on this version of the game.
@@ -5421,6 +5535,8 @@ pub fn run() {
             club_leagues,
             league_prizes,
             club_sponsorships,
+            club_kits,
+            set_kit,
             set_league_prizes,
             national_status,
             search_national_teams,
@@ -5646,6 +5762,7 @@ mod tests {
             person_name: None,
             objects: None,
             prize: None,
+            kit: None,
             stored: None,
             undo: None,
         }

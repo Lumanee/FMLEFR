@@ -116,6 +116,9 @@ export function changeWords(change: LoggedChange, field: EditField | undefined):
   if (change.stadium) {
     return sides(change.stadium.from, change.stadium.to);
   }
+  if (change.kit) {
+    return sides(change.kit.from, change.kit.to);
+  }
   if (change.personName) {
     return sides(change.personName.from ?? profileText.none, change.personName.to ?? profileText.none);
   }

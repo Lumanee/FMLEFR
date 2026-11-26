@@ -17,6 +17,7 @@ use serde::Serialize;
 use crate::clubs::ClubSummary;
 use crate::profile::KitsLayout;
 use crate::session::Session;
+use crate::transfer::{MoveError, Patch, Patches};
 
 /// The most items a club is taken to hold: the richest seen has 13.
 const MOST_ITEMS: u64 = 64;
@@ -49,6 +50,8 @@ pub enum KitsError {
     /// A value is not one the editor writes.
     Refused(&'static str),
     Memory(fmlibre_mem::Error),
+    /// The game's state does not allow writing just now (another save, a failed check), or memory changed.
+    Write(MoveError),
 }
 
 impl std::fmt::Display for KitsError {
@@ -58,7 +61,14 @@ impl std::fmt::Display for KitsError {
             KitsError::Unreadable(why) => write!(f, "the kits do not read as the game's: {why}"),
             KitsError::Refused(why) => write!(f, "not written: {why}"),
             KitsError::Memory(err) => write!(f, "{err}"),
+            KitsError::Write(err) => write!(f, "{err}"),
         }
+    }
+}
+
+impl From<MoveError> for KitsError {
+    fn from(err: MoveError) -> Self {
+        KitsError::Write(err)
     }
 }
 
@@ -142,16 +152,16 @@ impl Session {
         Ok(items)
     }
 
-    /// Writes colours and a style into item number `index` of a club's kits: the colours given (by position, in the
-    /// order of [`COLOUR_NAMES`]) and the style, if any. Checks the club and the item first, and reads the bytes back
-    /// after. Returns the item as it was before, so it can be put back.
-    pub fn set_kit_item(
+    /// Plans a change of item number `index` of a club's kits: the colours given (by position, in the order of
+    /// [`COLOUR_NAMES`]) and the style, if any. Checks the club and the item. Writes nothing; a change that alters
+    /// nothing has no patches.
+    pub fn plan_kit_change(
         &self,
         club: &ClubSummary,
         index: usize,
         colours: &[(usize, [u8; 3])],
         style: Option<u32>,
-    ) -> Result<KitItem, KitsError> {
+    ) -> Result<KitChange, KitsError> {
         let k = self.kits_layout()?;
         if colours.iter().any(|(i, _)| *i >= COLOURS) {
             return Err(KitsError::Refused("a colour position above 4"));
@@ -172,19 +182,56 @@ impl Session {
             let at = k.style as usize;
             new[at..at + 4].copy_from_slice(&style.to_le_bytes());
         }
-        if new == bytes {
-            return Ok(before);
-        }
+        let after = read_item(address, &new, k).ok_or(KitsError::Unreadable("the new item does not read as a kit"))?;
         // Only the colours and the style change; the rest of the record stays as it is.
         let (from, to) = (k.colours as usize, k.style as usize + 4);
-        self.process.write_bytes(address + from as u64, &new[from..to])?;
-        let after = self.process.read_bytes(address, k.item_size as usize)?;
-        if after != new {
-            // Put it back and say so rather than leave a half-written kit.
-            self.process.write_bytes(address + from as u64, &bytes[from..to])?;
-            return Err(KitsError::Unreadable("the game's memory did not take the write; it was put back"));
-        }
-        Ok(before)
+        let mut patches = Patches::default();
+        patches.push(address + from as u64, &bytes[from..to], &new[from..to]);
+        Ok(KitChange { club: club.uid, index, before, after, patches: patches.0 })
+    }
+
+    /// Writes a planned change, after the checks every write has (a known build, the same save), and reads it back.
+    pub fn apply_kit_change(&self, plan: &KitChange) -> Result<(), KitsError> {
+        self.apply_patches(&plan.patches)?;
+        Ok(())
+    }
+
+    /// Puts the old colours and style back, provided memory still holds the new ones.
+    pub fn undo_kit_change(&self, done: &KitChange) -> Result<(), KitsError> {
+        self.undo_patches(&done.patches)?;
+        Ok(())
+    }
+
+    /// Plans and writes a change in one go, as the probe does, without the locks of [`Session::apply_kit_change`]: returns the item as it was.
+    pub fn set_kit_item(
+        &self,
+        club: &ClubSummary,
+        index: usize,
+        colours: &[(usize, [u8; 3])],
+        style: Option<u32>,
+    ) -> Result<KitItem, KitsError> {
+        let plan = self.plan_kit_change(club, index, colours, style)?;
+        // The probe is for recon: it writes without the app's locks, but with the same checks of what memory held.
+        self.write_patches(&plan.patches)?;
+        Ok(plan.before)
+    }
+}
+
+/// A change to a kit item, planned or written: the item before and after and the bytes it writes, which its undo
+/// writes back.
+#[derive(Debug, Clone)]
+pub struct KitChange {
+    pub club: u32,
+    pub index: usize,
+    pub before: KitItem,
+    pub after: KitItem,
+    pub(crate) patches: Vec<Patch>,
+}
+
+impl KitChange {
+    /// Whether the change alters nothing.
+    pub fn is_empty(&self) -> bool {
+        self.patches.is_empty()
     }
 }
 
