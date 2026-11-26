@@ -14,11 +14,9 @@ import {
   FORMATION_NAMES,
   MAX_BENCH_SIZE,
   MIN_BENCH_SIZE,
-  type BenchSeat,
-  type Destination,
+  type Fit,
   type FormationName,
   type Pick,
-  type Placement,
 } from "./lineup";
 import { lineupText as text } from "./lineupText";
 import { positionLabel, profileText, squadText, teamLabel } from "./labels";
@@ -72,7 +70,20 @@ function lineOf(position: string): "gk" | "def" | "mid" | "att" {
 }
 
 /** A short form of a name for a card: the surname alone, cut at the card's width by the style. */
-const shortName = (name: string) => name;
+const shortName = (name: string) => name.split(" ").slice(-1)[0] ?? name;
+
+/** The "level for the tactic" as stars: how well he knows the tactic (0–100) over five stars, in halves. */
+function Stars({ value }: { value: number | null }) {
+  if (value === null) {
+    return <span className="muted">–</span>;
+  }
+  const halves = Math.round(Math.min(100, Math.max(0, value)) / 10);
+  return (
+    <span className="lineup-stars" style={{ "--fill": `${halves * 10}%` } as CSSProperties} title={`${Math.round(value)} / 100`}>
+      ★★★★★
+    </span>
+  );
+}
 
 /** One eleven on an upright pitch, each player at his place of the formation, with his position, name and ability. */
 function Pitch({ title, picks, average: mean }: { title: string; picks: readonly Pick[]; average: number | null }) {
@@ -93,7 +104,7 @@ function Pitch({ title, picks, average: mean }: { title: string; picks: readonly
             <span className="lineup-card-pos">{positionLabel(pick.slot.position)}</span>
             <span className="lineup-card-name">{pick.player ? shortName(pick.player.name) : "—"}</span>
             <span className="lineup-card-ca">
-              {pick.player ? pick.player.currentAbility : ""}
+              {pick.player ? <Stars value={pick.player.tactics} /> : null}
               {pick.fit !== "main" && pick.player ? " *" : ""}
             </span>
           </div>
@@ -103,14 +114,46 @@ function Pitch({ title, picks, average: mean }: { title: string; picks: readonly
   );
 }
 
-const DESTINATIONS: readonly Destination[] = ["reserve", "u19"];
+/** What the game says about his availability, as the Status column of the game's squad screen. */
+function status(player: SquadPlayer): { label: string; className: string } {
+  if (player.loan === "out") {
+    return { label: text.status.loan, className: "loan" };
+  }
+  if (player.injuries > 0) {
+    return { label: text.status.injured, className: "injured" };
+  }
+  if (player.bans > 0) {
+    return { label: text.status.banned, className: "banned" };
+  }
+  return { label: text.status.fit, className: "fit" };
+}
+
+/** A bar for energy, 0–10000 as stored. */
+function Bar({ value }: { value: number }) {
+  const percent = Math.min(100, Math.max(0, value / 100));
+  return (
+    <span className="lineup-bar" title={`${Math.round(percent)} %`}>
+      <span style={{ width: `${percent}%` }} />
+    </span>
+  );
+}
+
+interface Row {
+  key: string;
+  /** The first cell: the place of a starter, "R1" of a substitute, or where one who is left out goes. */
+  sel: string;
+  kind: "start" | "bench" | "rest";
+  player: SquadPlayer | null;
+  fit?: Fit;
+  seat?: number;
+  manual?: boolean;
+  note?: string;
+}
 
 export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
   const loaded = useSquads(clubUid, version);
-  // The formation asked for, or "auto": the one that gives this squad the best eleven. Kept for the next club.
   const [choice, setChoice] = useState<FormationName | "auto">(readChoice);
   const [includeUnavailable, setIncludeUnavailable] = useState(false);
-  // The seats of the bench: how many, and the player chosen by hand for each (null: left to the calculator).
   const [benchSize, setBenchSize] = useState(readBenchSize);
   const [benchChoices, setBenchChoices] = useState<(number | null)[]>([]);
 
@@ -147,10 +190,9 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
     try {
       localStorage.setItem(CHOICE_KEY, next);
     } catch {
-      // The choice is only a convenience: without storage it is the next club's default again.
+      // The choice is only a convenience.
     }
   };
-  // The team each player plays for now, by label.
   const playsFor = useMemo(() => {
     const map = new Map<number, string>();
     for (const team of teams ?? []) {
@@ -163,6 +205,64 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
     return map;
   }, [teams]);
 
+  // Whoever starts is not offered for the bench; the others are grouped by the team they play for now.
+  const groups = useMemo(() => {
+    const started = new Set(lineup.starters.flatMap((p) => (p.player ? [p.player.uid] : [])));
+    const byTeam = new Map<string, SquadPlayer[]>();
+    for (const player of players) {
+      if (!started.has(player.uid)) {
+        const team = playsFor.get(player.uid) ?? profileText.none;
+        byTeam.set(team, [...(byTeam.get(team) ?? []), player]);
+      }
+    }
+    return [...byTeam.entries()].map(
+      ([team, list]) => [team, [...list].sort((a, b) => b.currentAbility - a.currentAbility)] as const,
+    );
+  }, [players, playsFor, lineup.starters]);
+
+  // The one table: starters, the bench seats, then everyone else with where he goes.
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = lineup.starters.map((p) => ({
+      key: p.slot.id,
+      sel: positionLabel(p.slot.position),
+      kind: "start",
+      player: p.player,
+      fit: p.fit,
+    }));
+    lineup.bench.forEach((seat, index) =>
+      out.push({
+        key: `r${index}`,
+        sel: `R${index + 1}`,
+        kind: "bench",
+        player: seat.player,
+        seat: index,
+        manual: seat.manual,
+        note: seat.covers ? text.covers(positionLabel(seat.covers)) : undefined,
+      }),
+    );
+    const benched = new Set(lineup.bench.flatMap((seat) => (seat.player ? [seat.player.uid] : [])));
+    for (const p of lineup.offBench) {
+      if (p.player && !benched.has(p.player.uid)) {
+        out.push({ key: `o${p.player.uid}`, sel: text.mainLeft, kind: "rest", player: p.player });
+      }
+    }
+    for (const { player, destination, reason } of lineup.placements) {
+      out.push({
+        key: `p${player.uid}`,
+        sel: text.groupShort[destination],
+        kind: "rest",
+        player,
+        note: text.reasons[reason],
+      });
+    }
+    for (const { player, reason } of lineup.unavailable) {
+      out.push({ key: `u${player.uid}`, sel: text.unavailable, kind: "rest", player, note: text.unavailableReasons[reason] });
+    }
+    return out;
+  }, [lineup]);
+
+  const taken = new Set(lineup.bench.flatMap((seat) => (seat.player ? [seat.player.uid] : [])));
+
   return (
     <div className="lineup" role="tabpanel" id={panel.id} aria-labelledby={panel.labelledBy}>
       {loaded === null ? (
@@ -173,7 +273,6 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
         <p className="muted">{text.empty}</p>
       ) : (
         <>
-          <p className="muted">{text.intro}</p>
           <div className="lineup-controls">
             <div className="squad-teams" role="group" aria-label={text.formation}>
               <button type="button" aria-pressed={choice === "auto"} title={text.autoTitle} onClick={() => pick("auto")}>
@@ -212,51 +311,126 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
           </div>
 
           <section className="lineup-sheet" aria-label={text.sheetTitle}>
-            <Pitch title={text.starters} picks={lineup.starters} average={lineup.startersAverage} />
-            <BenchPanel
-              seats={lineup.bench}
-              onChoose={chooseSeat}
-              players={players}
-              starters={lineup.starters}
-              playsFor={playsFor}
-            />
+            <div className="lineup-left">
+              <Pitch title={text.starters} picks={lineup.starters} average={lineup.startersAverage} />
+              <section className="lineup-subs">
+                <h3>
+                  {text.subsTitle} <span className="muted">{lineup.bench.filter((s) => s.player).length} / {lineup.bench.length}</span>
+                </h3>
+                <ol>
+                  {lineup.bench.map((seat, index) => (
+                    <li key={index} className={seat.manual ? "manual" : ""}>
+                      <b>R{index + 1}</b>
+                      <span className="lineup-subs-name">{seat.player ? seat.player.name : "—"}</span>
+                      <span className="muted">
+                        {seat.player?.positions[0] ? positionLabel(seat.player.positions[0]) : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+            <div className="squad-table-wrap lineup-table-wrap">
+              <table className="grid squad-grid lineup-table" aria-label={text.tableTitle}>
+                <thead>
+                  <tr>
+                    <th>{text.sel}</th>
+                    <th className="col-name">{text.player}</th>
+                    <th title={text.tacticTitle}>{text.tactic}</th>
+                    <th>{text.positions}</th>
+                    <th>{text.bestPosition}</th>
+                    <th>{text.statusHead}</th>
+                    <th title={text.conditionTitle}>{text.condition}</th>
+                    <th>{text.morale}</th>
+                    <th className="num" title={text.cohesionTitle}>{text.cohesion}</th>
+                    <th className="num">{squadText.columns.age}</th>
+                    <th className="num">{squadText.columns.currentAbility}</th>
+                    <th className="num">{squadText.columns.potentialAbility}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const player = row.player;
+                    const state = player ? status(player) : null;
+                    return (
+                      <tr key={row.key} className={`lineup-row ${row.kind}${state && state.className !== "fit" ? ` ${state.className}` : ""}`}>
+                        <td className="lineup-sel">
+                          <span className="lineup-sel-box">{row.sel}</span>
+                        </td>
+                        <td className="col-name" title={player?.fullName ?? player?.name}>
+                          {row.kind === "bench" ? (
+                            <select
+                              aria-label={text.seat((row.seat ?? 0) + 1)}
+                              value={row.manual && player ? String(player.uid) : ""}
+                              onChange={(event) =>
+                                chooseSeat(row.seat ?? 0, event.target.value === "" ? null : Number(event.target.value))
+                              }
+                            >
+                              <option value="">
+                                {player && !row.manual ? `${text.auto} · ${player.name}` : text.autoSeat}
+                              </option>
+                              {groups.map(([team, list]) => (
+                                <optgroup key={team} label={team}>
+                                  {list.map((candidate) => (
+                                    <option
+                                      key={candidate.uid}
+                                      value={candidate.uid}
+                                      disabled={taken.has(candidate.uid) && candidate.uid !== player?.uid}
+                                    >
+                                      {candidate.name} · {candidate.positions[0] ? positionLabel(candidate.positions[0]) : "–"} · {candidate.currentAbility}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          ) : player ? (
+                            <>
+                              {player.name}
+                              {row.fit && row.fit !== "main" && (
+                                <span className={`tag ${row.fit === "out" ? "injured" : ""}`}>{text.fit[row.fit]}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="muted">{text.noPlayer}</span>
+                          )}
+                          {row.note && <div className="muted lineup-note">{row.note}</div>}
+                        </td>
+                        {player && state ? (
+                          <>
+                            <td>
+                              <Stars value={player.tactics} />
+                            </td>
+                            <td className="lineup-positions">{player.positions.slice(0, 4).map(positionLabel).join(", ")}</td>
+                            <td>{player.positions[0] ? positionLabel(player.positions[0]) : profileText.none}</td>
+                            <td>
+                              <span className={`lineup-status ${state.className}`}>{state.label}</span>
+                            </td>
+                            <td>
+                              <Bar value={player.condition} />
+                            </td>
+                            <td>{profileText.morale(player.morale)}</td>
+                            <td className="num">{player.cohesion ?? profileText.none}</td>
+                            <td className="num">{player.age ?? profileText.none}</td>
+                            <td className="num">
+                              <Ability value={player.currentAbility} />
+                            </td>
+                            <td className="num">
+                              <Ability value={player.potentialAbility} />
+                            </td>
+                          </>
+                        ) : (
+                          <td colSpan={10} />
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </section>
-          {lineup.offBench.length > 0 && (
-            <PicksTable
-              title={`${text.offBench} · ${text.average(average(lineup.replacementsAverage))}`}
-              picks={lineup.offBench}
-              average={null}
-              playsFor={playsFor}
-              hideAverage
-            />
-          )}
-          {DESTINATIONS.map((destination) => {
-            const group = lineup.placements.filter((placement) => placement.destination === destination);
-            return group.length === 0 ? null : (
-              <PlacementTable
-                key={destination}
-                title={text.groups[destination]}
-                placements={group}
-                playsFor={playsFor}
-              />
-            );
-          })}
-          {lineup.unavailable.length > 0 && (
-            <section className="lineup-section">
-              <h3>
-                {text.unavailable} <span className="muted">({lineup.unavailable.length})</span>
-              </h3>
-              <ul className="lineup-unavailable">
-                {lineup.unavailable.map(({ player, reason }) => (
-                  <li key={player.uid}>
-                    {player.name} <span className="muted">· {text.unavailableReasons[reason]}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
           <details className="lineup-rules">
             <summary>{text.rulesTitle}</summary>
+            <p className="muted">{text.intro}</p>
             <ul>
               {text.rules.map((rule) => (
                 <li key={rule}>{rule}</li>
@@ -266,213 +440,5 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
         </>
       )}
     </div>
-  );
-}
-
-/** The bench of the team sheet: a seat per substitute, each a list of the whole club to pick from. */
-function BenchPanel({
-  seats,
-  onChoose,
-  players,
-  starters,
-  playsFor,
-}: {
-  seats: readonly BenchSeat[];
-  onChoose: (seat: number, uid: number | null) => void;
-  players: readonly SquadPlayer[];
-  starters: readonly Pick[];
-  playsFor: ReadonlyMap<number, string>;
-}) {
-  // Whoever starts is not offered; the others are grouped by the team they play for now.
-  const groups = useMemo(() => {
-    const started = new Set(starters.flatMap((pick) => (pick.player ? [pick.player.uid] : [])));
-    const byTeam = new Map<string, SquadPlayer[]>();
-    for (const player of players) {
-      if (!started.has(player.uid)) {
-        const team = playsFor.get(player.uid) ?? profileText.none;
-        byTeam.set(team, [...(byTeam.get(team) ?? []), player]);
-      }
-    }
-    return [...byTeam.entries()].map(
-      ([team, list]) => [team, [...list].sort((a, b) => b.currentAbility - a.currentAbility)] as const,
-    );
-  }, [players, playsFor, starters]);
-  const taken = new Set(seats.flatMap((seat) => (seat.player ? [seat.player.uid] : [])));
-  return (
-    <section className="lineup-bench-box">
-      <h3>{text.benchTitle(seats.length)}</h3>
-      <ol className="lineup-bench">
-        {seats.map((seat, index) => (
-          <li key={index} className={`lineup-seat${seat.manual ? " manual" : ""}`}>
-            <span className="lineup-seat-n">{text.seat(index + 1)}</span>
-            <select
-              aria-label={text.seat(index + 1)}
-              value={seat.manual && seat.player ? String(seat.player.uid) : ""}
-              onChange={(event) => onChoose(index, event.target.value === "" ? null : Number(event.target.value))}
-            >
-              <option value="">
-                {seat.player && !seat.manual
-                  ? `${text.auto} · ${seat.player.name}`
-                  : text.autoSeat}
-              </option>
-              {groups.map(([team, list]) => (
-                <optgroup key={team} label={team}>
-                  {list.map((player) => (
-                    <option
-                      key={player.uid}
-                      value={player.uid}
-                      disabled={taken.has(player.uid) && player.uid !== seat.player?.uid}
-                    >
-                      {player.name} · {player.positions[0] ? positionLabel(player.positions[0]) : "–"} · {player.currentAbility}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            <span className="lineup-seat-info muted">
-              {seat.player ? (
-                <>
-                  {seat.player.positions[0] ? positionLabel(seat.player.positions[0]) : ""} · {seat.player.currentAbility}
-                  {seat.covers ? ` · ${text.covers(positionLabel(seat.covers))}` : ""}
-                  {seat.manual ? ` · ${text.manual}` : ""}
-                </>
-              ) : (
-                text.noPlayer
-              )}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-function PlayerCells({ player, playsFor }: { player: SquadPlayer; playsFor: ReadonlyMap<number, string> }) {
-  return (
-    <>
-      <td className="col-name" title={player.fullName ?? player.name}>
-        {player.name}
-      </td>
-      <td className="num">{player.age ?? profileText.none}</td>
-      <td className="num">
-        <Ability value={player.currentAbility} />
-      </td>
-      <td className="num">
-        <Ability value={player.potentialAbility} />
-      </td>
-      <td>{playsFor.get(player.uid) ?? <span className="muted">{profileText.none}</span>}</td>
-    </>
-  );
-}
-
-function Header({ withPlace }: { withPlace: boolean }) {
-  return (
-    <thead>
-      <tr>
-        {withPlace && <th>{text.place}</th>}
-        <th className="col-name">{text.player}</th>
-        <th className="num">{squadText.columns.age}</th>
-        <th className="num">{squadText.columns.currentAbility}</th>
-        <th className="num">{squadText.columns.potentialAbility}</th>
-        <th>{text.now}</th>
-      </tr>
-    </thead>
-  );
-}
-
-function PicksTable({
-  title,
-  picks,
-  average: mean,
-  playsFor,
-  hideAverage = false,
-}: {
-  title: string;
-  picks: readonly Pick[];
-  average: number | null;
-  playsFor: ReadonlyMap<number, string>;
-  hideAverage?: boolean;
-}) {
-  return (
-    <section className="lineup-section">
-      <h3>
-        {title}
-        {!hideAverage && <span className="muted"> · {text.average(average(mean))}</span>}
-      </h3>
-      <div className="squad-table-wrap">
-        <table className="grid squad-grid" aria-label={title}>
-          <Header withPlace />
-          <tbody>
-            {picks.map((pick) => (
-              <tr key={pick.slot.id}>
-                <td>
-                  {positionLabel(pick.slot.position)}
-                  {pick.fit !== "main" && pick.player && (
-                    <span className={`tag ${pick.fit === "out" ? "injured" : ""}`}> {text.fit[pick.fit]}</span>
-                  )}
-                </td>
-                {pick.player ? (
-                  <PlayerCells player={pick.player} playsFor={playsFor} />
-                ) : (
-                  <td colSpan={5} className="muted">
-                    {text.noPlayer}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function PlacementTable({
-  title,
-  placements,
-  playsFor,
-}: {
-  title: string;
-  placements: readonly Placement[];
-  playsFor: ReadonlyMap<number, string>;
-}) {
-  return (
-    <section className="lineup-section">
-      <h3>
-        {title} <span className="muted">({placements.length})</span>
-      </h3>
-      <div className="squad-table-wrap">
-        <table className="grid squad-grid" aria-label={title}>
-          <thead>
-            <tr>
-              <th className="col-name">{text.player}</th>
-              <th>{text.place}</th>
-              <th className="num">{squadText.columns.age}</th>
-              <th className="num">{squadText.columns.currentAbility}</th>
-              <th className="num">{squadText.columns.potentialAbility}</th>
-              <th>{text.now}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {placements.map(({ player, reason }) => (
-              <tr key={player.uid}>
-                <td className="col-name">{player.name}</td>
-                <td>{player.positions[0] ? positionLabel(player.positions[0]) : profileText.none}</td>
-                <td className="num">{player.age ?? profileText.none}</td>
-                <td className="num">
-                  <Ability value={player.currentAbility} />
-                </td>
-                <td className="num">
-                  <Ability value={player.potentialAbility} />
-                </td>
-                <td>{playsFor.get(player.uid) ?? profileText.none}</td>
-                <td className="muted">{text.reasons[reason]}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }

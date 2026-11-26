@@ -7855,7 +7855,7 @@ kbd {
 /* The team sheet: the pitch beside the bench, one under the other on a narrow window. */
 .lineup-sheet {
   display: grid;
-  grid-template-columns: minmax(300px, 520px) minmax(280px, 1fr);
+  grid-template-columns: minmax(300px, 440px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -8019,4 +8019,129 @@ kbd {
   z-index: 1001;
   min-width: 9rem;
   max-width: 20rem;
+}
+
+/* The squad screen look: the pitch and the substitutes on the left, one table of the whole squad on the right. */
+.lineup-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lineup-stars {
+  --fill: 0%;
+  background: linear-gradient(90deg, #f0c030 var(--fill), rgb(128 128 128 / 0.45) var(--fill));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.lineup-subs h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.lineup-subs ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lineup-subs li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.lineup-subs li.manual {
+  border-color: var(--accent, #3b82f6);
+}
+.lineup-subs-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lineup-table-wrap {
+  overflow-x: auto;
+}
+.lineup-table {
+  font-size: 13px;
+}
+.lineup-table th {
+  white-space: nowrap;
+}
+.lineup-sel-box {
+  display: inline-block;
+  min-width: 3.2em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-align: center;
+  font-weight: 600;
+  background: rgb(128 128 128 / 0.2);
+}
+.lineup-row.start .lineup-sel-box {
+  background: #1f6f5c;
+  color: #fff;
+}
+.lineup-row.bench .lineup-sel-box {
+  background: #7a2a2a;
+  color: #fff;
+}
+.lineup-row.rest {
+  opacity: 0.85;
+}
+.lineup-row.injured,
+.lineup-row.banned {
+  background: rgb(160 30 30 / 0.18);
+}
+.lineup-row select {
+  max-width: 100%;
+}
+.lineup-note {
+  font-size: 11px;
+}
+.lineup-positions {
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lineup-status {
+  display: inline-block;
+  min-width: 2.8em;
+  padding: 0 6px;
+  border-radius: 2px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: #fff;
+}
+.lineup-status.fit { background: #2e8b57; }
+.lineup-status.injured { background: #d4572a; }
+.lineup-status.banned { background: #b02a37; }
+.lineup-status.loan { background: #4b5563; }
+.lineup-bar {
+  display: inline-block;
+  width: 56px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgb(128 128 128 / 0.3);
+  vertical-align: middle;
+  overflow: hidden;
+}
+.lineup-bar > span {
+  display: block;
+  height: 100%;
+  background: #4cc26a;
+}
+@media (max-width: 1100px) {
+  .lineup-sheet {
+    grid-template-columns: 1fr;
+  }
 }
