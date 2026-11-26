@@ -49,3 +49,36 @@ Conclusion: the stored kits are in another encoding (a palette index, or a packe
 before/after difference around a real kit change (`fmlibre-probe pages OUT`, then `pages OUT2 --against OUT`), which in
 turn needs a way to change a kit in the game. Without it, a read or write cannot be proven correct and no kit editing
 should be shipped.
+
+## Where the kits are (Game Pass 0.9.2524.0): found
+
+This section replaces the conclusion above that no persistent store had been found: it has been, and written to.
+
+**Chain.** Club + `0xB0` points at an object; at +`0x78` of that object is a `(begin, end, capacity)` list of pointers, one
+per kit item. Checked on Olympique de Valence (2 items) and its two neighbours in memory (2 and 13 items): the club
+objects are 0x170 apart and each one's `0xB0` leads to a different object.
+
+**Item record, 0x28 bytes.**
+
+| offset | what |
+|---|---|
+| 0x00..0x14 | five colours, each 4 bytes B G R 0xff: foreground, background, outline, number, number outline |
+| 0x14 | u32 style (Valence home 27, away 1) |
+| 0x18 | two words of 0xffffffff: probably competition and season, none |
+| 0x22 | slot: 0 home, 1 away, 2 third |
+| 0x23 | type of item: 1 shirt; the club with 13 items also has 2, 3, 4, 5 and 0x21 (shorts, socks, goalkeeper items: not named yet) |
+
+Channels are always multiples of 8 (the game keeps 5 bits). Valence has only shirts, which matches the Kits and Colours
+screen of the other tool's screenshots (no shorts or socks lines for it).
+
+**Writing, checked.** Writing a colour into the home item's foreground (white to green) changed the sleeves, and the
+whole UI theme (top bar), after a day was advanced; putting it back restored them. Nothing shows until a day passes. The
+UI theme follows the home kit: red primary, white (the foreground) secondary.
+
+**Tools.** `fmlibre-probe kits UID` lists a club's items; `fmlibre-probe set-kit UID INDEX --colour 0=00f800 --style 27
+--hold 60` writes one and, with `--hold`, puts it back. Without `--hold` the change stays, which is how persistence over
+days and save/reload is checked. Layout: `[kits]` in `profiles/fm27/layout.toml`.
+
+**Not known yet.** Whether a change survives a save and reload; what the types 2, 3, 4, 5 and 0x21 are; the meaning of
+the bytes after the slot and type; how a kit is added (a third kit would mean growing the list); whether women's and youth
+teams share a club's items.
