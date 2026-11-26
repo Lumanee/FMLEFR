@@ -1050,7 +1050,7 @@ export const es: Strings = {
     reputationTitle: "Reputación",
 
     tabsLabel: "Secciones del club",
-    tabs: { overview: "Resumen", squad: "Plantilla", staff: "Personal", stadium: "Estadio", lineup: "Calculadora de plantilla" },
+    tabs: { overview: "Resumen", squad: "Plantilla", staff: "Personal", stadium: "Estadio", kits: "Equipaciones", lineup: "Calculadora de plantilla" },
     squadLocked: "Termina de editar para abrir la plantilla",
     staffLocked: "Termina de editar para abrir el personal",
 

@@ -1030,7 +1030,7 @@ export const tr: Strings = {
 
     // The tabs under the header
     tabsLabel: "Kulüp bölümleri",
-    tabs: { overview: "Genel", squad: "Kadro", staff: "Personel", stadium: "Stadyum", lineup: "Kadro hesaplayıcı" },
+    tabs: { overview: "Genel", squad: "Kadro", staff: "Personel", stadium: "Stadyum", kits: "Formalar", lineup: "Kadro hesaplayıcı" },
     squadLocked: "Kadroyu açmak için düzenlemeyi bitirin",
     staffLocked: "Personeli açmak için düzenlemeyi bitirin",
 

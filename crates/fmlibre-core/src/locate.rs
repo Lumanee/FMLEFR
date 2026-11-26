@@ -327,7 +327,9 @@ mod tests {
         // Epic profile of the same update now guesses Steam build 26620374's date, so that one is no longer beyond the
         // guesses.
         let kind = |profile: &BuildProfile| std::mem::discriminant(&profile.plugin);
-        let beyond_the_guesses = |profile: &BuildProfile| profile.package_version.as_deref() == Some("0.9.2524.0");
+        // Game Pass 0.9.2562.0 keeps its date at 0x20 from where 0.9.2524.0 does, relative to the players pair, so each now
+        // guesses the other's: no build is beyond the guesses any more.
+        let beyond_the_guesses = |_: &BuildProfile| false;
         for profile in profiles.iter().filter(|profile| profile.current_date.is_some()) {
             let date = profile.current_date.expect("a date");
             let siblings = profiles.iter().any(|other| {

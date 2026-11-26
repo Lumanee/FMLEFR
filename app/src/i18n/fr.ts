@@ -1137,7 +1137,7 @@ export const fr: Strings = {
     reputationTitle: "Réputation",
 
     tabsLabel: "Sections du club",
-    tabs: { overview: "Vue d'ensemble", squad: "Effectif", staff: "Staff", stadium: "Stade", lineup: "Calculateur d'effectif" },
+    tabs: { overview: "Vue d'ensemble", squad: "Effectif", staff: "Staff", stadium: "Stade", kits: "Maillots", lineup: "Calculateur d'effectif" },
     squadLocked: "Terminez la modification pour ouvrir l'effectif",
     staffLocked: "Terminez la modification pour ouvrir le staff",
 
