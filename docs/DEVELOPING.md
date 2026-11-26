@@ -461,6 +461,7 @@ fmlibre-probe captain 680 43425040 --restore         # make a player captain (--
 fmlibre-probe prizes                                 # the prize money competitions pay, by final position and per match
 fmlibre-probe prizes 130286 --win 1234567 --restore  # change what a Süper Lig win pays and back: this writes too
 fmlibre-probe sponsorships 2188                      # a club's sponsorship deals: kind, term, amounts (reads only)
+fmlibre-probe poke 0x1d13c720228 --expect "f8 f8 f8 ff" --bytes "00 f8 00 ff" --hold 60   # recon only: write, wait, put back (writes)
 fmlibre-probe scan                                   # find arrays of game objects in game_plugin.dll
 fmlibre-probe refs 0x1a5a5396990 --span 0x3c8        # every pointer into an object (holders, lists, squads too)
 fmlibre-probe dump game_plugin.dll+0x1000 --len 0x100

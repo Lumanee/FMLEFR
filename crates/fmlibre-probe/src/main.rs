@@ -739,6 +739,22 @@ enum Command {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Overwrite bytes at each ADDR for a while, then put the old bytes back (this writes to the game). Only for
+    /// finding which copy of some data the game shows: each address must still hold --expect before it is written.
+    Poke {
+        /// Addresses to write to, e.g. 0x1d13c720228.
+        #[arg(required = true)]
+        addrs: Vec<String>,
+        /// The bytes to write, as hex, e.g. "00 f8 00 ff".
+        #[arg(long)]
+        bytes: String,
+        /// The bytes each address must hold now (hex); an address that holds others is left alone.
+        #[arg(long)]
+        expect: String,
+        /// Seconds to keep the new bytes before putting the old ones back.
+        #[arg(long, default_value_t = 30)]
+        hold: u64,
+    },
     /// Follow the (begin, end) pair stored at PAIR and dump element INDEX of that array.
     Element {
         /// Address of the (begin, end) pair, e.g. game_plugin.dll+0x57037d0.
@@ -1532,6 +1548,49 @@ fn run(cli: Cli) -> Result<()> {
                 Some(path) => dump_raw(&process, addr, len, &path),
                 None => dump(&process, &modules, addr, len),
             }
+        }
+        Command::Poke { addrs, bytes, expect, hold } => {
+            let modules = list_modules(&process).context("listing modules")?;
+            let (bytes, expect) = (parse_bytes(&bytes)?, parse_bytes(&expect)?);
+            ensure!(!bytes.is_empty() && bytes.len() == expect.len(), "--bytes and --expect must have the same length");
+            let mut done: Vec<(u64, Vec<u8>)> = Vec::new();
+            for addr in &addrs {
+                let addr = resolve(addr, &modules)?;
+                let old = match process.read_bytes(addr, bytes.len()) {
+                    Ok(old) => old,
+                    Err(error) => {
+                        println!("{addr:#x}: unreadable ({error}), skipped");
+                        continue;
+                    }
+                };
+                if old != expect {
+                    println!("{addr:#x}: holds {old:02x?}, not the expected bytes, skipped");
+                    continue;
+                }
+                match process.write_bytes(addr, &bytes) {
+                    Ok(()) if process.read_bytes(addr, bytes.len()).is_ok_and(|now| now == bytes) => {
+                        println!("{addr:#x}: written");
+                        done.push((addr, old));
+                    }
+                    other => {
+                        println!("{addr:#x}: write failed ({other:?})");
+                        done.push((addr, old));
+                    }
+                }
+            }
+            println!("{} address(es) written; holding {hold} s, look at the game now.", done.len());
+            std::thread::sleep(std::time::Duration::from_secs(hold));
+            let mut failed = 0;
+            for (addr, old) in &done {
+                let back = process.write_bytes(*addr, old).is_ok()
+                    && process.read_bytes(*addr, old.len()).is_ok_and(|now| now == *old);
+                if !back {
+                    failed += 1;
+                    println!("{addr:#x}: COULD NOT RESTORE {old:02x?}");
+                }
+            }
+            println!("restored {} of {} address(es).", done.len() - failed, done.len());
+            Ok(())
         }
         Command::Element { pair, index, len } => {
             let modules = list_modules(&process).context("listing modules")?;
