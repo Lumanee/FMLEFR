@@ -1268,6 +1268,7 @@ fn run(cli: Cli) -> Result<()> {
         cli.command,
         Some(
             Command::Set { .. }
+                | Command::Poke { .. }
                 | Command::Move { .. }
                 | Command::Arrange { .. }
                 | Command::Permanent { .. }
@@ -1574,7 +1575,6 @@ fn run(cli: Cli) -> Result<()> {
                     }
                     other => {
                         println!("{addr:#x}: write failed ({other:?})");
-                        done.push((addr, old));
                     }
                 }
             }
