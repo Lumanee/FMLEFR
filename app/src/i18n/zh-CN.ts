@@ -1122,7 +1122,7 @@ export const zhCN: Strings = {
     // The tabs under the header: what the club has, and its squad (see `squad`).
     /** The name of the tabs for assistive technology. */
     tabsLabel: "俱乐部栏目",
-    tabs: { overview: "概览", squad: "阵容", staff: "职员", stadium: "球场" },
+    tabs: { overview: "概览", squad: "阵容", staff: "职员", stadium: "球场", lineup: "阵容计算器" },
     /** Hover text of the Squad tab while the club is edited: its values are on the Overview. */
     squadLocked: "完成编辑后才能打开阵容",
     staffLocked: "完成编辑后才能打开职员",
@@ -1597,6 +1597,11 @@ export const zhCN: Strings = {
     copyTitle: "复制 FMLibreEditor 在游戏中发现的信息，以便粘贴到问题报告中。信息不包含姓名或路径。",
     copied: "已复制",
     failed: (reason: string) => `无法复制诊断信息：${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "复制名称",
+    copySelection: "复制",
   },
 
   /** What each check is about (`CheckKey`), as the notice lists the ones that did not pass and the errors name them. */

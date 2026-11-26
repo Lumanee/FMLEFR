@@ -1050,7 +1050,7 @@ export const es: Strings = {
     reputationTitle: "Reputación",
 
     tabsLabel: "Secciones del club",
-    tabs: { overview: "Resumen", squad: "Plantilla", staff: "Personal", stadium: "Estadio" },
+    tabs: { overview: "Resumen", squad: "Plantilla", staff: "Personal", stadium: "Estadio", lineup: "Calculadora de plantilla" },
     squadLocked: "Termina de editar para abrir la plantilla",
     staffLocked: "Termina de editar para abrir el personal",
 
@@ -1501,6 +1501,11 @@ export const es: Strings = {
       "nombres ni rutas.",
     copied: "Copiado",
     failed: (reason) => `No se ha podido copiar el diagnóstico: ${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Copiar nombre",
+    copySelection: "Copiar",
   },
 
   checks: {

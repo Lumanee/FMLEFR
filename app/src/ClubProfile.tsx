@@ -28,6 +28,7 @@ import {
   type RatingRow,
 } from "./ProfileParts";
 import { ClubStaffTab } from "./ClubStaffTab";
+import { LineupTab } from "./LineupTab";
 import { SquadTab } from "./SquadTab";
 import type { ClubDetails, ClubSummary, Finances, Stadium, StadiumName } from "./types";
 import { EditorContext, useProfileEditing } from "./useProfileEditing";
@@ -35,9 +36,9 @@ import { EditorContext, useProfileEditing } from "./useProfileEditing";
 const text = clubProfileText;
 
 /** The tabs of the profile: what the club has, its squad, its staff, and its stadium. */
-export type ClubTab = "overview" | "squad" | "staff" | "stadium";
+export type ClubTab = "overview" | "squad" | "lineup" | "staff" | "stadium";
 
-const TABS: readonly ClubTab[] = ["overview", "squad", "staff", "stadium"];
+const TABS: readonly ClubTab[] = ["overview", "squad", "lineup", "staff", "stadium"];
 
 /** The tabs that are out of reach while the club is edited: they write to the game themselves. */
 const LOCKED_WHILE_EDITED: readonly ClubTab[] = ["squad", "staff"];
@@ -96,7 +97,7 @@ export function ClubProfile({ club, version, tab, onTab, onClose }: ClubProfileP
         </div>
       }
       tabs={details && <ClubTabs tab={shown} base={base} locked={locked} onSelect={onTab} />}
-      wide={details !== undefined && shown === "squad"}
+      wide={details !== undefined && (shown === "squad" || shown === "lineup")}
       loaded={loaded}
       onClose={onClose}
       editing={editing}
@@ -104,6 +105,8 @@ export function ClubProfile({ club, version, tab, onTab, onClose }: ClubProfileP
       {details &&
         (shown === "squad" ? (
           <SquadTab clubUid={club.uid} clubName={info.name} version={version} panel={panel} />
+        ) : shown === "lineup" ? (
+          <LineupTab clubUid={club.uid} version={version} panel={panel} />
         ) : shown === "staff" ? (
           <ClubStaffTab club={{ uid: club.uid, name: info.name, women: info.women }} version={version} panel={panel} />
         ) : shown === "stadium" ? (

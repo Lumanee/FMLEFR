@@ -1052,7 +1052,7 @@ export const ko: Strings = {
     reputationTitle: "명성",
 
     tabsLabel: "구단 섹션",
-    tabs: { overview: "개요", squad: "선수단", staff: "스태프", stadium: "경기장" },
+    tabs: { overview: "개요", squad: "선수단", staff: "스태프", stadium: "경기장", lineup: "선수단 계산기" },
     squadLocked: "선수단을 열려면 편집을 마치세요",
     staffLocked: "스태프를 열려면 편집을 마치세요",
 
@@ -1484,6 +1484,11 @@ export const ko: Strings = {
       "않습니다.",
     copied: "복사됨",
     failed: (reason) => `진단 정보를 복사하지 못했습니다: ${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "이름 복사",
+    copySelection: "복사",
   },
 
   checks: {

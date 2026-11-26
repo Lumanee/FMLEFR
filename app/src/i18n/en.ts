@@ -1029,7 +1029,7 @@ export const en = {
     // The tabs under the header: what the club has, and its squad (see `squad`).
     /** The name of the tabs for assistive technology. */
     tabsLabel: "Club sections",
-    tabs: { overview: "Overview", squad: "Squad", staff: "Staff", stadium: "Stadium" },
+    tabs: { overview: "Overview", squad: "Squad", staff: "Staff", stadium: "Stadium", lineup: "Squad calculator" },
     /** Hover text of the Squad tab while the club is edited: its values are on the Overview. */
     squadLocked: "Finish editing to open the squad",
     /** The same for the Staff tab (see `clubStaff`). */
@@ -1615,6 +1615,11 @@ export const en = {
     /** Said by the button for a moment once the report is on the clipboard. */
     copied: "Copied",
     failed: (reason: string) => `Could not copy the diagnostics: ${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Copy name",
+    copySelection: "Copy",
   },
 
   /** What each check is about (`CheckKey`), as the notice lists the ones that did not pass and the errors name them. */

@@ -1025,7 +1025,7 @@ export const ja: Strings = {
     reputationTitle: "評価",
 
     tabsLabel: "クラブの項目",
-    tabs: { overview: "概要", squad: "スカッド", staff: "スタッフ", stadium: "スタジアム" },
+    tabs: { overview: "概要", squad: "スカッド", staff: "スタッフ", stadium: "スタジアム", lineup: "編成計算" },
     squadLocked: "スカッドを開くには編集を終了してください",
     staffLocked: "スタッフを開くには編集を終了してください",
 
@@ -1451,6 +1451,11 @@ export const ja: Strings = {
     copyTitle: "FMLibreEditor がゲーム内で見つけた内容をコピーし、バグ報告に貼り付けられるようにします。名前やパスは含みません。",
     copied: "コピーしました",
     failed: (reason: string) => `診断情報をコピーできませんでした：${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "名前をコピー",
+    copySelection: "コピー",
   },
 
   checks: {

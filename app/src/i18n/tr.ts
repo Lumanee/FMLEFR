@@ -1030,7 +1030,7 @@ export const tr: Strings = {
 
     // The tabs under the header
     tabsLabel: "Kulüp bölümleri",
-    tabs: { overview: "Genel", squad: "Kadro", staff: "Personel", stadium: "Stadyum" },
+    tabs: { overview: "Genel", squad: "Kadro", staff: "Personel", stadium: "Stadyum", lineup: "Kadro hesaplayıcı" },
     squadLocked: "Kadroyu açmak için düzenlemeyi bitirin",
     staffLocked: "Personeli açmak için düzenlemeyi bitirin",
 
@@ -1467,6 +1467,11 @@ export const tr: Strings = {
       "içermez.",
     copied: "Kopyalandı",
     failed: (reason) => `Tanılama bilgisi kopyalanamadı: ${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Adı kopyala",
+    copySelection: "Kopyala",
   },
 
   checks: {

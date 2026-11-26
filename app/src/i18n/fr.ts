@@ -1137,7 +1137,7 @@ export const fr: Strings = {
     reputationTitle: "Réputation",
 
     tabsLabel: "Sections du club",
-    tabs: { overview: "Vue d'ensemble", squad: "Effectif", staff: "Staff", stadium: "Stade" },
+    tabs: { overview: "Vue d'ensemble", squad: "Effectif", staff: "Staff", stadium: "Stade", lineup: "Calculateur d'effectif" },
     squadLocked: "Terminez la modification pour ouvrir l'effectif",
     staffLocked: "Terminez la modification pour ouvrir le staff",
 
@@ -1595,6 +1595,11 @@ export const fr: Strings = {
       "chemins.",
     copied: "Copié",
     failed: (reason) => `Impossible de copier le diagnostic\u00a0: ${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Copier le nom",
+    copySelection: "Copier",
   },
 
   checks: {

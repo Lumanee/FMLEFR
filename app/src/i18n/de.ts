@@ -1114,7 +1114,7 @@ export const de: Strings = {
     reputationTitle: "Ansehen",
 
     tabsLabel: "Vereinsbereiche",
-    tabs: { overview: "Übersicht", squad: "Kader", staff: "Mitarbeiter", stadium: "Stadion" },
+    tabs: { overview: "Übersicht", squad: "Kader", staff: "Mitarbeiter", stadium: "Stadion", lineup: "Kaderrechner" },
     squadLocked: "Beenden Sie die Bearbeitung, um den Kader zu öffnen",
     staffLocked: "Beenden Sie die Bearbeitung, um die Mitarbeiter zu öffnen",
 
@@ -1582,6 +1582,11 @@ export const de: Strings = {
       "Pfade.",
     copied: "Kopiert",
     failed: (reason) => `Die Diagnose konnte nicht kopiert werden: ${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Namen kopieren",
+    copySelection: "Kopieren",
   },
 
   checks: {

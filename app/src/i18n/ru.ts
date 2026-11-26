@@ -1065,7 +1065,7 @@ export const ru: Strings = {
     reputationTitle: "Репутация",
 
     tabsLabel: "Разделы клуба",
-    tabs: { overview: "Обзор", squad: "Состав", staff: "Персонал", stadium: "Стадион" },
+    tabs: { overview: "Обзор", squad: "Состав", staff: "Персонал", stadium: "Стадион", lineup: "Расчёт состава" },
     squadLocked: "Завершите редактирование, чтобы открыть состав",
     staffLocked: "Завершите редактирование, чтобы открыть персонал",
 
@@ -1494,6 +1494,11 @@ export const ru: Strings = {
     copyTitle: "Скопировать то, что FMLibreEditor нашёл в игре, чтобы вставить в отчёт об ошибке. Без имён и путей.",
     copied: "Скопировано",
     failed: (reason) => `Не удалось скопировать диагностику: ${reason}`,
+  },
+  /** The context menu of a right click on a name: copies it, to paste into the game. */
+  nameMenu: {
+    copy: "Копировать имя",
+    copySelection: "Копировать",
   },
 
   checks: {
