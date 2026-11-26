@@ -1029,7 +1029,7 @@ export const en = {
     // The tabs under the header: what the club has, and its squad (see `squad`).
     /** The name of the tabs for assistive technology. */
     tabsLabel: "Club sections",
-    tabs: { overview: "Overview", squad: "Squad", staff: "Staff", stadium: "Stadium", lineup: "Squad calculator" },
+    tabs: { overview: "Overview", squad: "Squad", staff: "Staff", stadium: "Stadium", kits: "Kits", lineup: "Squad calculator" },
     /** Hover text of the Squad tab while the club is edited: its values are on the Overview. */
     squadLocked: "Finish editing to open the squad",
     /** The same for the Staff tab (see `clubStaff`). */

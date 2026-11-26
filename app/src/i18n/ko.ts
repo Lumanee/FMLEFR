@@ -1052,7 +1052,7 @@ export const ko: Strings = {
     reputationTitle: "명성",
 
     tabsLabel: "구단 섹션",
-    tabs: { overview: "개요", squad: "선수단", staff: "스태프", stadium: "경기장", lineup: "선수단 계산기" },
+    tabs: { overview: "개요", squad: "선수단", staff: "스태프", stadium: "경기장", kits: "유니폼", lineup: "선수단 계산기" },
     squadLocked: "선수단을 열려면 편집을 마치세요",
     staffLocked: "스태프를 열려면 편집을 마치세요",
 

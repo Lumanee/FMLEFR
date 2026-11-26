@@ -36,9 +36,9 @@ import { EditorContext, useProfileEditing } from "./useProfileEditing";
 const text = clubProfileText;
 
 /** The tabs of the profile: what the club has, its squad, its staff, and its stadium. */
-export type ClubTab = "overview" | "squad" | "lineup" | "staff" | "stadium";
+export type ClubTab = "overview" | "squad" | "lineup" | "staff" | "stadium" | "kits";
 
-const TABS: readonly ClubTab[] = ["overview", "squad", "lineup", "staff", "stadium"];
+const TABS: readonly ClubTab[] = ["overview", "squad", "lineup", "staff", "stadium", "kits"];
 
 /** The tabs that are out of reach while the club is edited: they write to the game themselves. */
 const LOCKED_WHILE_EDITED: readonly ClubTab[] = ["squad", "staff"];
@@ -111,6 +111,10 @@ export function ClubProfile({ club, version, tab, onTab, onClose }: ClubProfileP
           <ClubStaffTab club={{ uid: club.uid, name: info.name, women: info.women }} version={version} panel={panel} />
         ) : shown === "stadium" ? (
           <StadiumTab club={club.uid} stadium={details.stadium} panel={panel} />
+        ) : shown === "kits" ? (
+          <div className="profile-stack" role="tabpanel" id={panel.id} aria-labelledby={panel.labelledBy}>
+            <KitsGroup club={details.uid} version={version} />
+          </div>
         ) : (
           <ClubBody details={details} version={version} panel={panel} />
         ))}
@@ -192,7 +196,6 @@ function ClubBody({ details, version, panel }: { details: ClubDetails; version: 
       <div className="profile-stack">
         <Facilities facilities={details.facilities} />
         <FinancesGroup club={details.uid} finances={details.finances} />
-        <KitsGroup club={details.uid} version={version} />
         <SponsorshipsGroup club={details.uid} version={version} />
         {details.leagueUid !== null && <LeaguePrizesGroup club={details.uid} version={version} />}
       </div>

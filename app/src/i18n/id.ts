@@ -1005,7 +1005,7 @@ export const id: Strings = {
     reputationTitle: "Reputasi",
 
     tabsLabel: "Bagian klub",
-    tabs: { overview: "Ringkasan", squad: "Skuad", staff: "Staf", stadium: "Stadion", lineup: "Kalkulator skuad" },
+    tabs: { overview: "Ringkasan", squad: "Skuad", staff: "Staf", stadium: "Stadion", kits: "Kostum", lineup: "Kalkulator skuad" },
     squadLocked: "Selesaikan pengeditan untuk membuka skuad",
     staffLocked: "Selesaikan pengeditan untuk membuka staf",
 
