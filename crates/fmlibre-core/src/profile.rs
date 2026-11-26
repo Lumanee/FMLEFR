@@ -73,6 +73,9 @@ pub struct Layout {
     /// The sponsorship deals a club holds (see `sponsorship.rs`); only in the layouts they have been checked in.
     #[serde(default)]
     pub sponsorship: Option<SponsorshipLayout>,
+    /// The kits a club wears (see `kits.rs`); only in the layouts they have been read in.
+    #[serde(default)]
+    pub kits: Option<KitsLayout>,
     /// The game's tables of first, last and common names (see `names.rs`); only in the layouts they have been checked
     /// in.
     #[serde(default)]
@@ -269,6 +272,27 @@ pub struct PrizeMoneyLayout {
     pub win_again: u64,
     pub draw: u64,
     pub loss: u64,
+}
+
+/// The kits a club wears (see `kits.rs`): the club points at an object that holds a `(begin, end, capacity)` list of
+/// pointers, one per kit item, each to a record of `item_size` bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KitsLayout {
+    /// In the club: the pointer to the object that holds the list.
+    pub club_object: u64,
+    /// In that object: the `(begin, end, capacity)` list of pointers to the items.
+    pub list: u64,
+    /// The size of an item.
+    pub item_size: u64,
+    /// In an item: five 4-byte colours (blue, green, red, 0xff), in this order: foreground, background, outline,
+    /// number, number outline.
+    pub colours: u64,
+    /// In an item: a `u32` style.
+    pub style: u64,
+    /// In an item: a `u8` slot (0 home, 1 away, 2 third) and a `u8` type of item.
+    pub slot: u64,
+    pub item_type: u64,
 }
 
 /// The sponsorship deals a club holds (see `sponsorship.rs`): the club points at a `(begin, end, capacity)` record whose

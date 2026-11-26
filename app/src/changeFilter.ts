@@ -57,7 +57,7 @@ export const isNotInGame = (change: LoggedChange): boolean =>
  * Separate names are apart by a line break, which a word of the search never holds.
  */
 function searchTextOf(change: LoggedChange): string {
-  const { moved, captaincy, tie, stadium, personName, objects } = change;
+  const { moved, captaincy, tie, stadium, kit, personName, objects } = change;
   const parts = [
     change.name,
     fieldLabel(change.entity, change.field),
@@ -72,6 +72,9 @@ function searchTextOf(change: LoggedChange): string {
     tie?.to?.name,
     stadium?.from,
     stadium?.to,
+    kit?.item,
+    kit?.from,
+    kit?.to,
     personName?.from,
     personName?.to,
     objects?.from,

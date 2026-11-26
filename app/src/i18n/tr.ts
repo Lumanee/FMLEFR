@@ -629,6 +629,7 @@ export const tr: Strings = {
     "finance.total_wage_budget": "Toplam maaş bütçesi",
     "stadium.capacity": "Stadyum kapasitesi",
     "stadium.name": "Stadyum adı",
+    kit: "Kit",
     "name.first": "Ad",
     "name.last": "Soyad",
     "name.common": "Bilinen ad",
@@ -1293,6 +1294,31 @@ export const tr: Strings = {
     placeField: (place) => `${format(place)}. sıra için lig para ödülü`,
     changedIn: (league, groups) =>
       groups > 1 ? `${league} içindeki her kulüp için, ${format(groups)} grupta` : `${league} içindeki her kulüp için`,
+  },
+
+  /**
+   * A club's kits: each item the game keeps (home, away and third shirts; a club that has them also has shorts, socks
+   * and goalkeeper items) with its five colours and its style, which can be changed while the game can be written to.
+   */
+  kits: {
+    title: "Kits",
+    reading: "Reading the club's kits…",
+    none: "The club has no kit items.",
+    /** The name of an item: its slot (0 home, 1 away, 2 third) and its type (1 a shirt). */
+    itemName: (slot: number, type: number) =>
+      `${slot === 0 ? "Home" : slot === 1 ? "Away" : slot === 2 ? "Third" : "Kit"} ${type === 1 ? "shirt" : `item ${type}`}`,
+    foreground: "Foreground",
+    background: "Background",
+    outline: "Outline",
+    number: "Number",
+    numberOutline: "Number outline",
+    style: "Style",
+    apply: "Apply",
+    applying: "Applying…",
+    reset: "Reset",
+    /** Under the kits. */
+    note: "The game redraws kits only when a day passes: advance a day to see a change. The home kit also sets the colours of the screens. The game keeps 5 bits of each colour, so colours are rounded to the nearest step it keeps.",
+    unavailable: "The editor does not know where this version of the game keeps the kits, so it shows none.",
   },
 
   sponsorships: {

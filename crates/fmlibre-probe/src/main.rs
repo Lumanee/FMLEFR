@@ -332,6 +332,30 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         hold: u64,
     },
+    /// Show a club's kit items (colours, style, slot, type) as the editor reads them from the game. Only reads, on any
+    /// build whose layout places them.
+    Kits {
+        /// The club's UID.
+        club: u32,
+    },
+    /// Change the colours and the style of one kit item of a club (recon; writes). The game shows the change after the
+    /// next day. With --hold N, puts the item back after N seconds and checks it; without it the change stays.
+    SetKit {
+        /// The club's UID.
+        club: u32,
+        /// The item's number in `kits`, from 0.
+        index: usize,
+        /// A colour as POSITION=RRGGBB (0 foreground, 1 background, 2 outline, 3 number, 4 number outline), e.g.
+        /// 0=00f800. Repeat for more.
+        #[arg(long = "colour")]
+        colours: Vec<String>,
+        /// The style number.
+        #[arg(long)]
+        style: Option<u32>,
+        /// Put it back after this many seconds.
+        #[arg(long)]
+        hold: Option<u64>,
+    },
     /// Show a club's sponsorship deals as the editor reads them from the game (#114). Only reads, on any build whose
     /// layout places them.
     Sponsorships {
@@ -738,6 +762,22 @@ enum Command {
         /// two moments of the game.
         #[arg(long)]
         out: Option<PathBuf>,
+    },
+    /// Overwrite bytes at each ADDR for a while, then put the old bytes back (this writes to the game). Only for
+    /// finding which copy of some data the game shows: each address must still hold --expect before it is written.
+    Poke {
+        /// Addresses to write to, e.g. 0x1d13c720228.
+        #[arg(required = true)]
+        addrs: Vec<String>,
+        /// The bytes to write, as hex, e.g. "00 f8 00 ff".
+        #[arg(long)]
+        bytes: String,
+        /// The bytes each address must hold now (hex); an address that holds others is left alone.
+        #[arg(long)]
+        expect: String,
+        /// Seconds to keep the new bytes before putting the old ones back.
+        #[arg(long, default_value_t = 30)]
+        hold: u64,
     },
     /// Follow the (begin, end) pair stored at PAIR and dump element INDEX of that array.
     Element {
@@ -1252,6 +1292,8 @@ fn run(cli: Cli) -> Result<()> {
         cli.command,
         Some(
             Command::Set { .. }
+                | Command::Poke { .. }
+                | Command::SetKit { .. }
                 | Command::Move { .. }
                 | Command::Arrange { .. }
                 | Command::Permanent { .. }
@@ -1396,6 +1438,10 @@ fn run(cli: Cli) -> Result<()> {
                 names.into_iter().filter_map(|(kind, name)| name.map(|name| (kind, name))).collect();
             rename(&connect(process, ArraySource::ProfileFirst)?, uid, staff, &wanted, restore)
         }
+        Command::Kits { club } => kits(&connect(process, ArraySource::ProfileFirst)?, club),
+        Command::SetKit { club, index, colours, style, hold } => {
+            set_kit(&connect(process, ArraySource::ProfileFirst)?, club, index, &colours, style, hold)
+        }
         Command::Sponsorships { club } => sponsorships(&connect(process, ArraySource::ProfileFirst)?, club),
         Command::Prizes { text, settings, place, win, draw, loss, all, restore, hold } => {
             let mut amounts: Vec<(PrizeAmount, u32)> = place
@@ -1532,6 +1578,48 @@ fn run(cli: Cli) -> Result<()> {
                 Some(path) => dump_raw(&process, addr, len, &path),
                 None => dump(&process, &modules, addr, len),
             }
+        }
+        Command::Poke { addrs, bytes, expect, hold } => {
+            let modules = list_modules(&process).context("listing modules")?;
+            let (bytes, expect) = (parse_bytes(&bytes)?, parse_bytes(&expect)?);
+            ensure!(!bytes.is_empty() && bytes.len() == expect.len(), "--bytes and --expect must have the same length");
+            let mut done: Vec<(u64, Vec<u8>)> = Vec::new();
+            for addr in &addrs {
+                let addr = resolve(addr, &modules)?;
+                let old = match process.read_bytes(addr, bytes.len()) {
+                    Ok(old) => old,
+                    Err(error) => {
+                        println!("{addr:#x}: unreadable ({error}), skipped");
+                        continue;
+                    }
+                };
+                if old != expect {
+                    println!("{addr:#x}: holds {old:02x?}, not the expected bytes, skipped");
+                    continue;
+                }
+                match process.write_bytes(addr, &bytes) {
+                    Ok(()) if process.read_bytes(addr, bytes.len()).is_ok_and(|now| now == bytes) => {
+                        println!("{addr:#x}: written");
+                        done.push((addr, old));
+                    }
+                    other => {
+                        println!("{addr:#x}: write failed ({other:?})");
+                    }
+                }
+            }
+            println!("{} address(es) written; holding {hold} s, look at the game now.", done.len());
+            std::thread::sleep(std::time::Duration::from_secs(hold));
+            let mut failed = 0;
+            for (addr, old) in &done {
+                let back = process.write_bytes(*addr, old).is_ok()
+                    && process.read_bytes(*addr, old.len()).is_ok_and(|now| now == *old);
+                if !back {
+                    failed += 1;
+                    println!("{addr:#x}: COULD NOT RESTORE {old:02x?}");
+                }
+            }
+            println!("restored {} of {} address(es).", done.len() - failed, done.len());
+            Ok(())
         }
         Command::Element { pair, index, len } => {
             let modules = list_modules(&process).context("listing modules")?;
@@ -5440,6 +5528,60 @@ fn print_prize_money(prize: &PrizeMoney, addresses: &[u64]) {
 }
 
 /// An amount with commas between thousands: 10,222,480.
+/// Prints the kit items of a club as the editor reads them.
+fn kits(session: &Session, club: u32) -> Result<()> {
+    let clubs = ClubIndex::new(session.clubs()?);
+    let club = clubs.get(club).with_context(|| format!("no club with UID {club}"))?;
+    let items = session.club_kits(club).map_err(|err| anyhow!("{err}"))?;
+    println!("{} ({}): {} kit item(s)", club.name, club.uid, items.len());
+    for (i, item) in items.iter().enumerate() {
+        let colours: Vec<String> =
+            item.colours.iter().map(|c| format!("{:02x}{:02x}{:02x}", c[0], c[1], c[2])).collect();
+        println!(
+            "  #{i:<2} 0x{:x}  slot {} type {:>2} style {:>3}  fg/bg/outline/number/number-outline {}",
+            item.address,
+            item.slot,
+            item.item_type,
+            item.style,
+            colours.join(" ")
+        );
+    }
+    Ok(())
+}
+
+/// Writes colours and a style into one kit item, and puts them back after `hold` seconds when asked.
+fn set_kit(
+    session: &Session,
+    club: u32,
+    index: usize,
+    colours: &[String],
+    style: Option<u32>,
+    hold: Option<u64>,
+) -> Result<()> {
+    let clubs = ClubIndex::new(session.clubs()?);
+    let club = clubs.get(club).with_context(|| format!("no club with UID {club}"))?;
+    let mut parsed = Vec::new();
+    for colour in colours {
+        let (position, hex) = colour.split_once('=').with_context(|| format!("{colour}: expected POSITION=RRGGBB"))?;
+        ensure!(hex.len() == 6, "{colour}: the colour is 6 hex digits");
+        let value = u32::from_str_radix(hex, 16).with_context(|| format!("{colour}: not hex"))?;
+        parsed.push((position.parse::<usize>()?, [(value >> 16) as u8, (value >> 8) as u8, value as u8]));
+    }
+    let before = session.set_kit_item(club, index, &parsed, style).map_err(|err| anyhow!("{err}"))?;
+    let after = session.club_kits(club).map_err(|err| anyhow!("{err}"))?;
+    println!("written to item #{index} of {} at 0x{:x}; it reads now as {:?}", club.name, before.address, after[index]);
+    println!("it was {before:?}");
+    if let Some(seconds) = hold {
+        println!("holding {seconds} s, then putting it back; advance a day in the game to see the change");
+        std::thread::sleep(std::time::Duration::from_secs(seconds));
+        let back: Vec<(usize, [u8; 3])> = before.colours.iter().copied().enumerate().collect();
+        session.set_kit_item(club, index, &back, Some(before.style)).map_err(|err| anyhow!("{err}"))?;
+        let now = session.club_kits(club).map_err(|err| anyhow!("{err}"))?;
+        println!("put back: {}", if now[index] == before { "yes, it reads as it was" } else { "NO, it differs" });
+    }
+    Ok(())
+}
+
 /// Prints the deals of a club as the app lists them, in pounds, with the game's date and whether the app shows them on
 /// this build.
 fn sponsorships(session: &Session, club: u32) -> Result<()> {

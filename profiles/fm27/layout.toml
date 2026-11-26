@@ -554,6 +554,18 @@ percent = 0x10            # u16: the amount falls by this much on relegation; a 
 reputation = 0x12         # u16, the club's reputation when the deal was signed
 kind = 0x14               # u8, named as the game's screen does in sponsorship.rs
 
+# A club's kits (docs/recon/fm27-kits.md): the club points at an object whose list holds a pointer per kit item. Read on
+# Game Pass 0.9.2524.0 for Olympique de Valence (home and away shirts, checked by writing the colours into the game and
+# seeing the kit change after the next day) and for two neighbouring clubs, one with 13 items.
+[kits]
+club_object = 0xB0        # in the club: pointer to the object that holds the list
+list = 0x78               # in that object: (begin, end, capacity) of pointers to the items
+item_size = 0x28
+colours = 0x00            # 5 x BGRA: foreground, background, outline, number, number outline; channels are multiples of 8
+style = 0x14              # u32
+slot = 0x22               # u8: 0 home, 1 away, 2 third
+item_type = 0x23          # u8: 1 shirt (the only items Valence has), 2, 3, 4, 5, 0x21 others
+
 [club_info]
 season_tickets = 0xC0     # u32
 founded = 0xD8            # u16 year
