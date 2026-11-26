@@ -42,6 +42,22 @@ interface LineupStrings {
   mainTitle: string;
   offBench: string;
   bestOf: string;
+  subsTitle: string;
+  tableTitle: string;
+  sel: string;
+  tactic: string;
+  tacticTitle: string;
+  positions: string;
+  bestPosition: string;
+  statusHead: string;
+  status: { fit: string; injured: string; banned: string; loan: string };
+  condition: string;
+  conditionTitle: string;
+  morale: string;
+  cohesion: string;
+  cohesionTitle: string;
+  mainLeft: string;
+  groupShort: { reserve: string; u19: string };
 }
 
 const en: LineupStrings = {
@@ -98,6 +114,22 @@ const en: LineupStrings = {
   mainTitle: "The 22 main players",
   offBench: "Main players left off the bench",
   bestOf: "Suggested",
+  subsTitle: "Substitutes",
+  tableTitle: "Squad",
+  sel: "Sel",
+  tactic: "Tactic level",
+  tacticTitle: "How well he knows the team's tactic, in stars (the game's own figure, when it can be read)",
+  positions: "Positions",
+  bestPosition: "Best pos.",
+  statusHead: "Status",
+  status: { fit: "OK", injured: "Inj", banned: "Ban", loan: "Loan" },
+  condition: "Cond.",
+  conditionTitle: "Energy",
+  morale: "Form",
+  cohesion: "Coh.",
+  cohesionTitle: "Cohesion with the club",
+  mainLeft: "Choose",
+  groupShort: { reserve: "Reserve", u19: "U19" },
 };
 
 const fr: LineupStrings = {
@@ -154,6 +186,22 @@ const fr: LineupStrings = {
   mainTitle: "Les 22 joueurs principaux",
   offBench: "Joueurs principaux hors du banc",
   bestOf: "Suggestions",
+  subsTitle: "Remplaçants",
+  tableTitle: "Effectif",
+  sel: "Sél",
+  tactic: "Niveau pour la tactique",
+  tacticTitle: "À quel point il connaît la tactique de l'équipe, en étoiles (le chiffre du jeu, quand il est lisible)",
+  positions: "Postes",
+  bestPosition: "Meilleur poste",
+  statusHead: "Statut",
+  status: { fit: "Dispo", injured: "Bls", banned: "Sus", loan: "Prêt" },
+  condition: "Condition",
+  conditionTitle: "Énergie",
+  morale: "Forme",
+  cohesion: "EdE",
+  cohesionTitle: "Esprit d'équipe : cohésion avec le club",
+  mainLeft: "Choisir",
+  groupShort: { reserve: "Réserve", u19: "U19" },
 };
 
 export const lineupText: LineupStrings = locale === "fr" ? fr : en;
