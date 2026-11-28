@@ -131,7 +131,8 @@ pub use staff::{
     read_staff_details,
 };
 pub use staff_move::{
-    DIRECTOR_OF_FOOTBALL, Department, MANAGER, NewStaffContract, Post, STAFF_JOBS, StaffChange, StaffPlan, post_of,
+    DIRECTOR_OF_FOOTBALL, Department, MANAGER, NewStaffContract, Post, STAFF_JOBS, StaffChange, StaffPlan,
+    TEAM_COACH_JOBS, TeamManagerSlot, post_of,
 };
 pub use tactical_areas::area_options;
 pub use text::{fold, is_name_like, read_fm_string, read_name_entry};

@@ -1419,6 +1419,7 @@ export const fr: Strings = {
     none: "Le club n'a aucun élément de tenue.",
     itemName: (slot, type) =>
       `${type === 1 ? "Maillot" : `Élément ${type}`} ${slot === 0 ? "domicile" : slot === 1 ? "extérieur" : slot === 2 ? "third" : ""}`.trim(),
+    preview: "Aperçu : les couleurs sont celles du jeu, le motif est une approximation du numéro de style.",
     foreground: "Premier plan",
     background: "Fond",
     outline: "Contour",

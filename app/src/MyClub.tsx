@@ -12,7 +12,7 @@ import { clubProfileText, homeText as text, profileText, squadText } from "./lab
 import { percentText } from "./MedicalGroup";
 import { ClubLogo, PICTURE_SIZE } from "./Picture";
 import { ReputationMeter, useProfileDetails } from "./ProfileParts";
-import { SquadTab } from "./SquadTab";
+import { ClubProfile, readTab, type ClubTab } from "./ClubProfile";
 import type { ClubDetails, ClubPage, ClubSummary, ClubTeam, FmDate, SquadPlayer, StaffPage, StaffSummary } from "./types";
 
 /** Where the club picked to follow is kept: its UID. */
@@ -32,6 +32,17 @@ const CONTRACT_MONTHS = 6;
 
 /** How many players a card names before it says how many more there are. */
 const NAMES_SHOWN = 4;
+
+/** The tab of the club's page open last time. */
+const TAB_KEY = "fmlibre.homeTab";
+
+function savedTab(): ClubTab {
+  try {
+    return readTab(window.localStorage.getItem(TAB_KEY) ?? "squad");
+  } catch {
+    return "squad";
+  }
+}
 
 /** The UID of the club picked to follow; null when none is, or the storage cannot be read. */
 function followedUid(): number | null {
@@ -123,6 +134,15 @@ export function MyClub({ version, gameDate, onOpenClub, onEmpty }: MyClubProps) 
   // Which of the user's clubs is shown, in a save with several managers; and whether the search for a club is open.
   const [chosen, setChosen] = useState(0);
   const [picking, setPicking] = useState(false);
+  const [tab, setTab] = useState<ClubTab>(savedTab);
+  const openTab = (next: ClubTab) => {
+    setTab(next);
+    try {
+      window.localStorage.setItem(TAB_KEY, next);
+    } catch {
+      // Only a convenience.
+    }
+  };
   const subjects = found?.subjects;
   const subject = subjects?.[chosen] ?? subjects?.[0];
   const empty = subjects !== undefined && subjects.length === 0;
@@ -177,13 +197,18 @@ export function MyClub({ version, gameDate, onOpenClub, onEmpty }: MyClubProps) 
               onOpenClub={onOpenClub}
               onPick={() => setPicking(true)}
             />
-            <SquadTab
-              key={`squad-${subject.uid}`}
-              clubUid={subject.uid}
-              clubName={subject.name}
+            {/* The whole profile of the club, as a part of the page: the squad with what needs a look, the calculator
+                with its pitch, the staff, the club's money and sponsors, the stadium and the kits, all of it editable. */}
+            <ClubProfile
+              key={`profile-${subject.uid}`}
+              embedded
+              club={{ uid: subject.uid, name: subject.name } as ClubSummary}
               version={version}
-              label={text.squad}
-              overview={(team, open) => <Attention team={team} gameDate={gameDate} onOpen={open} />}
+              tab={tab}
+              onTab={openTab}
+              onClose={() => {}}
+              squadLabel={text.squad}
+              squadOverview={(team, open) => <Attention team={team} gameDate={gameDate} onOpen={open} />}
             />
           </>
         )}

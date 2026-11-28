@@ -21,8 +21,9 @@ use fmlibre_core::{
     PrizeMoney, PrizeReadError, PrizeUnavailable, ROLES, RelationSet, RetirementSet, Role, SCOUT_POSITIONS,
     SENIOR_KIND, ScoutError, ScoutPosition, ScoutRequest, Scouted, SearchIndex, Session, SessionError, Skipped,
     Sponsorship, SponsorshipReadError, SponsorshipUnavailable, SquadMember, SquadReport, StadiumName, StadiumRename,
-    StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, StaffSummary, TacticsSet, Target, Tie,
-    TieTarget, competition_prizes, diagnostics_report, find_game, nations, sort_players, sort_staff,
+    StaffChange, StaffDetails, StaffFilter, StaffIndex, StaffOrder, StaffPlan, StaffSummary, TacticsSet, Target,
+    TeamManagerSlot, Tie, TieTarget, competition_prizes, diagnostics_report, find_game, nations, sort_players,
+    sort_staff,
 };
 use fmlibre_mem::{Process, find_processes, is_current_process_elevated, list_modules};
 use serde::{Deserialize, Serialize};
@@ -1506,6 +1507,19 @@ impl Connection {
     fn plan_staff_job(&self, uid: u32, job: u8) -> Result<StaffPlan, Failure> {
         let member = self.staff.get(uid).ok_or_else(|| not_found(Entity::Staff, uid))?;
         self.session.plan_staff_job(member, job).map_err(|err| self.with_names(err.into()))
+    }
+
+    /// Works out naming the member of staff `uid` manager of the club's team at index `team` (not the senior team).
+    fn plan_team_manager(&self, club: u32, team: usize, uid: u32) -> Result<StaffPlan, Failure> {
+        let summary = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        let member = self.staff.get(uid).ok_or_else(|| not_found(Entity::Staff, uid))?;
+        self.session.plan_team_manager(summary, team, member).map_err(|err| self.with_names(err.into()))
+    }
+
+    /// Works out emptying the place for a manager of the club's team at index `team` (not the senior team).
+    fn plan_team_manager_clear(&self, club: u32, team: usize) -> Result<StaffPlan, Failure> {
+        let summary = self.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+        self.session.plan_team_manager_clear(summary, team).map_err(|err| self.with_names(err.into()))
     }
 
     /// Works out releasing the member of staff `uid` from his club.
@@ -4352,6 +4366,36 @@ fn change_staff_job(state: State<'_, AppState>, uid: u32, job: u8) -> Result<Log
     Ok(connection.log_staff(done, None, None))
 }
 
+/// The reserve and youth teams of the club `club` (every team but the senior one), each with who manages it.
+#[tauri::command]
+fn club_team_managers(state: State<'_, AppState>, club: u32) -> Result<Vec<TeamManagerSlot>, Failure> {
+    let guard = state.0.lock()?;
+    let connection = guard.as_ref().ok_or_else(not_connected)?;
+    let summary = connection.clubs.get(club).ok_or_else(|| not_found(Entity::Club, club))?;
+    connection.session.team_managers(summary).map_err(|err| connection.with_names(err.into()))
+}
+
+/// Names the member of staff `uid`, one of the club's coaches, manager of the club's team at index `team` (not the
+/// senior team), and logs it: one undo takes it back.
+#[tauri::command]
+fn set_team_manager(state: State<'_, AppState>, club: u32, team: usize, uid: u32) -> Result<LoggedChange, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let plan = connection.plan_team_manager(club, team, uid)?;
+    let done = connection.session.apply_staff_plan(&plan)?;
+    Ok(connection.log_staff(done, None, None))
+}
+
+/// Empties the place for a manager of the club's team at index `team` (not the senior team), and logs it.
+#[tauri::command]
+fn clear_team_manager(state: State<'_, AppState>, club: u32, team: usize) -> Result<LoggedChange, Failure> {
+    let mut guard = state.0.lock()?;
+    let connection = guard.as_mut().ok_or_else(not_connected)?;
+    let plan = connection.plan_team_manager_clear(club, team)?;
+    let done = connection.session.apply_staff_plan(&plan)?;
+    Ok(connection.log_staff(done, None, None))
+}
+
 /// Checks that the member of staff `uid` can be released from his club, and names it; the error says why he cannot.
 /// Nothing is written.
 #[tauri::command]
@@ -5589,6 +5633,9 @@ pub fn run() {
             plan_staff_move,
             move_staff,
             change_staff_job,
+            club_team_managers,
+            set_team_manager,
+            clear_team_manager,
             plan_staff_release,
             release_staff,
             club_staff,
