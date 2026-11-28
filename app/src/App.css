@@ -8217,3 +8217,26 @@ kbd {
   flex: 1 1 260px;
   min-width: 0;
 }
+
+/* The reserve and youth teams' managers in the Staff tab: one line per team. */
+.team-managers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.team-managers-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.team-managers-list li b {
+  min-width: 5em;
+}
+.team-managers-list select {
+  min-width: 16em;
+  max-width: 100%;
+}

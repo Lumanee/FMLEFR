@@ -16,6 +16,7 @@ import { undoFailureLines } from "./massDraft";
 import { ClubLine } from "./MoveDialog";
 import type { Loaded, PanelIds } from "./ProfileParts";
 import { HumanBadge } from "./StaffProfile";
+import { TeamManagers } from "./TeamManagers";
 import type { BatchUndo, ClubStaffRow, ClubSummary, Failure, MassReport } from "./types";
 import { useModal } from "./useModal";
 import { EditorContext } from "./useProfileEditing";
@@ -324,6 +325,8 @@ export function ClubStaffTab({ club, version, panel }: ClubStaffTabProps) {
           </div>
 
           <ResultLine ref={resultBox} result={result} busy={busy} onUndo={(take) => void undo(take)} />
+
+          <TeamManagers club={club.uid} version={version} staff={rows} editable={editable} readOnlyNote={readOnlyNote} onEdited={onEdited} />
 
           {rows.length === 0 ? (
             <p className="empty">{text.empty}</p>

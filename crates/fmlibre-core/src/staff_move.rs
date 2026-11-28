@@ -36,6 +36,13 @@
 //! The game keeps the contracts of some staff, most doctors and the board among them, as `db::BASIC_CONTRACT`: 40
 //! bytes, as far as the job, with no dates. Only those first bytes of theirs are written.
 //!
+//! A club's reserve and youth teams each have a place for a manager too, which the editor fills with one of the club's
+//! coaches (see [`Session::plan_team_manager`]) and empties (see [`Session::plan_team_manager_clear`]): the team points
+//! at him, as the senior team does at its manager, and his contract points at the team he works for. While a team's
+//! place holds him he is not moved, given another job or released (the team is his), so the place is emptied first.
+//! Not checked against the game yet: the layout is the one the senior team's manager has, which the editor does
+//! check, applied to the other teams.
+//!
 //! [`ClubLayout`]: crate::ClubLayout
 //! [`TeamLayout`]: crate::TeamLayout
 
@@ -146,6 +153,22 @@ pub struct NewStaffContract {
     pub wage: i64,
     /// The end date, as a number like 20290630.
     pub expires: i64,
+}
+
+/// The jobs that may run a reserve or youth team: the coaches.
+pub const TEAM_COACH_JOBS: [u8; 6] = [2, 20, 22, 26, 34, 64];
+
+/// A club's team other than the senior team, and who has its place for a manager.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamManagerSlot {
+    /// Where the team is in the club's list of teams (see [`crate::ClubTeam`]); 0 is the senior team, never listed here.
+    pub team: usize,
+    /// The game's code for the kind of team, and the oldest its players may be (see [`crate::ClubTeam`]).
+    pub kind: u8,
+    pub age_limit: Option<u8>,
+    /// The id of the member of staff in the place, if one is.
+    pub manager: Option<u32>,
 }
 
 /// A move of a member of staff, a new job, a signing or a release, worked out from the game as it is now and ready to be
@@ -347,6 +370,122 @@ impl Session {
             contract: None,
             patches: patches.0,
             grow,
+        })
+    }
+
+    /// The club's teams other than its senior team, with who has each one's place for a manager. Empty where the layout
+    /// does not place a team's manager.
+    pub fn team_managers(&self, club: &ClubSummary) -> Result<Vec<TeamManagerSlot>, MoveError> {
+        let (process, layout) = (&self.process, &self.layout);
+        let Some(offset) = layout.team.manager else {
+            return Ok(Vec::new());
+        };
+        let Some(teams) = PointerList::read(process, club.address + layout.club.teams)? else {
+            return Ok(Vec::new());
+        };
+        let mut slots = Vec::new();
+        for (index, team) in teams.elements(process)?.into_iter().enumerate().skip(1) {
+            if !is_user_pointer(team) {
+                continue;
+            }
+            let held = process.read_u64(team + offset)?;
+            let manager = if is_user_pointer(held) { process.read_u32(held + layout.staff.uid).ok() } else { None };
+            let age = process.read_bytes(team + layout.team.age_limit, 1)?[0];
+            slots.push(TeamManagerSlot {
+                team: index,
+                kind: process.read_bytes(team + layout.team.kind, 1)?[0],
+                age_limit: (age != 100).then_some(age),
+                manager,
+            });
+        }
+        Ok(slots)
+    }
+
+    /// The team at `index` of the club at `club`, which is not the senior team, and its place for a manager.
+    fn other_team(&self, club: u64, index: usize) -> Result<(u64, u64), MoveError> {
+        let offset = self.layout.team.manager.ok_or(MoveError::StaffRole)?;
+        let teams = PointerList::read(&self.process, club + self.layout.club.teams)?.ok_or(MoveError::StaffRole)?;
+        match teams.elements(&self.process)?.get(index) {
+            Some(&team) if index > 0 && is_user_pointer(team) => Ok((team, offset)),
+            _ => Err(MoveError::StaffRole),
+        }
+    }
+
+    /// Works out naming `member`, one of his club's coaches, the manager of the club's team at `team` (not the senior
+    /// team): the team points at him, and his contract at the team. Refused when he is not one of the coaches the
+    /// editor can move (see [`TEAM_COACH_JOBS`]), when he runs a team already, or when the team's place is taken: empty it
+    /// first (see [`Session::plan_team_manager_clear`]). Nothing is written.
+    pub fn plan_team_manager(
+        &self,
+        club: &ClubSummary,
+        team: usize,
+        member: &StaffSummary,
+    ) -> Result<StaffPlan, MoveError> {
+        let holder = self.staff_holder(member)?;
+        if holder.club != club.address {
+            return Err(MoveError::UnusualContract);
+        }
+        let in_coaching = holder.lists.iter().any(|(department, ..)| *department == Department::Coaching);
+        if !TEAM_COACH_JOBS.contains(&holder.job) || !in_coaching || holder.manager.is_some() || holder.director {
+            return Err(MoveError::StaffRole);
+        }
+        let (team_address, offset) = self.other_team(club.address, team)?;
+        let held = self.process.read_u64(team_address + offset)?;
+        if held != 0 {
+            return Err(MoveError::StaffRole);
+        }
+        let c = &self.layout.contract;
+        let mut patches = Patches::default();
+        patches.push(team_address + offset, 0u64.to_le_bytes(), holder.object.to_le_bytes());
+        let works_for = &holder.record[c.team as usize..c.team as usize + 8];
+        if works_for != team_address.to_le_bytes() {
+            patches.push(holder.contract + c.team, works_for, team_address.to_le_bytes());
+        }
+        Ok(StaffPlan {
+            member: member.uid,
+            from_club: holder.club_uid,
+            to_club: holder.club_uid,
+            job: (holder.job, holder.job),
+            grows: false,
+            contract: None,
+            patches: patches.0,
+            grow: Vec::new(),
+        })
+    }
+
+    /// Works out emptying the place for a manager of the club's team at `team` (not the senior team): the team points
+    /// at no one, and its manager's contract points at the club's senior team again, as the contract of every other
+    /// coach does. Nothing is written.
+    pub fn plan_team_manager_clear(&self, club: &ClubSummary, team: usize) -> Result<StaffPlan, MoveError> {
+        let (process, layout) = (&self.process, &self.layout);
+        let (team_address, offset) = self.other_team(club.address, team)?;
+        let held = process.read_u64(team_address + offset)?;
+        if !is_user_pointer(held) {
+            return Err(MoveError::StaffRole);
+        }
+        let (senior, _) = self.senior_team(club.address, club.uid)?;
+        let (s, c) = (&layout.staff, &layout.contract);
+        let member = process.read_u32(held + s.uid)?;
+        let contract = process.read_u64(held + s.contract)?;
+        if !is_user_pointer(contract) {
+            return Err(MoveError::Unemployed);
+        }
+        let mut patches = Patches::default();
+        patches.push(team_address + offset, held.to_le_bytes(), 0u64.to_le_bytes());
+        let works_for = process.read_bytes(contract + c.team, 8)?;
+        if works_for == team_address.to_le_bytes() {
+            patches.push(contract + c.team, works_for, senior.to_le_bytes());
+        }
+        let job = process.read_bytes(contract + c.job, 1)?[0];
+        Ok(StaffPlan {
+            member,
+            from_club: club.uid,
+            to_club: club.uid,
+            job: (job, job),
+            grows: false,
+            contract: None,
+            patches: patches.0,
+            grow: Vec::new(),
         })
     }
 

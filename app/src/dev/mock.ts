@@ -1957,6 +1957,9 @@ function moveStaff(uid: number, clubUid: number, job?: number, terms: MoveTerms 
   return logStaff(member, "club", preview.from?.uid ?? 0, preview.to.uid, moved);
 }
 
+/** The coach each reserve or youth team of the fixture club has, by team index. */
+const teamManagers: Record<number, number> = {};
+
 function changeStaffJob(uid: number, job: number): LoggedChange {
   const member = movableStaff(uid);
   givenJob(member.job);
@@ -4164,6 +4167,23 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
     }
     case "edit_fields":
       return fieldTable(args?.entity as EditEntity) as T;
+    case "club_team_managers": {
+      return [
+        { team: 1, kind: 10, ageLimit: 21, manager: teamManagers[1] ?? null },
+        { team: 2, kind: 12, ageLimit: 18, manager: teamManagers[2] ?? null },
+      ] as T;
+    }
+    case "set_team_manager": {
+      const member = movableStaff(Number(args?.uid));
+      teamManagers[Number(args?.team)] = member.uid;
+      return changeStaffJob(member.uid, member.job!) as T;
+    }
+    case "clear_team_manager": {
+      const uid = teamManagers[Number(args?.team)];
+      delete teamManagers[Number(args?.team)];
+      const member = movableStaff(uid);
+      return changeStaffJob(member.uid, member.job!) as T;
+    }
     case "club_kits": {
       const kit = (slot: number, itemType: number, style: number, colours: number[][]) => ({
         address: 0x1000 + slot * 0x40 + itemType,
