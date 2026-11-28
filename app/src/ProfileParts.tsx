@@ -89,6 +89,11 @@ interface ProfileFrameProps {
    * Escape stay in it (see `useModal`), and it has no handle to resize it.
    */
   modal?: boolean;
+  /**
+   * Part of a page instead of a panel: no header with a name and a close button (the page has its own), just the tabs
+   * with Edit beside them, then the body. Closing and Escape do nothing here.
+   */
+  embedded?: boolean;
   loaded: Loaded<unknown> | null;
   onClose: () => void;
   /**
@@ -107,7 +112,7 @@ interface ProfileFrameProps {
  */
 export function ProfileFrame(props: ProfileFrameProps) {
   const { picture, name, fullName, badge, meta, vitals, currentAbility, potentialAbility } = props;
-  const { side, actions, tabs, wide, modal = false, loaded, onClose, editing, children } = props;
+  const { side, actions, tabs, wide, modal = false, embedded = false, loaded, onClose, editing, children } = props;
   const closeProfile = editing ? () => editing.guardClose(onClose) : onClose;
   const onEscape = editing ? () => editing.escape(onClose) : onClose;
   const panelWidth = usePanelWidth(wide ? "wide" : "profile");
@@ -122,7 +127,7 @@ export function ProfileFrame(props: ProfileFrameProps) {
   }, [modal]);
 
   useEffect(() => {
-    if (modal) {
+    if (modal || embedded) {
       return;
     }
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -132,14 +137,14 @@ export function ProfileFrame(props: ProfileFrameProps) {
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onEscape, modal]);
+  }, [onEscape, modal, embedded]);
 
   // The inputs reach the whole panel, so `side` can hold one too (a club's reputation is in the header).
   return (
     <SessionContext.Provider value={editing?.session ?? null}>
       <section
         ref={section}
-        className={["profile", editing?.stage === "edit" && "editing", wide && "wide", modal && "popup"]
+        className={["profile", editing?.stage === "edit" && "editing", wide && "wide", modal && "popup", embedded && "embedded"]
           .filter(Boolean)
           .join(" ")}
         role="dialog"
@@ -147,9 +152,20 @@ export function ProfileFrame(props: ProfileFrameProps) {
         aria-label={name}
         aria-busy={!loaded}
         tabIndex={modal ? -1 : undefined}
-        style={modal ? undefined : panelWidth.style}
+        style={modal || embedded ? undefined : panelWidth.style}
       >
-        {!modal && <PanelResizer panelWidth={panelWidth} />}
+        {!modal && !embedded && <PanelResizer panelWidth={panelWidth} />}
+        {embedded && (
+          <div className="embedded-bar">
+            <div className="embedded-tabs">{tabs}</div>
+            {side}
+            <div className="profile-actions">
+              {actions}
+              {editing && <EditButton editing={editing} ready={loaded?.details !== undefined} />}
+            </div>
+          </div>
+        )}
+        {!embedded && (
         <header className="profile-head">
           {picture}
           <div className="profile-id">
@@ -199,8 +215,9 @@ export function ProfileFrame(props: ProfileFrameProps) {
               ))}
           </div>
         </header>
+        )}
 
-        {tabs}
+        {!embedded && tabs}
 
         <div className="profile-body">
           {!loaded && (

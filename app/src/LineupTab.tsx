@@ -21,6 +21,7 @@ import {
 import { lineupText as text } from "./lineupText";
 import { positionLabel, profileText, squadText, teamLabel } from "./labels";
 import type { PanelIds } from "./ProfileParts";
+import { useBestRoles } from "./useBestRoles";
 import { useSquads } from "./SquadTab";
 import type { SquadPlayer } from "./types";
 
@@ -193,6 +194,10 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
       // The choice is only a convenience.
     }
   };
+  const { roles: bestRoles, done: rolesDone } = useBestRoles(
+    useMemo(() => players.map((player) => player.uid), [players]),
+    version,
+  );
   const playsFor = useMemo(() => {
     const map = new Map<number, string>();
     for (const team of teams ?? []) {
@@ -337,8 +342,7 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
                     <th>{text.sel}</th>
                     <th className="col-name">{text.player}</th>
                     <th title={text.tacticTitle}>{text.tactic}</th>
-                    <th>{text.positions}</th>
-                    <th>{text.bestPosition}</th>
+                    <th title={text.rolesTitle}>{text.roles}</th>
                     <th>{text.statusHead}</th>
                     <th title={text.conditionTitle}>{text.condition}</th>
                     <th>{text.morale}</th>
@@ -400,8 +404,19 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
                             <td>
                               <Stars value={player.tactics} />
                             </td>
-                            <td className="lineup-positions">{player.positions.slice(0, 4).map(positionLabel).join(", ")}</td>
-                            <td>{player.positions[0] ? positionLabel(player.positions[0]) : profileText.none}</td>
+                            <td className="lineup-roles">
+                              <div className="lineup-roles-list">
+                              {(bestRoles.get(player.uid) ?? []).map((entry) => (
+                                <span key={entry.position} className="lineup-role" title={`${positionLabel(entry.position)} ${entry.rating}/20`}>
+                                  <b>{positionLabel(entry.position)}</b> {entry.role} <i>{entry.fit.toFixed(1)}</i>
+                                </span>
+                              ))}
+                              {!rolesDone && !bestRoles.has(player.uid) && <span className="muted">{text.rolesReading}</span>}
+                              {rolesDone && (bestRoles.get(player.uid) ?? []).length === 0 && (
+                                <span className="muted">{player.positions.slice(0, 3).map(positionLabel).join(", ") || profileText.none}</span>
+                              )}
+                            </div>
+                            </td>
                             <td>
                               <span className={`lineup-status ${state.className}`}>{state.label}</span>
                             </td>
@@ -419,7 +434,7 @@ export function LineupTab({ clubUid, version, panel }: LineupTabProps) {
                             </td>
                           </>
                         ) : (
-                          <td colSpan={10} />
+                          <td colSpan={9} />
                         )}
                       </tr>
                     );

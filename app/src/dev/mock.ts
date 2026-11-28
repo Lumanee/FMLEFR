@@ -4164,6 +4164,24 @@ export async function mockInvoke<T>(command: string, args?: Record<string, unkno
     }
     case "edit_fields":
       return fieldTable(args?.entity as EditEntity) as T;
+    case "club_kits": {
+      const kit = (slot: number, itemType: number, style: number, colours: number[][]) => ({
+        address: 0x1000 + slot * 0x40 + itemType,
+        slot,
+        itemType,
+        style,
+        colours,
+      });
+      return {
+        unavailable: false,
+        items: [
+          kit(0, 1, 2, [[255, 255, 255], [200, 30, 40], [20, 20, 20], [255, 255, 255], [20, 20, 20]]),
+          kit(0, 2, 0, [[255, 255, 255], [20, 20, 20], [200, 30, 40], [255, 255, 255], [20, 20, 20]]),
+          kit(1, 1, 1, [[20, 40, 120], [250, 250, 250], [20, 40, 120], [20, 40, 120], [250, 250, 250]]),
+          kit(2, 1, 4, [[250, 200, 20], [30, 30, 30], [250, 200, 20], [250, 200, 20], [30, 30, 30]]),
+        ],
+      } as T;
+    }
     case "freeze_money": {
       const club = Number(args?.club);
       if (args?.frozen) {

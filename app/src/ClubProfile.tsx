@@ -1,4 +1,4 @@
-import { useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useContext, useEffect, useId, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from "react";
 import { EditableValue } from "./EditControls";
 import { clubDiagnostics, freezeMoney, frozenClubs, renameStadium, stadiumName } from "./editing";
 import { converts, inCurrency } from "./currency";
@@ -56,10 +56,16 @@ interface ClubProfileProps {
   tab: ClubTab;
   onTab: (tab: ClubTab) => void;
   onClose: () => void;
+  /** Part of a page (My club) rather than a panel: see `ProfileFrame`. */
+  embedded?: boolean;
+  /** For the Squad tab: what goes between the team's summary and its actions (see `SquadTab`). */
+  squadOverview?: ComponentProps<typeof SquadTab>["overview"];
+  /** For the Squad tab: the name of the tab group (see `SquadTab`). */
+  squadLabel?: string;
 }
 
 /** The profile of one club. Mount it with `key={uid}` so a new club starts at the top. */
-export function ClubProfile({ club, version, tab, onTab, onClose }: ClubProfileProps) {
+export function ClubProfile({ club, version, tab, onTab, onClose, embedded, squadOverview, squadLabel }: ClubProfileProps) {
   const loaded = useProfileDetails<ClubDetails>("club_details", club.uid, version);
   const editing = useProfileEditing("club", club.uid);
   const base = useId();
@@ -97,6 +103,7 @@ export function ClubProfile({ club, version, tab, onTab, onClose }: ClubProfileP
         </div>
       }
       tabs={details && <ClubTabs tab={shown} base={base} locked={locked} onSelect={onTab} />}
+      embedded={embedded}
       wide={details !== undefined && (shown === "squad" || shown === "lineup")}
       loaded={loaded}
       onClose={onClose}
@@ -104,7 +111,7 @@ export function ClubProfile({ club, version, tab, onTab, onClose }: ClubProfileP
     >
       {details &&
         (shown === "squad" ? (
-          <SquadTab clubUid={club.uid} clubName={info.name} version={version} panel={panel} />
+          <SquadTab clubUid={club.uid} clubName={info.name} version={version} panel={panel} overview={squadOverview} label={squadLabel} />
         ) : shown === "lineup" ? (
           <LineupTab clubUid={club.uid} version={version} panel={panel} />
         ) : shown === "staff" ? (

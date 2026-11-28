@@ -1298,6 +1298,7 @@ export const ja: Strings = {
     /** The name of an item: its slot (0 home, 1 away, 2 third) and its type (1 a shirt). */
     itemName: (slot: number, type: number) =>
       `${slot === 0 ? "Home" : slot === 1 ? "Away" : slot === 2 ? "Third" : "Kit"} ${type === 1 ? "shirt" : `item ${type}`}`,
+    preview: "Preview: the colours are the game's, the pattern is an approximation of the style number.",
     foreground: "Foreground",
     background: "Background",
     outline: "Outline",

@@ -7808,6 +7808,7 @@ kbd {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
 
 /* The Squad calculator tab: the formation switch and the box under the intro, then a table for each group. */
 .lineup {
@@ -8106,11 +8107,24 @@ kbd {
 .lineup-note {
   font-size: 11px;
 }
-.lineup-positions {
-  max-width: 12em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.lineup-roles {
+  min-width: 17em;
+}
+.lineup-roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.lineup-role b {
+  display: inline-block;
+  min-width: 2.6em;
+}
+.lineup-role i {
+  font-style: normal;
+  color: var(--muted, #6b7280);
+  margin-left: 2px;
 }
 .lineup-status {
   display: inline-block;
@@ -8144,4 +8158,62 @@ kbd {
   .lineup-sheet {
     grid-template-columns: 1fr;
   }
+}
+
+/* The club's profile as a part of the My club page (see `ProfileFrame`'s `embedded`): no side panel, the page scrolls. */
+.profile.embedded {
+  flex: none;
+  min-width: 0;
+  border-left: none;
+  background: transparent;
+  animation: none;
+}
+
+.profile.embedded .embedded-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.profile.embedded .embedded-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.profile.embedded .profile-body {
+  overflow: visible;
+  padding: 16px 0 0;
+}
+
+/* The kits: a strip of the shirts, then each item with its preview beside its inputs. */
+.kit-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.kit-strip figure {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+}
+.kit-strip figcaption {
+  margin-top: 2px;
+  color: var(--muted);
+}
+.kit-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 18px;
+}
+.kit-preview {
+  flex: none;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.25));
+}
+.kit-edit {
+  flex: 1 1 260px;
+  min-width: 0;
 }

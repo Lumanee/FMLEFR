@@ -49,6 +49,9 @@ interface LineupStrings {
   tacticTitle: string;
   positions: string;
   bestPosition: string;
+  roles: string;
+  rolesTitle: string;
+  rolesReading: string;
   statusHead: string;
   status: { fit: string; injured: string; banned: string; loan: string };
   condition: string;
@@ -121,6 +124,9 @@ const en: LineupStrings = {
   tacticTitle: "How well he knows the team's tactic, in stars (the game's own figure, when it can be read)",
   positions: "Positions",
   bestPosition: "Best pos.",
+  roles: "Best positions and roles",
+  rolesTitle: "His best positions (rated 13+ by the game), each with the tactical role his attributes suit best, and how well (1–20). An estimate from his key attributes, not the game's own figure.",
+  rolesReading: "reading…",
   statusHead: "Status",
   status: { fit: "OK", injured: "Inj", banned: "Ban", loan: "Loan" },
   condition: "Cond.",
@@ -193,6 +199,9 @@ const fr: LineupStrings = {
   tacticTitle: "À quel point il connaît la tactique de l'équipe, en étoiles (le chiffre du jeu, quand il est lisible)",
   positions: "Postes",
   bestPosition: "Meilleur poste",
+  roles: "Meilleurs postes et rôles",
+  rolesTitle: "Ses meilleurs postes (notés 13+ par le jeu), chacun avec le rôle tactique que ses attributs servent le mieux, et à quel point (1–20). Une estimation à partir de ses attributs clés, pas la valeur du jeu.",
+  rolesReading: "lecture…",
   statusHead: "Statut",
   status: { fit: "Dispo", injured: "Bls", banned: "Sus", loan: "Prêt" },
   condition: "Condition",

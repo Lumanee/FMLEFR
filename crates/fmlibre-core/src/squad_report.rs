@@ -171,6 +171,18 @@ fn status(players: usize, cover: usize, target: usize) -> DepthStatus {
     }
 }
 
+/// Whether a player is a prospect, whom a scout never recommends selling: young, and with a potential among the
+/// squad's best (`top_potential`), above the level of its best eleven, or far above his ability today.
+fn is_prospect(age: u16, ability: i32, potential: i32, level: i32, top_potential: i32) -> bool {
+    let room = potential - ability;
+    age <= 24 && (potential >= top_potential.max(level + 5) || room >= 20 || (age <= 21 && room >= 15))
+}
+
+/// His potential, or his ability while the game has not settled it (a potential below zero).
+fn potential_of(player: &PlayerSummary) -> i32 {
+    if player.potential_ability < 0 { i32::from(player.current_ability) } else { i32::from(player.potential_ability) }
+}
+
 /// How many of a line's players a team starts with.
 fn starters(target: usize) -> usize {
     target.div_ceil(2)
@@ -257,6 +269,11 @@ impl Session {
         wages.sort_unstable_by(|a, b| b.cmp(a));
         let high_wage = wages.get(wages.len() / 4).copied();
 
+        // The best potentials of the squad: what a player's potential must reach to count as one of its prospects.
+        let mut potentials: Vec<i32> = members.iter().map(|m| potential_of(m.player)).collect();
+        potentials.sort_unstable_by(|a, b| b.cmp(a));
+        let top_potential = potentials.get(potentials.len() / 5).copied().unwrap_or(0);
+
         let mut out = Vec::new();
         for (m, details) in members.iter().zip(&details) {
             if m.on_loan {
@@ -277,32 +294,42 @@ impl Session {
             let first_choice =
                 rank <= starters(line.target) || matches!(standing, Some(Standing::Key | Standing::Regular));
 
+            // A prospect is never sold or released for being behind today: young, and either among the squad's best
+            // potentials, above the level of its best eleven, or with a lot of room left. At most he is lent out to play.
+            let prospect = is_prospect(age, i32::from(ability), potential_of(p), i32::from(level), top_potential);
+            // Needed where the squad is thin: one of the first of a line that has too few players is not let go.
+            let needed = matches!(line.status, DepthStatus::Missing | DepthStatus::Thin) && rank <= line.target;
+
             let mut reasons = Vec::new();
             let mut priority = 0u8;
             let mut add = |code: &'static str, weight: u8, value: Option<i64>| {
                 reasons.push(DepartureReason { code, value });
                 priority += weight;
             };
-            if line.status == DepthStatus::Crowded && rank > line.target {
+            if line.status == DepthStatus::Crowded && rank > line.target && !prospect {
                 add("surplus", 3, Some(line.players.len() as i64));
             }
-            let below = ability + 25 < level && age >= 23;
+            let below = ability + 25 < level && age >= 23 && !prospect && !needed;
             if below {
                 add("belowLevel", 3, Some(i64::from(ability)));
             }
-            let ageing = (age >= 32 && !first_choice) || age >= 34;
+            let ageing = !prospect && !needed && ((age >= 32 && !first_choice) || age >= 34);
             if ageing {
                 add("ageing", 2, Some(i64::from(age)));
             }
             if let Some(days) = today.zip(p.contract_expires).map(|(today, expires)| days_between(today, expires))
                 && days <= 365
                 && !first_choice
+                && !prospect
+                && !needed
             {
                 add("expiring", 2, Some(days));
             }
             if let (Some(wage), Some(high)) = (wage, high_wage)
                 && wage >= high
                 && !first_choice
+                && !prospect
+                && !needed
                 && ability < level
             {
                 add("highWage", 2, Some(i64::from(wage)));
@@ -322,7 +349,7 @@ impl Session {
                 add("blocked", 2, Some(i64::from(p.potential_ability)));
             }
             // His contract says the club has no use for him: surplus to requirements.
-            if standing == Some(Standing::Surplus) {
+            if standing == Some(Standing::Surplus) && !prospect && !needed {
                 add("unwanted", 3, None);
             }
             if p.transfer_listed {
@@ -334,8 +361,12 @@ impl Session {
             if reasons.iter().all(|reason| matches!(reason.code, "unhappy" | "lowMorale")) {
                 continue;
             }
+            // A prospect only ever shows when he is blocked: lent out, never sold, and below the players who are let go.
+            if prospect && !blocked {
+                continue;
+            }
             let worth_little = p.transfer_value.is_none_or(|value| value < 250_000);
-            let action = if blocked && !below {
+            let action = if prospect || (blocked && !below) {
                 DepartureAction::Loan
             } else if worth_little && age >= 28 && (below || ageing) {
                 DepartureAction::Release
@@ -346,7 +377,7 @@ impl Session {
                 player: p.clone(),
                 action,
                 reasons,
-                priority,
+                priority: if prospect { priority.min(1) } else { priority },
                 value: known_value(p.transfer_value),
                 not_for_sale: p.transfer_value == Some(NOT_FOR_SALE),
                 wage,
@@ -354,7 +385,14 @@ impl Session {
                 rank,
             });
         }
-        out.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.player.current_ability.cmp(&b.player.current_ability)));
+        // Those who are lent out to play come after the ones to sell or release, and the weakest come first among those.
+        out.sort_by(|a, b| {
+            let loan = |d: &Departure| d.action == DepartureAction::Loan;
+            loan(a)
+                .cmp(&loan(b))
+                .then(b.priority.cmp(&a.priority))
+                .then(a.player.current_ability.cmp(&b.player.current_ability))
+        });
         out
     }
 }
@@ -378,6 +416,18 @@ mod tests {
         // On a tie, the line listed first.
         assert_eq!(line_of(&ratings(&[("dc", 20), ("dm", 20)])).0, 1);
         assert_eq!(line_of(&ratings(&[("gk", 20)])), (0, 20));
+    }
+
+    #[test]
+    fn prospects_are_never_let_go_for_being_behind() {
+        // 18 years old, 90 now and 165 potential in a squad whose best eleven average 120: a prospect.
+        assert!(is_prospect(18, 90, 165, 120, 140));
+        // 24 years old with little room and a potential under the squad's level: not one.
+        assert!(!is_prospect(24, 100, 110, 120, 140));
+        // 27 years old, whatever his potential: not one.
+        assert!(!is_prospect(27, 100, 170, 120, 140));
+        // 22 years old with 25 points of room: one, even if his potential is not among the squad's best.
+        assert!(is_prospect(22, 80, 105, 120, 140));
     }
 
     #[test]
